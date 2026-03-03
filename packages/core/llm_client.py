@@ -27,7 +27,7 @@ class LLMClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "grok-3-mini",
+        model: str = "grok-4-1-fast-non-reasoning",
         timeout: int = 60,
     ) -> None:
         self.api_key = api_key or os.environ.get("XAI_API_KEY", "")
