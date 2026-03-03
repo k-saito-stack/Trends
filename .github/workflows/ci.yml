@@ -26,7 +26,11 @@ jobs:
         run: ruff check packages/ batch/ tests/ scripts/
 
       - name: Type check (mypy)
+        env:
+          PYTHONPATH: .
         run: mypy packages/ batch/ --ignore-missing-imports
 
       - name: Test (pytest)
+        env:
+          PYTHONPATH: .
         run: pytest tests/ -v --tb=short

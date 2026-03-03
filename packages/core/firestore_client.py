@@ -67,8 +67,8 @@ def get_document(collection: str, document_id: str) -> dict[str, Any] | None:
     db = get_db()
     doc_ref = db.collection(collection).document(document_id)
     doc = doc_ref.get()
-    if doc.exists:
-        return doc.to_dict()  # type: ignore[return-value]
+    if doc.exists:  # type: ignore[union-attr]
+        return doc.to_dict()  # type: ignore[union-attr]
     return None
 
 

@@ -6,6 +6,8 @@ NOT in code (public repo risk).
 
 from __future__ import annotations
 
+from typing import Any
+
 from packages.core import firestore_client
 from packages.core.models import AlgorithmConfig, AppConfig, MusicConfig
 
@@ -34,11 +36,11 @@ def load_music_config() -> MusicConfig:
     return MusicConfig.from_dict(data)
 
 
-def load_source_config(source_id: str) -> dict | None:
+def load_source_config(source_id: str) -> dict[str, Any] | None:
     """Load /config/sources/{sourceId} from Firestore."""
     return firestore_client.get_document("config/sources", source_id)
 
 
-def load_all_source_configs() -> list[dict]:
+def load_all_source_configs() -> list[dict[str, Any]]:
     """Load all source configs."""
     return firestore_client.get_collection("config/sources")
