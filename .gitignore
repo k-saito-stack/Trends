@@ -21,6 +21,7 @@ build/
 # Node.js
 node_modules/
 apps/web/dist/
+*.tsbuildinfo
 
 # Data (local only)
 data/

@@ -39,7 +39,7 @@ def generate_summary(
         breakdown: Bucket score breakdown
         evidence: Evidence items
         mode: One of "LLM", "TEMPLATE", "OFF"
-        llm_client: Optional LLM client for LLM mode (Phase 6)
+        llm_client: LLMClient instance (required for LLM mode)
 
     Returns:
         Summary string
@@ -87,16 +87,53 @@ def _generate_llm_summary(
 ) -> str:
     """Generate an LLM-based summary using xAI API.
 
-    Phase 6 implementation. For now, falls back to template.
+    Produces a 1-2 sentence summary explaining why this candidate
+    is trending, based on the evidence and score breakdown.
+    Falls back to template on failure.
     """
-    if llm_client is None:
+    if llm_client is None or not getattr(llm_client, "available", False):
         logger.info("LLM client not available, falling back to TEMPLATE mode")
         return _generate_template_summary(
             candidate_name, trend_score, breakdown, evidence
         )
 
-    # Full LLM implementation will be added in Phase 6
-    # For now, return template as fallback
+    # Build context for the LLM
+    bucket_info = ", ".join(
+        f"{b.bucket}({b.score:.1f})" for b in breakdown[:5] if b.score > 0
+    )
+    evidence_info = "\n".join(
+        f"- [{e.source_id}] {e.title}" for e in evidence[:3]
+    )
+
+    prompt = (
+        f"以下のトレンド候補について、なぜ今注目されているか1〜2文で簡潔に要約してください。\n\n"
+        f"候補名: {candidate_name}\n"
+        f"トレンドスコア: {trend_score:.1f}\n"
+        f"スコア内訳: {bucket_info}\n"
+    )
+    if evidence_info:
+        prompt += f"エビデンス:\n{evidence_info}\n"
+    prompt += "\n要約（日本語、1〜2文）:"
+
+    system_msg = "あなたはトレンド分析の専門家です。簡潔に日本語で回答してください。"
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": prompt},
+    ]
+
+    try:
+        result = llm_client.chat(messages, temperature=0.3, max_tokens=200)
+        if result:
+            # Clean up the response
+            summary = result.strip().strip('"').strip("'")
+            # Limit length
+            if len(summary) > 200:
+                summary = summary[:197] + "..."
+            return str(summary)
+    except Exception as e:
+        logger.warning("LLM summary failed for %s: %s", candidate_name, e)
+
+    # Fallback to template
     return _generate_template_summary(
         candidate_name, trend_score, breakdown, evidence
     )

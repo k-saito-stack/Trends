@@ -321,8 +321,37 @@ def main(date_arg: str = "today") -> None:
     top_candidates = select_top_k(candidate_score_list, top_k=app_config.top_k)
     logger.info("Selected %d candidates", len(top_candidates))
 
-    # ── Step 9: Select EvidenceTop3 ──
-    logger.info("Step 9: Selecting evidence...")
+    # ── Step 9: X Search enrichment + EvidenceTop3 ──
+    logger.info("Step 9: Enriching evidence (X search: %s)...", degrade.x_search_enabled)
+    x_search_calls = 0
+
+    if degrade.x_search_enabled:
+        from packages.connectors.x_search import XSearchConnector
+        x_connector = XSearchConnector()
+        x_limit = min(degrade.x_search_max, len(top_candidates))
+
+        for entry in top_candidates[:x_limit]:
+            cand = entry["candidate"]
+            try:
+                x_evidence = x_connector.search_candidate(cand.display_name)
+                x_search_calls += 1
+                # Add X evidence to the pool
+                cand_id = entry["candidate_id"]
+                for ev in x_evidence:
+                    if cand_id not in candidate_evidence:
+                        candidate_evidence[cand_id] = []
+                    candidate_evidence[cand_id].append({
+                        "source_id": ev.source_id,
+                        "title": ev.title,
+                        "url": ev.url,
+                        "metric": ev.metric,
+                        "snippet": ev.snippet,
+                        "signal_value": 1.0,
+                    })
+            except Exception as e:
+                logger.warning("X Search failed for %s: %s", cand.display_name, e)
+
+    # Build final evidence for each candidate
     for entry in top_candidates:
         cand_id = entry["candidate_id"]
         raw_ev = candidate_evidence.get(cand_id, [])
@@ -331,6 +360,12 @@ def main(date_arg: str = "today") -> None:
 
     # ── Step 10: Generate summary ──
     logger.info("Step 10: Generating summaries (mode: %s)...", degrade.summary_mode)
+    llm_summary_calls = 0
+    llm_client = None
+    if degrade.summary_mode == "LLM":
+        from packages.core.llm_client import LLMClient
+        llm_client = LLMClient()
+
     for entry in top_candidates:
         cand = entry["candidate"]
         entry["summary"] = generate_summary(
@@ -339,14 +374,13 @@ def main(date_arg: str = "today") -> None:
             breakdown=entry["breakdown"],
             evidence=entry.get("evidence_top3", []),
             mode=degrade.summary_mode,
+            llm_client=llm_client,
         )
+        if degrade.summary_mode == "LLM" and llm_client and llm_client.available:
+            llm_summary_calls += 1
 
     # ── Step 11: Write to Firestore ──
     logger.info("Step 11: Writing results to Firestore...")
-    x_search_calls = 0
-    llm_summary_calls = 0
-    if degrade.summary_mode == "LLM":
-        llm_summary_calls = len(top_candidates)
 
     try:
         # Build DailyRankingItems

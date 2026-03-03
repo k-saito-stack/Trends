@@ -9,18 +9,16 @@ API docs: https://docs.x.ai/developers/tools/x-search
 
 from __future__ import annotations
 
+import json
 import logging
-import os
+import re
 from typing import Any
 
-import requests
-
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
-from packages.core.models import RawCandidate
+from packages.core.llm_client import LLMClient
+from packages.core.models import Evidence, RawCandidate
 
 logger = logging.getLogger(__name__)
-
-XAI_API_URL = "https://api.x.ai/v1/chat/completions"
 
 
 class XSearchConnector(BaseConnector):
@@ -33,7 +31,7 @@ class XSearchConnector(BaseConnector):
         **kwargs: Any,
     ) -> None:
         super().__init__(source_id="X_SEARCH", stability="B", **kwargs)
-        self.api_key = api_key or os.environ.get("XAI_API_KEY", "")
+        self.llm = LLMClient(api_key=api_key)
         self.max_candidates = max_candidates
 
     def fetch(self) -> FetchResult:
@@ -43,61 +41,71 @@ class XSearchConnector(BaseConnector):
         """
         return FetchResult(items=[], item_count=0)
 
-    def search_candidate(self, candidate_name: str) -> dict[str, Any] | None:
+    def search_candidate(self, candidate_name: str) -> list[Evidence]:
         """Search X posts related to a candidate name.
 
         Uses xAI's chat completions with x_search tool to find
-        related posts. Returns a summary dict or None on failure.
+        related posts. Returns a list of Evidence items.
         """
-        if not self.api_key:
+        if not self.llm.available:
             logger.warning("[%s] XAI_API_KEY not set", self.source_id)
-            return None
+            return []
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    f"'{candidate_name}'について、"
+                    "X(Twitter)で最近話題になっている投稿を3件まで教えてください。\n"
+                    "以下のJSON配列形式で返してください:\n"
+                    '[{"url": "投稿URL", "summary": "概要", '
+                    '"likes": 数値, "retweets": 数値}]'
+                ),
+            }
+        ]
 
-        payload = {
-            "model": "grok-3-mini",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": (
-                        f"'{candidate_name}'について、"
-                        "X(Twitter)で最近話題になっている投稿を3件まで教えてください。"
-                        "各投稿のURL、概要、反応数（いいね/RT）を簡潔にJSON形式で返してください。"
-                    ),
-                }
-            ],
-            "tools": [{"type": "x_search"}],
-            "temperature": 0,
-        }
+        result = self.llm.chat(
+            messages,
+            temperature=0,
+            tools=[{"type": "x_search"}],
+            max_tokens=800,
+        )
 
-        try:
-            resp = requests.post(
-                XAI_API_URL, json=payload, headers=headers, timeout=60
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except requests.RequestException as e:
-            logger.warning("[%s] Search failed for %s: %s",
-                           self.source_id, candidate_name, e)
-            return None
+        if result is None:
+            return []
 
-        # Extract the assistant's response
-        choices = data.get("choices", [])
-        if not choices:
-            return None
+        return self._parse_evidence(candidate_name, result)
 
-        message = choices[0].get("message", {})
-        content = message.get("content", "")
+    def _parse_evidence(self, candidate_name: str, content: str) -> list[Evidence]:
+        """Parse LLM response into Evidence items."""
+        evidence_list: list[Evidence] = []
 
-        return {
-            "candidate_name": candidate_name,
-            "content": content,
-            "source_id": self.source_id,
-        }
+        posts = _extract_json_array(content)
+
+        if posts:
+            for post in posts[:3]:
+                url = post.get("url", "")
+                summary = post.get("summary", "")
+                likes = post.get("likes", 0)
+                retweets = post.get("retweets", 0)
+
+                evidence_list.append(Evidence(
+                    source_id=self.source_id,
+                    title=summary[:100] if summary else f"X post about {candidate_name}",
+                    url=url,
+                    metric=f"likes:{likes},RT:{retweets}",
+                    snippet=summary[:200] if summary else "",
+                ))
+        else:
+            # Fallback: use the raw content as a single evidence
+            evidence_list.append(Evidence(
+                source_id=self.source_id,
+                title=f"X posts about {candidate_name}",
+                url="",
+                snippet=content[:200],
+            ))
+
+        return evidence_list
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
         """Not used (X Search is not a Discover source)."""
@@ -108,3 +116,36 @@ class XSearchConnector(BaseConnector):
     ) -> list[SignalResult]:
         """Not used (X Search is not a Discover source)."""
         return []
+
+
+def _extract_json_array(text: str) -> list[dict[str, Any]]:
+    """Try to extract a JSON array from text."""
+    # Direct parse
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # Find JSON in markdown code blocks
+    json_match = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", text)
+    if json_match:
+        try:
+            parsed = json.loads(json_match.group(1))
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    # Find JSON array pattern in text
+    arr_match = re.search(r"\[[\s\S]*?\]", text)
+    if arr_match:
+        try:
+            parsed = json.loads(arr_match.group())
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    return []
