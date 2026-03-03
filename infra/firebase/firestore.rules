@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper: user has verified @kodansha.co.jp email
+    function isAllowedDomain() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches(".*@kodansha\\.co\\.jp$");
+    }
+
+    // Daily rankings (read-only for users, write by Admin SDK only)
+    match /daily_rankings/{date} {
+      allow read: if isAllowedDomain();
+      allow write: if false;
+      match /items/{candidateId} {
+        allow read: if isAllowedDomain();
+        allow write: if false;
+      }
+    }
+
+    // Config (read/write for authorized users)
+    match /config/{doc} {
+      allow read, write: if isAllowedDomain();
+    }
+    match /config/sources/{sourceId} {
+      allow read, write: if isAllowedDomain();
+    }
+
+    // Queries (read/write for authorized users)
+    match /queries/{queryId} {
+      allow read, write: if isAllowedDomain();
+    }
+
+    // Candidates (read/write for authorized users)
+    match /candidates/{candidateId} {
+      allow read, write: if isAllowedDomain();
+    }
+
+    // Change logs (read/write for authorized users)
+    match /change_logs/{logId} {
+      allow read, write: if isAllowedDomain();
+    }
+
+    // Run logs (read-only for users, write by Admin SDK only)
+    match /runs/{runId} {
+      allow read: if isAllowedDomain();
+      allow write: if false;
+    }
+
+    // Cost logs (read-only for users, write by Admin SDK only)
+    match /cost_logs/{yyyymm} {
+      allow read: if isAllowedDomain();
+      allow write: if false;
+      match /days/{date} {
+        allow read: if isAllowedDomain();
+        allow write: if false;
+      }
+    }
+
+    // Config snapshots (read-only for users, write by Admin SDK only)
+    match /snapshots/{doc=**} {
+      allow read: if isAllowedDomain();
+      allow write: if false;
+    }
+  }
+}

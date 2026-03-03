@@ -1,0 +1,14 @@
+# Firebase
+firebase-admin>=6.4.0
+
+# HTTP / Data fetching
+requests>=2.31.0
+feedparser>=6.0.0
+
+# Utilities
+python-ulid>=2.7.0
+
+# Dev / Testing
+pytest>=8.0.0
+ruff>=0.5.0
+mypy>=1.10.0
