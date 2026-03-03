@@ -1,0 +1,22 @@
+{
+  "feed": {
+    "title": "Top Songs - Japan",
+    "results": [
+      {
+        "name": "夜明け",
+        "artistName": "YOASOBI",
+        "url": "https://music.apple.com/jp/album/yoake/123"
+      },
+      {
+        "name": "Magnetic",
+        "artistName": "ILLIT",
+        "url": "https://music.apple.com/jp/album/magnetic/456"
+      },
+      {
+        "name": "新時代",
+        "artistName": "Ado",
+        "url": "https://music.apple.com/jp/album/shinjidai/789"
+      }
+    ]
+  }
+}

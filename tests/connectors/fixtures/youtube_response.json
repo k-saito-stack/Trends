@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "id": "abc123",
+      "snippet": {
+        "title": "【MV】新曲「夜明け」Official Music Video",
+        "channelTitle": "YOASOBI",
+        "publishedAt": "2026-03-01T10:00:00Z"
+      },
+      "statistics": {
+        "viewCount": "5000000",
+        "likeCount": "100000"
+      }
+    },
+    {
+      "id": "def456",
+      "snippet": {
+        "title": "最新ドラマ予告「光の中で」第1話",
+        "channelTitle": "TBS公式",
+        "publishedAt": "2026-03-02T08:00:00Z"
+      },
+      "statistics": {
+        "viewCount": "2000000",
+        "likeCount": "50000"
+      }
+    },
+    {
+      "id": "ghi789",
+      "snippet": {
+        "title": "YOASOBI - ライブ映像 2026",
+        "channelTitle": "YOASOBI",
+        "publishedAt": "2026-02-28T12:00:00Z"
+      },
+      "statistics": {
+        "viewCount": "3000000",
+        "likeCount": "80000"
+      }
+    }
+  ]
+}
