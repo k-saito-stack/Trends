@@ -35,6 +35,7 @@ from packages.connectors.base import BaseConnector, SignalResult
 from packages.connectors.google_trends import GoogleTrendsConnector
 from packages.connectors.rakuten_magazine import RakutenMagazineConnector
 from packages.connectors.rss_feeds import RSSFeedConnector
+from packages.connectors.x_search import XTrendingConnector
 from packages.connectors.youtube import YouTubeConnector
 from packages.core import candidate_store
 from packages.core.config import load_algorithm_config, load_app_config, load_music_config
@@ -83,6 +84,7 @@ def _create_connectors() -> list[BaseConnector]:
         GoogleTrendsConnector(),
         RSSFeedConnector(),
         RakutenMagazineConnector(),
+        XTrendingConnector(),
     ]
 
 
@@ -322,7 +324,7 @@ def main(date_arg: str = "today") -> None:
     top_candidates = select_top_k(candidate_score_list, top_k=app_config.top_k)
     logger.info("Selected %d candidates", len(top_candidates))
 
-    # ── Step 9: X Search enrichment + EvidenceTop3 ──
+    # ── Step 9: X Search enrichment + Wikipedia power + EvidenceTop3 ──
     logger.info("Step 9: Enriching evidence (X search: %s)...", degrade.x_search_enabled)
     x_search_calls = 0
 
@@ -351,6 +353,31 @@ def main(date_arg: str = "today") -> None:
                     })
             except Exception as e:
                 logger.warning("X Search failed for %s: %s", cand.display_name, e)
+
+    # Wikipedia power score (free API, no key needed)
+    logger.info("Step 9b: Fetching Wikipedia power scores...")
+    try:
+        from packages.connectors.wikipedia import WikipediaConnector
+        wiki = WikipediaConnector()
+        # Date range: last 7 days
+        end_dt = datetime.strptime(target_date, "%Y-%m-%d")
+        start_dt = end_dt - timedelta(days=7)
+        wiki_start = start_dt.strftime("%Y%m%d")
+        wiki_end = end_dt.strftime("%Y%m%d")
+
+        for entry in top_candidates:
+            cand = entry["candidate"]
+            wiki_title = cand.display_name.replace(" ", "_")
+            try:
+                pv = wiki.fetch_pageviews(wiki_title, wiki_start, wiki_end)
+                if pv is not None and pv > 0:
+                    entry["power"] = wiki.compute_power_score(pv)
+                    logger.info("  Wiki: %s -> %d PV (power=%.2f)",
+                                cand.display_name, pv, entry["power"])
+            except Exception as e:
+                logger.debug("Wiki failed for %s: %s", cand.display_name, e)
+    except Exception as e:
+        logger.warning("Wikipedia connector failed: %s", e)
 
     # Build final evidence for each candidate
     for entry in top_candidates:
@@ -398,6 +425,7 @@ def main(date_arg: str = "today") -> None:
                 evidence_top3=entry.get("evidence_top3", []),
                 summary=entry.get("summary", ""),
                 sparkline_7d=cand.trend_history_7d[-7:],
+                power=entry.get("power"),
             )
             ranking_items.append(item)
 

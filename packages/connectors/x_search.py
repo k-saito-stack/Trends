@@ -1,7 +1,8 @@
 """X Search (xAI) connector.
 
-Used for evidence enrichment of top candidates (NOT as a Discover source).
-Searches X (Twitter) posts related to candidates for corroboration.
+Two modes:
+1. XTrendingConnector: Discover trending topics on X (regular source)
+2. XSearchConnector: Evidence enrichment per-candidate (Step 9)
 
 Spec reference: Section 8, Rule 7 (X Search)
 API docs: https://docs.x.ai/developers/tools/x-search
@@ -11,14 +12,123 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from typing import Any
 
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
 from packages.core.llm_client import LLMClient
-from packages.core.models import Evidence, RawCandidate
+from packages.core.models import CandidateType, Evidence, RawCandidate
 
 logger = logging.getLogger(__name__)
+
+# Valid CandidateType values for parsing LLM output
+_VALID_TYPES = {t.value for t in CandidateType}
+
+
+class XTrendingConnector(BaseConnector):
+    """Discover trending topics on X via xAI x_search (regular source)."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        max_results: int = 20,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(source_id="X_TRENDING", stability="C", **kwargs)
+        self.llm = LLMClient(api_key=api_key)
+        self.max_results = max_results
+
+    def fetch(self) -> FetchResult:
+        """Fetch trending topics from X via xAI x_search tool."""
+        if not self.llm.available:
+            return FetchResult(error="XAI_API_KEY not set")
+
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    "日本のX(Twitter)で直近24時間に話題になっている"
+                    "人物、グループ、アーティスト、作品、キーワードを"
+                    f"最大{self.max_results}件教えてください。\n"
+                    "以下のJSON配列形式で回答してください:\n"
+                    '[{"name": "名前", '
+                    '"type": "PERSON / GROUP / WORK / MUSIC_ARTIST / MUSIC_TRACK / KEYWORD", '
+                    '"engagement": いいね+RT概算数値, '
+                    '"summary": "なぜ話題か1行"}]'
+                ),
+            }
+        ]
+
+        result = self.llm.chat(
+            messages,
+            temperature=0,
+            tools=[{"type": "x_search"}],
+            max_tokens=1500,
+        )
+
+        if result is None:
+            return FetchResult(error="X trending search returned no result")
+
+        items = _extract_json_array(result)
+        return FetchResult(items=items, item_count=len(items))
+
+    def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
+        """Extract candidates from X trending items."""
+        candidates: list[RawCandidate] = []
+
+        for i, item in enumerate(items):
+            name = item.get("name", "")
+            if not name:
+                continue
+
+            type_str = item.get("type", "KEYWORD").strip()
+            cand_type = (
+                CandidateType(type_str) if type_str in _VALID_TYPES
+                else CandidateType.KEYWORD
+            )
+
+            engagement = item.get("engagement", 0) or 0
+            summary = item.get("summary", "")
+            rank = i + 1
+
+            evidence = Evidence(
+                source_id=self.source_id,
+                title=name,
+                url="",
+                snippet=summary[:200] if summary else "",
+                metric=f"rank:{rank},engagement:{engagement}",
+            )
+
+            candidates.append(RawCandidate(
+                name=name,
+                type=cand_type,
+                source_id=self.source_id,
+                rank=rank,
+                metric_value=math.log1p(engagement) if engagement > 0 else 1.0,
+                evidence=evidence,
+            ))
+
+        return candidates
+
+    def compute_signals(
+        self, items: list[dict[str, Any]], candidates: list[RawCandidate]
+    ) -> list[SignalResult]:
+        """Compute signals from X trending data."""
+        signals: dict[str, SignalResult] = {}
+
+        for cand in candidates:
+            key = cand.name
+            if key in signals:
+                signals[key].signal_value += cand.metric_value
+            else:
+                signals[key] = SignalResult(
+                    candidate_name=key,
+                    signal_value=cand.metric_value,
+                    evidence=cand.evidence,
+                )
+
+        return list(signals.values())
 
 
 class XSearchConnector(BaseConnector):

@@ -27,6 +27,7 @@ SOURCE_TO_BUCKET: dict[str, str] = {
     "NEWS_RSS": DisplayBucket.NEWS_RSS,
     "RAKUTEN_MAG": DisplayBucket.MAGAZINES,
     "X_SEARCH": DisplayBucket.X,
+    "X_TRENDING": DisplayBucket.X,
     "IG_BOOST": DisplayBucket.INSTAGRAM_BOOST,
 }
 
