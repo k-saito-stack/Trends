@@ -59,8 +59,13 @@ class RakutenMagazineConnector(BaseConnector):
             "outOfStockFlag": 0,
         }
 
+        # Origin header required since Feb 2026 API migration
+        headers = {"Origin": "https://k-saito-stack.github.io"}
+
         try:
-            resp = requests.get(RAKUTEN_API_URL, params=params, timeout=30)
+            resp = requests.get(
+                RAKUTEN_API_URL, params=params, headers=headers, timeout=30,
+            )
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as e:
