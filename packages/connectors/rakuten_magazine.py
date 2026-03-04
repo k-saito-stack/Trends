@@ -20,7 +20,12 @@ from packages.core.models import CandidateType, Evidence, RawCandidate
 
 logger = logging.getLogger(__name__)
 
-RAKUTEN_API_URL = "https://app.rakuten.co.jp/services/api/BooksMagazine/Search/20170404"
+# Rakuten API migrated to openapi.rakuten.co.jp in Feb 2026
+# accessKey is now required in addition to applicationId
+RAKUTEN_API_URL = "https://openapi.rakuten.co.jp/services/api/BooksMagazine/Search/20170404"
+
+# booksGenreId 007604: 雑誌 (magazines)
+DEFAULT_MAGAZINE_GENRE = "007604"
 
 
 class RakutenMagazineConnector(BaseConnector):
@@ -29,20 +34,26 @@ class RakutenMagazineConnector(BaseConnector):
     def __init__(
         self,
         app_id: str | None = None,
+        access_key: str | None = None,
         max_results: int = 30,
         **kwargs: Any,
     ) -> None:
         super().__init__(source_id="RAKUTEN_MAG", stability="B", **kwargs)
         self.app_id = app_id or os.environ.get("RAKUTEN_APP_ID", "")
+        self.access_key = access_key or os.environ.get("RAKUTEN_ACCESS_KEY", "")
         self.max_results = max_results
 
     def fetch(self) -> FetchResult:
         """Fetch recent magazines from Rakuten Books API."""
         if not self.app_id:
             return FetchResult(error="RAKUTEN_APP_ID not set")
+        if not self.access_key:
+            return FetchResult(error="RAKUTEN_ACCESS_KEY not set")
 
         params: dict[str, Any] = {
             "applicationId": self.app_id,
+            "accessKey": self.access_key,
+            "booksGenreId": DEFAULT_MAGAZINE_GENRE,
             "sort": "-releaseDate",
             "hits": self.max_results,
             "outOfStockFlag": 0,

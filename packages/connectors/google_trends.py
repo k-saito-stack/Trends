@@ -20,10 +20,8 @@ from packages.core.models import CandidateType, Evidence, RawCandidate
 logger = logging.getLogger(__name__)
 
 # Google Trends Daily Trends RSS (public, no auth needed)
-GOOGLE_TRENDS_RSS_URL = (
-    "https://trends.google.co.jp/trends/trendingsearches/daily/rss"
-    "?geo=JP"
-)
+# Note: Old URL (.../trendingsearches/daily/rss) was deprecated (404).
+GOOGLE_TRENDS_RSS_URL = "https://trends.google.com/trending/rss?geo=JP"
 
 
 class GoogleTrendsConnector(BaseConnector):
@@ -114,16 +112,21 @@ def _parse_trends_rss(xml_content: str) -> list[dict[str, Any]]:
         return items
 
     # RSS namespace handling
-    ns = {"ht": "https://trends.google.co.jp/trends/trendingsearches/daily"}
+    ns = {"ht": "https://trends.google.com/trending/rss"}
 
     for item_el in root.iter("item"):
         title_el = item_el.find("title")
-        link_el = item_el.find("link")
         traffic_el = item_el.find("ht:approx_traffic", ns)
 
         title = title_el.text if title_el is not None and title_el.text else ""
-        url = link_el.text if link_el is not None and link_el.text else ""
         traffic = traffic_el.text if traffic_el is not None and traffic_el.text else ""
+
+        # Get URL from first news_item (link tag points to feed itself)
+        url = ""
+        news_item = item_el.find("ht:news_item", ns)
+        if news_item is not None:
+            url_el = news_item.find("ht:news_item_url", ns)
+            url = url_el.text if url_el is not None and url_el.text else ""
 
         if title:
             items.append({
