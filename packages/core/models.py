@@ -49,6 +49,7 @@ class SourceState:
     last_sig: float = 0.0    # most recent sig_beta value
     last_updated: str = ""   # ISO date string (YYYY-MM-DD)
     observation_count: int = 0  # for warmup tracking
+    sig_history: list[float] = field(default_factory=list)  # [sig_t, sig_{t-1}, sig_{t-2}]
 
 
 # --- Evidence ---
@@ -108,6 +109,7 @@ class Candidate:
                     "lastSig": v.last_sig,
                     "lastUpdated": v.last_updated,
                     "observationCount": v.observation_count,
+                    "sigHistory": v.sig_history,
                 }
                 for k, v in self.source_state.items()
             },
@@ -125,6 +127,7 @@ class Candidate:
                 last_sig=v.get("lastSig", 0.0),
                 last_updated=v.get("lastUpdated", ""),
                 observation_count=v.get("observationCount", 0),
+                sig_history=v.get("sigHistory", []),
             )
         return cls(
             candidate_id=data.get("candidateId", ""),

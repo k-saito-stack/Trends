@@ -283,12 +283,13 @@ def main(date_arg: str = "today") -> None:
             candidate.source_state[source_id] = updated_state
 
             # Build sig history: [sig_t, sig_{t-1}, sig_{t-2}]
-            # sig_{t-1} and sig_{t-2} come from stored history
-            prev_sigs: list[float] = (
-                candidate.trend_history_7d[-2:] if candidate.trend_history_7d else []
-            )
-            sig_history: list[float] = [sig_value] + prev_sigs
-            sig_by_source[cand_id][source_id] = sig_history
+            # Use per-source sig_history (not trend_history_7d which is aggregated)
+            prev_sigs: list[float] = updated_state.sig_history[:2]
+            sig_history_list: list[float] = [sig_value] + prev_sigs
+            sig_by_source[cand_id][source_id] = sig_history_list
+
+            # Update per-source sig history (keep last 3)
+            updated_state.sig_history = sig_history_list[:3]
 
     # ── Step 7: Aggregate to buckets + multiBonus ──
     logger.info("Step 7: Computing TrendScores...")

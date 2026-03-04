@@ -118,6 +118,7 @@ def update_source_state(
             last_sig=0.0,
             last_updated=target_date,
             observation_count=new_count,
+            sig_history=state.sig_history,
         ), 0.0
 
     # Compute significance
@@ -129,6 +130,7 @@ def update_source_state(
         last_sig=sig,
         last_updated=target_date,
         observation_count=new_count,
+        sig_history=state.sig_history,
     ), sig
 
 
