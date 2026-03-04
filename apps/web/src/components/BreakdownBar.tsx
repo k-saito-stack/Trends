@@ -1,17 +1,17 @@
 /**
- * Horizontal stacked bar showing bucket score breakdown.
+ * Horizontal stacked bar — blue gradient design system.
  */
 import type { BucketScore } from "../hooks/useDailyRanking";
 
 const BUCKET_COLORS: Record<string, string> = {
-  TRENDS: "#3b82f6",
-  YOUTUBE: "#ef4444",
-  X: "#1d9bf0",
-  NEWS_RSS: "#f59e0b",
-  RANKINGS_STREAM: "#8b5cf6",
-  MUSIC: "#ec4899",
-  MAGAZINES: "#10b981",
-  INSTAGRAM_BOOST: "#f97316",
+  TRENDS: "#2563eb",
+  YOUTUBE: "#1d4ed8",
+  X: "#3b82f6",
+  NEWS_RSS: "#60a5fa",
+  RANKINGS_STREAM: "#1e40af",
+  MUSIC: "#3b82f6",
+  MAGAZINES: "#93c5fd",
+  INSTAGRAM_BOOST: "#1e3a8a",
 };
 
 interface BreakdownBarProps {
@@ -24,7 +24,7 @@ export default function BreakdownBar({ buckets, totalScore }: BreakdownBarProps)
 
   return (
     <div>
-      <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
+      <div className="flex h-4 overflow-hidden bg-blue-100">
         {buckets.map((b) => {
           const pct = (b.score / totalScore) * 100;
           if (pct <= 0) return null;
@@ -33,22 +33,24 @@ export default function BreakdownBar({ buckets, totalScore }: BreakdownBarProps)
               key={b.bucket}
               style={{
                 width: `${pct}%`,
-                backgroundColor: BUCKET_COLORS[b.bucket] || "#9ca3af",
+                backgroundColor: BUCKET_COLORS[b.bucket] || "#93c5fd",
               }}
               title={`${b.bucket}: ${b.score.toFixed(1)}`}
             />
           );
         })}
       </div>
-      <div className="flex flex-wrap gap-2 mt-1">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
         {buckets.map((b) => (
-          <span key={b.bucket} className="text-xs text-gray-500">
-            <span
-              className="inline-block w-2 h-2 rounded-full mr-1"
-              style={{ backgroundColor: BUCKET_COLORS[b.bucket] || "#9ca3af" }}
+          <div key={b.bucket} className="flex items-center">
+            <div
+              className="w-2 h-2 mr-1"
+              style={{ backgroundColor: BUCKET_COLORS[b.bucket] || "#93c5fd" }}
             />
-            {b.bucket} ({b.score.toFixed(1)})
-          </span>
+            <span className="text-blue-600 text-[10px]">
+              {b.bucket} ({b.score.toFixed(1)})
+            </span>
+          </div>
         ))}
       </div>
     </div>

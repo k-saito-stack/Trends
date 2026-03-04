@@ -20,8 +20,8 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-400">読み込み中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#0039d6]">
+        <div className="text-white/60">読み込み中...</div>
       </div>
     );
   }
@@ -31,7 +31,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0039d6]">
       <Header
         date={date}
         onDateChange={setDate}
@@ -40,7 +40,7 @@ export default function App() {
         userName={user.displayName}
       />
 
-      <main className="max-w-4xl mx-auto px-4 py-4">
+      <main className="max-w-2xl mx-auto px-4 py-4 pb-12">
         <Dashboard date={date} />
       </main>
 

@@ -1,5 +1,5 @@
 /**
- * Mini sparkline chart showing 7-day trend.
+ * Mini sparkline chart — blue strokes on white card.
  */
 interface SparklineProps {
   data: (number | null)[];
@@ -13,7 +13,7 @@ export default function Sparkline({
   height = 24,
 }: SparklineProps) {
   const values = data.filter((v): v is number => v !== null && v !== undefined);
-  if (values.length < 2) return <span className="text-xs text-gray-400">-</span>;
+  if (values.length < 2) return <span className="text-xs text-blue-600/30">-</span>;
 
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -27,9 +27,9 @@ export default function Sparkline({
     })
     .join(" ");
 
-  // Color: green if last > first, red if declining
+  // Blue tones: lighter for decline, darker for rise
   const trend = values[values.length - 1] >= values[0];
-  const color = trend ? "#22c55e" : "#ef4444";
+  const color = trend ? "#2563eb" : "#93c5fd";
 
   return (
     <svg width={width} height={height} className="inline-block">
@@ -37,10 +37,19 @@ export default function Sparkline({
         points={points}
         fill="none"
         stroke={color}
-        strokeWidth="1.5"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      {/* End dot */}
+      {values.length > 0 && (
+        <circle
+          cx={(values.length - 1) / (values.length - 1) * width}
+          cy={height - ((values[values.length - 1] - min) / range) * (height - 4) - 2}
+          r="2.5"
+          fill={color}
+        />
+      )}
     </svg>
   );
 }

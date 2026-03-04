@@ -1,5 +1,5 @@
 /**
- * Dashboard header with date navigation and controls.
+ * Dashboard header — blue background with white text and SVG icons.
  */
 interface HeaderProps {
   date: string;
@@ -33,47 +33,56 @@ export default function Header({
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+    <header className="bg-[#0039d6]">
+      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+        {/* Left: title + date nav */}
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-gray-800">Trends</h1>
+          <h1 className="text-white text-lg font-medium">Trends</h1>
           <div className="flex items-center gap-1">
             <button
               onClick={handlePrevDay}
-              className="px-2 py-1 text-gray-500 hover:text-gray-800 text-sm"
+              className="text-white/70 hover:text-white p-1"
             >
-              &lt;
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
             <input
               type="date"
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-2 py-1"
+              className="text-sm bg-transparent border border-white/30 text-white px-2 py-1 outline-none"
             />
             <button
               onClick={handleNextDay}
-              className="px-2 py-1 text-gray-500 hover:text-gray-800 text-sm"
+              className="text-white/70 hover:text-white p-1"
             >
-              &gt;
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Right: user + settings + logout */}
+        <div className="flex items-center gap-2">
           {userName && (
-            <span className="text-xs text-gray-500 hidden sm:inline">
+            <span className="text-xs text-white/50 hidden sm:inline">
               {userName}
             </span>
           )}
           <button
             onClick={onSettingsClick}
-            className="text-gray-500 hover:text-gray-800 text-sm px-2 py-1"
+            className="text-white/70 hover:text-white p-1"
+            title="設定"
           >
-            設定
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
           </button>
           <button
             onClick={onLogout}
-            className="text-gray-500 hover:text-gray-800 text-sm px-2 py-1"
+            className="text-white/70 hover:text-white text-xs border border-white/30 px-3 py-1"
           >
             ログアウト
           </button>
