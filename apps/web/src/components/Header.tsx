@@ -1,9 +1,11 @@
 /**
  * Header — OCI style.
  * Blue bg, 2 rows (logo + nav), scramble title, reveal-from-bottom logout.
+ * Magnetic cursor on interactive elements.
  */
 import { useRef } from "react";
 import { gsap } from "../hooks/useGSAPSetup";
+import { useMagnetic } from "../hooks/useMagnetic";
 import { useScrambleText } from "../hooks/useScrambleText";
 
 interface HeaderProps {
@@ -25,6 +27,12 @@ export default function Header({
   const logoutBgRef = useRef<HTMLDivElement>(null);
   const logoutTextRef = useRef<HTMLSpanElement>(null);
   const { scramble } = useScrambleText();
+
+  // Magnetic cursor for interactive elements
+  const magLogout = useMagnetic(0.3);
+  const magPrev = useMagnetic(0.4);
+  const magNext = useMagnetic(0.4);
+  const magSettings = useMagnetic(0.3);
 
   const handlePrevDay = () => {
     const d = new Date(date);
@@ -94,9 +102,14 @@ export default function Header({
               </span>
             )}
             <button
+              ref={magLogout.ref as React.RefObject<HTMLButtonElement>}
               onClick={onLogout}
               onMouseEnter={handleLogoutEnter}
-              onMouseLeave={handleLogoutLeave}
+              onMouseMove={magLogout.onMouseMove}
+              onMouseLeave={() => {
+                handleLogoutLeave();
+                magLogout.onMouseLeave();
+              }}
               className="oci-btn border-oci-mercury/30"
             >
               <div
@@ -118,7 +131,10 @@ export default function Header({
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
             <button
+              ref={magPrev.ref as React.RefObject<HTMLButtonElement>}
               onClick={handlePrevDay}
+              onMouseMove={magPrev.onMouseMove}
+              onMouseLeave={magPrev.onMouseLeave}
               className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1"
             >
               <svg
@@ -145,7 +161,10 @@ export default function Header({
                          transition-colors duration-300"
             />
             <button
+              ref={magNext.ref as React.RefObject<HTMLButtonElement>}
               onClick={handleNextDay}
+              onMouseMove={magNext.onMouseMove}
+              onMouseLeave={magNext.onMouseLeave}
               className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1"
             >
               <svg
@@ -166,7 +185,10 @@ export default function Header({
           </div>
 
           <button
+            ref={magSettings.ref as React.RefObject<HTMLButtonElement>}
             onClick={onSettingsClick}
+            onMouseMove={magSettings.onMouseMove}
+            onMouseLeave={magSettings.onMouseLeave}
             className="oci-link text-oci-mercury/50 gap-2"
           >
             <span className="oci-link__dot" style={{ backgroundColor: "#e8e6e0" }} />
