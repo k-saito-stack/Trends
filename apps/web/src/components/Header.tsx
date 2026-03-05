@@ -15,6 +15,7 @@ interface HeaderProps {
   onSettingsClick: () => void;
   onLogout: () => void;
   userEmail: string | null;
+  generatedAt: string | null;
 }
 
 export default function Header({
@@ -23,6 +24,7 @@ export default function Header({
   onSettingsClick,
   onLogout,
   userEmail,
+  generatedAt,
 }: HeaderProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const logoutBgRef = useRef<HTMLDivElement>(null);
@@ -219,16 +221,23 @@ export default function Header({
             </button>
           </div>
 
-          <button
-            ref={magSettings.ref as React.RefObject<HTMLButtonElement>}
-            onClick={onSettingsClick}
-            onMouseMove={magSettings.onMouseMove}
-            onMouseLeave={magSettings.onMouseLeave}
-            className="oci-link text-oci-mercury/50 gap-2"
-          >
-            <span className="oci-link__dot" style={{ backgroundColor: "#e8e6e0" }} />
-            <span className="oci-label-sm">Settings</span>
-          </button>
+          <div className="flex items-center gap-5">
+            {generatedAt && (
+              <span className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+                {new Date(generatedAt).toLocaleString("ja-JP")}
+              </span>
+            )}
+            <button
+              ref={magSettings.ref as React.RefObject<HTMLButtonElement>}
+              onClick={onSettingsClick}
+              onMouseMove={magSettings.onMouseMove}
+              onMouseLeave={magSettings.onMouseLeave}
+              className="oci-link text-oci-mercury/50 gap-2"
+            >
+              <span className="oci-link__dot" style={{ backgroundColor: "#e8e6e0" }} />
+              <span className="oci-label-sm">Settings</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>

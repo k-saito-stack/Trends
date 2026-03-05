@@ -13,16 +13,20 @@ import CustomScrollbar from "./components/CustomScrollbar";
 import GridLines from "./components/GridLines";
 import { useAuth } from "./hooks/useAuth";
 import { useLenis } from "./hooks/useLenis";
+import { useDailyRanking } from "./hooks/useDailyRanking";
 
 function getToday(): string {
   return new Date().toISOString().split("T")[0];
 }
 
 export default function App() {
-  const { user, loading, error, login, logout } = useAuth();
+  const { user, loading: authLoading, error: authError, login, logout } = useAuth();
   const [date, setDate] = useState(getToday());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loaderDone, setLoaderDone] = useState(false);
+
+  // Data
+  const { items, meta, loading: dataLoading, error: dataError } = useDailyRanking(date);
 
   // Smooth scroll
   useLenis();
@@ -37,7 +41,7 @@ export default function App() {
   }
 
   // Auth loading
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-oci-mercury">
         <span className="oci-label text-oci-blue/40">Loading...</span>
@@ -47,7 +51,7 @@ export default function App() {
 
   // Not authenticated
   if (!user) {
-    return <LoginPage onLogin={login} error={error} />;
+    return <LoginPage onLogin={login} error={authError} />;
   }
 
   // Authenticated
@@ -63,10 +67,11 @@ export default function App() {
         onSettingsClick={() => setSettingsOpen(true)}
         onLogout={logout}
         userEmail={user.email}
+        generatedAt={meta?.generatedAt ?? null}
       />
 
       <main className="relative z-10 max-w-5xl mx-auto px-6 lg:px-10 pt-8 pb-20">
-        <Dashboard date={date} />
+        <Dashboard items={items} loading={dataLoading} error={dataError} />
       </main>
 
       <SettingsDrawer
