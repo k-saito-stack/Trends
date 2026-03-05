@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import math
-import re
 from html.parser import HTMLParser
 from typing import Any
 
@@ -43,7 +42,7 @@ class _Top10TableParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr_dict = dict(attrs)
-        cls = attr_dict.get("class", "")
+        cls = attr_dict.get("class") or ""
         if "rank" in cls.split():
             self._in_rank = True
             self._current_rank = ""

@@ -7,7 +7,8 @@ applying enabled/fetchLimit/killSwitch settings from config.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from packages.connectors.apple_music import AppleMusicConnector
 from packages.connectors.base import BaseConnector

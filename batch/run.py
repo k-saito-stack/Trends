@@ -481,7 +481,10 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     # ── Step 8: Preliminary TopM (wider pool for wiki enrichment) ──
     from packages.core.ranking import compute_final_score
     preliminary_top_m = min(80, len(candidate_score_list))
-    logger.info("Step 8: Preliminary Top %d (from %d)...", preliminary_top_m, len(candidate_score_list))
+    logger.info(
+        "Step 8: Preliminary Top %d (from %d)...",
+        preliminary_top_m, len(candidate_score_list),
+    )
     preliminary_candidates = select_top_k(candidate_score_list, top_k=preliminary_top_m)
 
     # ── Step 9: X Search enrichment + Wikipedia power + EvidenceTop3 ──
