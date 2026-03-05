@@ -92,6 +92,22 @@ SOURCE_CONFIGS = [
         "description": "xAI X Search (evidence enrichment for top candidates)",
     },
     {
+        "sourceId": "NETFLIX_TV_JP",
+        "enabled": True,
+        "stability": "B",
+        "fetchLimit": 10,
+        "killSwitch": {"maxConsecutiveFailures": 3},
+        "description": "Netflix Top 10 Japan TV Shows (weekly, HTML scraping)",
+    },
+    {
+        "sourceId": "NETFLIX_FILMS_JP",
+        "enabled": True,
+        "stability": "B",
+        "fetchLimit": 10,
+        "killSwitch": {"maxConsecutiveFailures": 3},
+        "description": "Netflix Top 10 Japan Films (weekly, HTML scraping)",
+    },
+    {
         "sourceId": "IG_BOOST",
         "enabled": False,
         "stability": "C",

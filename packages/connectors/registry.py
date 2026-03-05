@@ -12,6 +12,7 @@ from typing import Any, Callable
 from packages.connectors.apple_music import AppleMusicConnector
 from packages.connectors.base import BaseConnector
 from packages.connectors.google_trends import GoogleTrendsConnector
+from packages.connectors.netflix import NetflixTop10Connector
 from packages.connectors.rakuten_magazine import RakutenMagazineConnector
 from packages.connectors.rss_feeds import RSSFeedConnector
 from packages.connectors.x_search import XTrendingConnector
@@ -49,6 +50,18 @@ FACTORIES: dict[str, Callable[[dict[str, Any]], BaseConnector]] = {
         enabled=cfg.get("enabled", True),
     ),
     "X_TRENDING": lambda cfg: XTrendingConnector(
+        enabled=cfg.get("enabled", True),
+    ),
+    "NETFLIX_TV_JP": lambda cfg: NetflixTop10Connector(
+        category="tv",
+        max_results=cfg.get("fetchLimit", 10),
+        max_consecutive_failures=cfg.get("killSwitch", {}).get("maxConsecutiveFailures", 3),
+        enabled=cfg.get("enabled", True),
+    ),
+    "NETFLIX_FILMS_JP": lambda cfg: NetflixTop10Connector(
+        category="films",
+        max_results=cfg.get("fetchLimit", 10),
+        max_consecutive_failures=cfg.get("killSwitch", {}).get("maxConsecutiveFailures", 3),
         enabled=cfg.get("enabled", True),
     ),
 }
