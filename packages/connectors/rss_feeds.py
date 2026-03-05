@@ -64,11 +64,13 @@ class RSSFeedConnector(BaseConnector):
         return FetchResult(items=all_items, item_count=len(all_items))
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
-        """Extract candidates from article titles.
+        """Extract candidates from article titles using NER.
 
-        For MVP, the full title is used as a KEYWORD candidate.
-        The candidate engine's proper noun filter will handle noise.
+        NER extracts PERSON/GROUP/WORK entities from headlines.
+        Falls back to full title as KEYWORD if NER finds nothing.
         """
+        from packages.core.ner import extract_entities
+
         candidates: list[RawCandidate] = []
 
         for item in items:
@@ -85,13 +87,30 @@ class RSSFeedConnector(BaseConnector):
                 published_at=item.get("published", ""),
             )
 
-            candidates.append(RawCandidate(
-                name=title,
-                type=CandidateType.KEYWORD,
-                source_id=self.source_id,
-                metric_value=1.0,  # count-based: each mention = 1
-                evidence=evidence,
-            ))
+            # NER extraction from headline
+            entities = extract_entities(title, max_entities=5)
+            if entities:
+                for ent_text, ent_type in entities:
+                    try:
+                        cand_type = CandidateType(ent_type)
+                    except ValueError:
+                        cand_type = CandidateType.KEYWORD
+                    candidates.append(RawCandidate(
+                        name=ent_text,
+                        type=cand_type,
+                        source_id=self.source_id,
+                        metric_value=1.0,
+                        evidence=evidence,
+                    ))
+            else:
+                # Fallback: full title as KEYWORD
+                candidates.append(RawCandidate(
+                    name=title,
+                    type=CandidateType.KEYWORD,
+                    source_id=self.source_id,
+                    metric_value=1.0,
+                    evidence=evidence,
+                ))
 
         return candidates
 

@@ -36,6 +36,17 @@ class SignalResult:
     evidence: Evidence | None = None
 
 
+@dataclass
+class ConnectorRunResult:
+    """Result from a connector's full run() pipeline."""
+    source_id: str
+    ok: bool
+    item_count: int
+    candidates: list[RawCandidate] = field(default_factory=list)
+    signals: list[SignalResult] = field(default_factory=list)
+    error: str | None = None
+
+
 class BaseConnector(ABC):
     """Abstract base connector for data sources.
 
@@ -78,15 +89,19 @@ class BaseConnector(ABC):
     ) -> list[SignalResult]:
         """Compute daily signal x(s,q,t) for each candidate."""
 
-    def run(self) -> tuple[list[RawCandidate], list[SignalResult]]:
+    def run(self) -> ConnectorRunResult:
         """Execute full pipeline: fetch -> extract -> signal.
 
-        Returns (candidates, signals). On failure, returns empty lists
-        and increments failure counter for kill switch.
+        Returns ConnectorRunResult with ok=True on success (including 0 items),
+        ok=False on fetch failure. This distinction allows batch/run.py to
+        correctly handle 0-observation (x=0) vs missing data (x=None).
         """
         if not self.enabled:
             logger.info("[%s] Skipped (disabled)", self.source_id)
-            return [], []
+            return ConnectorRunResult(
+                source_id=self.source_id, ok=False, item_count=0,
+                error="disabled",
+            )
 
         # Kill switch check
         if self.consecutive_failures >= self.max_consecutive_failures:
@@ -95,7 +110,10 @@ class BaseConnector(ABC):
                 self.source_id,
                 self.consecutive_failures,
             )
-            return [], []
+            return ConnectorRunResult(
+                source_id=self.source_id, ok=False, item_count=0,
+                error="kill_switch",
+            )
 
         # Fetch
         try:
@@ -103,16 +121,25 @@ class BaseConnector(ABC):
         except Exception as e:
             self.consecutive_failures += 1
             logger.error("[%s] Fetch error: %s", self.source_id, e)
-            return [], []
+            return ConnectorRunResult(
+                source_id=self.source_id, ok=False, item_count=0,
+                error=str(e),
+            )
 
         if result.error:
             self.consecutive_failures += 1
             logger.error("[%s] Fetch error: %s", self.source_id, result.error)
-            return [], []
+            return ConnectorRunResult(
+                source_id=self.source_id, ok=False, item_count=0,
+                error=result.error,
+            )
 
         if not result.items:
             logger.info("[%s] No items returned", self.source_id)
-            return [], []
+            # ok=True: fetch succeeded but 0 items (valid 0-observation)
+            return ConnectorRunResult(
+                source_id=self.source_id, ok=True, item_count=0,
+            )
 
         # Reset failure counter on success
         self.consecutive_failures = 0
@@ -122,14 +149,21 @@ class BaseConnector(ABC):
             candidates = self.extract_candidates(result.items)
         except Exception as e:
             logger.error("[%s] Extract error: %s", self.source_id, e)
-            return [], []
+            return ConnectorRunResult(
+                source_id=self.source_id, ok=False, item_count=len(result.items),
+                error=f"extract: {e}",
+            )
 
         # Compute signals
         try:
             signals = self.compute_signals(result.items, candidates)
         except Exception as e:
             logger.error("[%s] Signal error: %s", self.source_id, e)
-            return candidates, []
+            return ConnectorRunResult(
+                source_id=self.source_id, ok=True, item_count=len(result.items),
+                candidates=candidates,
+                error=f"signal: {e}",
+            )
 
         logger.info(
             "[%s] OK: %d items -> %d candidates, %d signals",
@@ -138,4 +172,7 @@ class BaseConnector(ABC):
             len(candidates),
             len(signals),
         )
-        return candidates, signals
+        return ConnectorRunResult(
+            source_id=self.source_id, ok=True, item_count=len(result.items),
+            candidates=candidates, signals=signals,
+        )

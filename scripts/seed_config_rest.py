@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 
-from packages.core.models import AlgorithmConfig, AppConfig, MusicConfig
+from packages.core.models import AlgorithmConfig, AppConfig, MusicConfig, NerConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -156,19 +156,16 @@ def seed() -> None:
     music_config = MusicConfig()
     write_document(requests, project_id, "config", "music", music_config.to_dict(), headers)
 
-    # /config/sources/{sourceId}
+    # /config/ner
+    logger.info("Writing /config/ner ...")
+    ner_config = NerConfig()
+    write_document(requests, project_id, "config", "ner", ner_config.to_dict(), headers)
+
+    # /config_sources/{sourceId}
     for source in SOURCE_CONFIGS:
         source_id = source["sourceId"]
-        logger.info("Writing /config/sources/%s ...", source_id)
-        # Subcollection: config/sources/sourceId
-        url = (
-            f"{FIRESTORE_BASE}/projects/{project_id}/databases/(default)"
-            f"/documents/config/sources/{source_id}/{source_id}"
-        )
-        body = {"fields": dict_to_firestore_fields(source)}
-        resp = requests.patch(url, json=body, headers=headers, timeout=30)
-        resp.raise_for_status()
-        logger.info("  Written: config/sources/%s", source_id)
+        logger.info("Writing /config_sources/%s ...", source_id)
+        write_document(requests, project_id, "config_sources", source_id, source, headers)
 
     logger.info("Seed completed successfully!")
 

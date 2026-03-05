@@ -31,7 +31,7 @@ from ulid import ULID
 from batch.cost_tracker import estimate_run_cost, record_run_cost
 from batch.degrade import DegradeState, compute_degrade_state
 from packages.connectors.apple_music import AppleMusicConnector
-from packages.connectors.base import BaseConnector, SignalResult
+from packages.connectors.base import BaseConnector, ConnectorRunResult, SignalResult
 from packages.connectors.google_trends import GoogleTrendsConnector
 from packages.connectors.rakuten_magazine import RakutenMagazineConnector
 from packages.connectors.rss_feeds import RSSFeedConnector
@@ -160,7 +160,21 @@ def release_lock(target_date: str, run_id: str, status: str = "COMPLETED") -> No
 
 
 def _create_connectors() -> list[BaseConnector]:
-    """Create all active connector instances."""
+    """Create connector instances from Firestore source configs.
+
+    Falls back to hardcoded defaults if config loading fails.
+    """
+    try:
+        from packages.connectors.registry import build_connectors
+        from packages.core.config import load_all_source_configs
+        source_cfgs = load_all_source_configs()
+        if source_cfgs:
+            return build_connectors(source_cfgs)
+        logger.warning("No source configs found, using defaults")
+    except Exception as e:
+        logger.warning("Failed to load source configs: %s (using defaults)", e)
+
+    # Fallback: hardcoded defaults
     return [
         YouTubeConnector(),
         AppleMusicConnector(region="JP"),
@@ -183,13 +197,31 @@ def main(date_arg: str = "today") -> None:
     logger.info("Target date: %s", target_date)
 
     # Acquire per-date lock (prevent duplicate runs)
+    lock_acquired = False
     try:
         if not acquire_lock(target_date, run_id):
             logger.info("=== Batch skipped (lock not acquired) ===")
             return
+        lock_acquired = True
         logger.info("Lock acquired for %s", target_date)
     except Exception as e:
         logger.warning("Lock check failed (proceeding anyway): %s", e)
+
+    try:
+        _run_pipeline(target_date, run_id, errors)
+    except Exception as e:
+        logger.error("Batch pipeline failed with unexpected error: %s", e)
+        errors.append(f"FATAL: {e}")
+        if lock_acquired:
+            try:
+                release_lock(target_date, run_id, status="FAILED")
+            except Exception as lock_err:
+                logger.warning("Failed to release lock as FAILED: %s", lock_err)
+        raise
+
+
+def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
+    """Execute the main batch pipeline (extracted for lock safety)."""
 
     # ── Step 0: Load config + candidates ──
     logger.info("Step 0: Loading config and candidates...")
@@ -235,24 +267,34 @@ def main(date_arg: str = "today") -> None:
     connectors = _create_connectors()
     all_raw_candidates: list[RawCandidate] = []
     all_signals: dict[str, list[SignalResult]] = {}  # source_id -> signals
+    source_ok: dict[str, bool] = {}  # source_id -> fetch success flag
     sources_used: list[str] = []
 
     for connector in connectors:
         source_id = connector.source_id
         logger.info("  Fetching: %s", source_id)
         try:
-            raw_cands, signals = connector.run()
-            sources_used.append(source_id)
-            all_raw_candidates.extend(raw_cands)
-            all_signals[source_id] = signals
+            run_result: ConnectorRunResult = connector.run()
+            source_ok[source_id] = run_result.ok
+            if run_result.ok:
+                sources_used.append(source_id)
+            all_raw_candidates.extend(run_result.candidates)
+            all_signals[source_id] = run_result.signals
 
             # Log source result
             with contextlib.suppress(Exception):
-                update_run_source(run_id, source_id, len(raw_cands))
+                update_run_source(
+                    run_id, source_id, len(run_result.candidates),
+                    error=run_result.error,
+                )
+
+            if run_result.error and not run_result.ok:
+                errors.append(f"{source_id}: {run_result.error}")
 
         except Exception as e:
             error_msg = f"{source_id}: {e}"
             errors.append(error_msg)
+            source_ok[source_id] = False
             logger.error("  Failed: %s", error_msg)
             with contextlib.suppress(Exception):
                 update_run_source(run_id, source_id, 0, error=str(e))
@@ -357,34 +399,56 @@ def main(date_arg: str = "today") -> None:
     # sig_history: cand_id -> {source_id -> [sig_t, sig_{t-1}, sig_{t-2}]}
     sig_by_source: dict[str, dict[str, list[float]]] = {}
 
-    for cand_id, source_signals in candidate_signals.items():
+    # Collect all OK sources for 0-observation injection
+    ok_sources = [sid for sid, ok in source_ok.items() if ok]
+
+    # Process all candidates that have signals OR have existing state
+    active_candidate_ids = set(candidate_signals.keys()) | set(existing_candidates.keys())
+
+    for cand_id in active_candidate_ids:
         candidate = existing_candidates.get(cand_id)
         if candidate is None:
             continue
 
         sig_by_source[cand_id] = {}
 
-        for source_id, x_value in source_signals.items():
+        for source_id in ok_sources:
+            # x=0 if source succeeded but candidate had no signal
+            x_value = candidate_signals.get(cand_id, {}).get(source_id, 0.0)
+
+            # Only update sources where this candidate has existing state
+            # OR where it appeared today (to avoid creating state for every
+            # candidate x source combination)
+            has_existing_state = source_id in candidate.source_state
+            has_signal_today = (
+                cand_id in candidate_signals
+                and source_id in candidate_signals[cand_id]
+            )
+            if not has_existing_state and not has_signal_today:
+                continue
+
             # Get or create source state
             state = candidate.source_state.get(source_id)
             if state is None:
                 from packages.core.models import SourceState
                 state = SourceState()
 
-            # Update state
+            # Update state (x=0.0 is a valid observation)
             updated_state, sig_value = update_source_state(
                 state, x_value, algo_config, target_date
             )
             candidate.source_state[source_id] = updated_state
 
             # Build sig history: [sig_t, sig_{t-1}, sig_{t-2}]
-            # Use per-source sig_history (not trend_history_7d which is aggregated)
             prev_sigs: list[float] = updated_state.sig_history[:2]
             sig_history_list: list[float] = [sig_value] + prev_sigs
             sig_by_source[cand_id][source_id] = sig_history_list
 
             # Update per-source sig history (keep last 3)
             updated_state.sig_history = sig_history_list[:3]
+
+        # For failed sources (ok=False), skip update entirely (x=None)
+        # -> state is preserved as-is from previous day
 
     # ── Step 7: Aggregate to buckets + multiBonus ──
     logger.info("Step 7: Computing TrendScores...")
@@ -412,10 +476,11 @@ def main(date_arg: str = "today") -> None:
             "candidate": candidate,
         })
 
-    # ── Step 8: Select Top15 ──
-    logger.info("Step 8: Selecting Top %d...", app_config.top_k)
-    top_candidates = select_top_k(candidate_score_list, top_k=app_config.top_k)
-    logger.info("Selected %d candidates", len(top_candidates))
+    # ── Step 8: Preliminary TopM (wider pool for wiki enrichment) ──
+    from packages.core.ranking import compute_final_score
+    preliminary_top_m = min(80, len(candidate_score_list))
+    logger.info("Step 8: Preliminary Top %d (from %d)...", preliminary_top_m, len(candidate_score_list))
+    preliminary_candidates = select_top_k(candidate_score_list, top_k=preliminary_top_m)
 
     # ── Step 9: X Search enrichment + Wikipedia power + EvidenceTop3 ──
     logger.info("Step 9: Enriching evidence (X search: %s)...", degrade.x_search_enabled)
@@ -424,9 +489,9 @@ def main(date_arg: str = "today") -> None:
     if degrade.x_search_enabled:
         from packages.connectors.x_search import XSearchConnector
         x_connector = XSearchConnector()
-        x_limit = min(degrade.x_search_max, len(top_candidates))
+        x_limit = min(degrade.x_search_max, len(preliminary_candidates))
 
-        for entry in top_candidates[:x_limit]:
+        for entry in preliminary_candidates[:x_limit]:
             cand = entry["candidate"]
             try:
                 x_evidence = x_connector.search_candidate(cand.display_name)
@@ -458,7 +523,7 @@ def main(date_arg: str = "today") -> None:
         wiki_start = start_dt.strftime("%Y%m%d")
         wiki_end = end_dt.strftime("%Y%m%d")
 
-        for entry in top_candidates:
+        for entry in preliminary_candidates:
             cand = entry["candidate"]
             wiki_title = cand.display_name.replace(" ", "_")
             try:
@@ -471,6 +536,11 @@ def main(date_arg: str = "today") -> None:
                 logger.debug("Wiki failed for %s: %s", cand.display_name, e)
     except Exception as e:
         logger.warning("Wikipedia connector failed: %s", e)
+
+    # Compute final_score (trend + power boost) and re-rank
+    compute_final_score(preliminary_candidates, power_weight=algo_config.power_weight)
+    top_candidates = select_top_k(preliminary_candidates, top_k=app_config.top_k)
+    logger.info("Selected %d candidates (with power boost)", len(top_candidates))
 
     # Build final evidence for each candidate
     for entry in top_candidates:
@@ -583,11 +653,11 @@ def main(date_arg: str = "today") -> None:
     except Exception as e:
         logger.warning("Failed to record cost: %s", e)
 
-    status = "SUCCESS" if not errors else "PARTIAL"
+    run_status = "SUCCESS" if not errors else "PARTIAL"
     try:
         end_run(
             run_id,
-            status=status,
+            status=run_status,
             candidate_count=len(existing_candidates),
             top_k=len(top_candidates),
             errors=errors if errors else None,
@@ -596,13 +666,13 @@ def main(date_arg: str = "today") -> None:
     except Exception as e:
         logger.warning("Failed to log run end: %s", e)
 
-    # Release per-date lock
+    # Release per-date lock (lock vocabulary: COMPLETED/FAILED only)
     try:
-        release_lock(target_date, run_id, status)
+        release_lock(target_date, run_id, status="COMPLETED")
     except Exception as e:
         logger.warning("Failed to release lock: %s", e)
 
-    logger.info("=== Batch Complete (%s) ===", status)
+    logger.info("=== Batch Complete (%s) ===", run_status)
     logger.info(
         "Result: %d candidates scored, %d in Top-%d, cost=%.1f JPY",
         len(candidate_score_list),

@@ -61,7 +61,13 @@ class YouTubeConnector(BaseConnector):
         return FetchResult(items=items, item_count=len(items))
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
-        """Extract candidate names from video titles and channel names."""
+        """Extract candidate names from video titles and channel names.
+
+        Uses NER to extract PERSON/GROUP/WORK entities from video titles.
+        Channel names are always included as PERSON candidates.
+        """
+        from packages.core.ner import extract_entities
+
         candidates: list[RawCandidate] = []
 
         for i, item in enumerate(items):
@@ -93,9 +99,35 @@ class YouTubeConnector(BaseConnector):
                     evidence=evidence,
                 ))
 
-            # Title keywords could be extracted here in the future
-            # For MVP, we rely on channel names + candidate engine's
-            # proper noun detection to filter noise
+            # NER: extract entities from video title
+            ner_found = False
+            if title:
+                entities = extract_entities(title, max_entities=5)
+                for ent_text, ent_type in entities:
+                    try:
+                        cand_type = CandidateType(ent_type)
+                    except ValueError:
+                        cand_type = CandidateType.KEYWORD
+                    candidates.append(RawCandidate(
+                        name=ent_text,
+                        type=cand_type,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                    ))
+                    ner_found = True
+
+            # Fallback: if NER found nothing, keep title as KEYWORD
+            if not ner_found and title:
+                candidates.append(RawCandidate(
+                    name=title,
+                    type=CandidateType.KEYWORD,
+                    source_id=self.source_id,
+                    rank=rank,
+                    metric_value=_rank_exposure(rank),
+                    evidence=evidence,
+                ))
 
         return candidates
 

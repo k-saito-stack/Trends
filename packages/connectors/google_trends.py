@@ -47,7 +47,13 @@ class GoogleTrendsConnector(BaseConnector):
         return FetchResult(items=items, item_count=len(items))
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
-        """Extract keyword candidates from trending searches."""
+        """Extract candidates from trending searches using NER.
+
+        NER extracts PERSON/GROUP/WORK entities from search terms.
+        Falls back to full title as KEYWORD if NER finds nothing.
+        """
+        from packages.core.ner import extract_entities
+
         candidates: list[RawCandidate] = []
 
         for i, item in enumerate(items):
@@ -66,14 +72,32 @@ class GoogleTrendsConnector(BaseConnector):
                 metric=f"rank:{rank},traffic:{traffic}",
             )
 
-            candidates.append(RawCandidate(
-                name=title,
-                type=CandidateType.KEYWORD,
-                source_id=self.source_id,
-                rank=rank,
-                metric_value=_rank_exposure(rank),
-                evidence=evidence,
-            ))
+            # NER extraction from search term
+            entities = extract_entities(title, max_entities=5)
+            if entities:
+                for ent_text, ent_type in entities:
+                    try:
+                        cand_type = CandidateType(ent_type)
+                    except ValueError:
+                        cand_type = CandidateType.KEYWORD
+                    candidates.append(RawCandidate(
+                        name=ent_text,
+                        type=cand_type,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                    ))
+            else:
+                # Fallback: full title as KEYWORD
+                candidates.append(RawCandidate(
+                    name=title,
+                    type=CandidateType.KEYWORD,
+                    source_id=self.source_id,
+                    rank=rank,
+                    metric_value=_rank_exposure(rank),
+                    evidence=evidence,
+                ))
 
         return candidates
 

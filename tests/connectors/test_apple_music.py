@@ -78,7 +78,8 @@ class TestAppleMusicConnector:
         mock_get.return_value = mock_response
 
         connector = AppleMusicConnector(region="JP")
-        candidates, signals = connector.run()
+        result = connector.run()
 
-        assert len(candidates) == 6
-        assert len(signals) > 0
+        assert result.ok is True
+        assert len(result.candidates) == 6
+        assert len(result.signals) > 0

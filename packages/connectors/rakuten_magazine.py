@@ -76,7 +76,13 @@ class RakutenMagazineConnector(BaseConnector):
         return FetchResult(items=items, item_count=len(items))
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
-        """Extract candidates from magazine titles and descriptions."""
+        """Extract candidates from magazine titles and descriptions using NER.
+
+        NER extracts PERSON/GROUP/WORK from title + caption (first 200 chars).
+        Falls back to full title as KEYWORD if NER finds nothing.
+        """
+        from packages.core.ner import extract_entities
+
         candidates: list[RawCandidate] = []
 
         for item in items:
@@ -94,15 +100,36 @@ class RakutenMagazineConnector(BaseConnector):
                 published_at=item.get("salesDate", ""),
             )
 
-            # Magazine title as KEYWORD candidate
-            candidates.append(RawCandidate(
-                name=title,
-                type=CandidateType.KEYWORD,
-                source_id=self.source_id,
-                metric_value=1.0,
-                evidence=evidence,
-                extra={"caption": caption[:200] if caption else ""},
-            ))
+            # NER: extract from title + caption head
+            ner_text = title
+            if caption:
+                ner_text = f"{title} {caption[:200]}"
+
+            entities = extract_entities(ner_text, max_entities=5)
+            if entities:
+                for ent_text, ent_type in entities:
+                    try:
+                        cand_type = CandidateType(ent_type)
+                    except ValueError:
+                        cand_type = CandidateType.KEYWORD
+                    candidates.append(RawCandidate(
+                        name=ent_text,
+                        type=cand_type,
+                        source_id=self.source_id,
+                        metric_value=1.0,
+                        evidence=evidence,
+                        extra={"caption": caption[:200] if caption else ""},
+                    ))
+            else:
+                # Fallback: full title as KEYWORD
+                candidates.append(RawCandidate(
+                    name=title,
+                    type=CandidateType.KEYWORD,
+                    source_id=self.source_id,
+                    metric_value=1.0,
+                    evidence=evidence,
+                    extra={"caption": caption[:200] if caption else ""},
+                ))
 
         return candidates
 

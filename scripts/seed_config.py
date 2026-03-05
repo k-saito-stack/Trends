@@ -19,7 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from packages.core import firestore_client
-from packages.core.models import AlgorithmConfig, AppConfig, MusicConfig
+from packages.core.models import AlgorithmConfig, AppConfig, MusicConfig, NerConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -120,13 +120,16 @@ def seed() -> None:
     logger.info("Writing /config/music ...")
     firestore_client.set_document("config", "music", music_config.to_dict())
 
-    # /config/sources/{sourceId}
+    # /config/ner
+    ner_config = NerConfig()
+    logger.info("Writing /config/ner ...")
+    firestore_client.set_document("config", "ner", ner_config.to_dict())
+
+    # /config_sources/{sourceId}
     for source in SOURCE_CONFIGS:
         source_id = source["sourceId"]
-        logger.info("Writing /config/sources/%s ...", source_id)
-        firestore_client.set_subcollection_document(
-            "config", "sources", source_id, source_id, source
-        )
+        logger.info("Writing /config_sources/%s ...", source_id)
+        firestore_client.set_document("config_sources", source_id, source)
 
     logger.info("Seed completed successfully!")
 

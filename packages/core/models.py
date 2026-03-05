@@ -287,6 +287,7 @@ class AlgorithmConfig:
     multi_weight: float = 1.0
     momentum_lambda: float = 0.7
     max_x_clip: float = 50.0
+    power_weight: float = 0.15
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AlgorithmConfig:
@@ -298,6 +299,7 @@ class AlgorithmConfig:
             multi_weight=data.get("multiWeight", 1.0),
             momentum_lambda=data.get("momentumLambda", 0.7),
             max_x_clip=data.get("maxXClip", 50.0),
+            power_weight=data.get("powerWeight", 0.15),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -309,6 +311,7 @@ class AlgorithmConfig:
             "multiWeight": self.multi_weight,
             "momentumLambda": self.momentum_lambda,
             "maxXClip": self.max_x_clip,
+            "powerWeight": self.power_weight,
         }
 
 
@@ -329,6 +332,29 @@ class MusicConfig:
         return {
             "weights": self.weights,
             "sources": self.sources,
+        }
+
+
+@dataclass
+class NerConfig:
+    """Config from /config/ner."""
+    enabled: bool = True
+    max_entities_per_item: int = 5
+    model_name: str = "ja_ginza"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> NerConfig:
+        return cls(
+            enabled=data.get("enabled", True),
+            max_entities_per_item=data.get("maxEntitiesPerItem", 5),
+            model_name=data.get("modelName", "ja_ginza"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "maxEntitiesPerItem": self.max_entities_per_item,
+            "modelName": self.model_name,
         }
 
 

@@ -85,21 +85,55 @@ def compute_candidate_score(
     return total, breakdown, mb
 
 
+def compute_final_score(
+    candidate_scores: list[dict[str, Any]],
+    power_weight: float = 0.15,
+) -> None:
+    """Compute final_score incorporating Wikipedia power.
+
+    Formula:
+      power_norm = normalize power across current batch to 0..1
+      power_boost = trend_score * power_weight * power_norm
+      final_score = trend_score + power_boost
+
+    This avoids "always-strong" candidates dominating by making
+    power a multiplier of trend (not an independent additive term).
+    Modifies candidate_scores in-place.
+    """
+    import math
+
+    # Collect raw power values for normalization
+    powers = [c.get("power", 0) or 0 for c in candidate_scores]
+    max_power = max(powers) if powers else 0
+
+    for entry in candidate_scores:
+        trend = entry.get("trend_score", 0)
+        raw_power = entry.get("power", 0) or 0
+
+        if max_power > 0 and raw_power > 0:
+            power_norm = math.log1p(raw_power) / math.log1p(max_power)
+            power_boost = trend * power_weight * power_norm
+        else:
+            power_boost = 0.0
+
+        entry["final_score"] = trend + power_boost
+
+
 def select_top_k(
     candidate_scores: list[dict[str, Any]],
-    top_k: int = 15,
+    top_k: int = 20,
 ) -> list[dict[str, Any]]:
-    """Select top K candidates by TrendScore.
+    """Select top K candidates by final_score (or trend_score as fallback).
 
-    Tiebreaker: multiBonus -> power (if available).
+    final_score incorporates Wikipedia power as a boost proportional to trend.
+    Tiebreaker: multiBonus.
     Returns sorted list of candidate score dicts.
     """
     sorted_candidates = sorted(
         candidate_scores,
         key=lambda c: (
-            -c.get("trend_score", 0),
+            -c.get("final_score", c.get("trend_score", 0)),
             -c.get("multi_bonus", 0),
-            -c.get("power", 0),
         ),
     )
     return sorted_candidates[:top_k]
