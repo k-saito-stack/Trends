@@ -54,8 +54,7 @@ export default function Header({
 
   const handleLogoutEnter = () => {
     gsap.to(logoutBgRef.current, {
-      yPercent: 0,
-      scaleX: 1,
+      scaleY: 1,
       duration: 0.5,
       ease: "power4.out",
       overwrite: true,
@@ -69,8 +68,7 @@ export default function Header({
 
   const handleLogoutLeave = () => {
     gsap.to(logoutBgRef.current, {
-      yPercent: 101,
-      scaleX: 0.5,
+      scaleY: 0,
       duration: 0.5,
       ease: "power4.out",
       overwrite: true,
@@ -89,7 +87,7 @@ export default function Header({
         <div className="flex items-center justify-between py-4 border-b border-white/10">
           <h1
             ref={titleRef}
-            className="oci-heading text-oci-mercury text-2xl cursor-default"
+            className="oci-heading text-oci-mercury text-5xl cursor-default"
             onMouseEnter={handleTitleHover}
           >
             TRENDS
@@ -114,8 +112,15 @@ export default function Header({
             >
               <div
                 ref={logoutBgRef}
-                className="oci-btn__bg"
-                style={{ backgroundColor: "#e8e6e0" }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundColor: "#e8e6e0",
+                  transform: "scaleY(0)",
+                  transformOrigin: "center bottom",
+                  zIndex: 0,
+                  pointerEvents: "none",
+                }}
               />
               <span
                 ref={logoutTextRef}
@@ -129,13 +134,14 @@ export default function Header({
 
         {/* Row 2: Date nav + settings */}
         <div className="flex items-center justify-between py-3">
-          <div className="flex items-center gap-3">
+          {/* Date nav — arrow sticks out left, date box aligns with card content */}
+          <div className="flex items-center gap-0">
             <button
               ref={magPrev.ref as React.RefObject<HTMLButtonElement>}
               onClick={handlePrevDay}
               onMouseMove={magPrev.onMouseMove}
               onMouseLeave={magPrev.onMouseLeave}
-              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1"
+              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1 -ml-6"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -165,7 +171,7 @@ export default function Header({
               onClick={handleNextDay}
               onMouseMove={magNext.onMouseMove}
               onMouseLeave={magNext.onMouseLeave}
-              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1"
+              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1 ml-1"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

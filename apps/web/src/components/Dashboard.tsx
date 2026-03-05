@@ -112,11 +112,11 @@ export default function Dashboard({ date }: DashboardProps) {
   return (
     <div>
       {meta && (
-        <div className="flex items-center justify-between mb-6 pb-3 border-b border-oci-blue/10">
-          <span className="oci-label-sm text-oci-blue/30">
+        <div className="oci-section-blue flex items-center justify-between mb-6 px-6 lg:px-10 py-2">
+          <span className="oci-label-sm text-oci-mercury/60">
             Generated: {new Date(meta.generatedAt).toLocaleString("ja-JP")}
           </span>
-          <span className="oci-label-sm text-oci-blue/20">
+          <span className="oci-label-sm text-oci-mercury/40">
             Run: {meta.runId.slice(0, 8)}
           </span>
         </div>

@@ -61,26 +61,22 @@ export default function TrendCard({ item }: TrendCardProps) {
     });
 
     // Header text → white
-    const headerTargets = [
-      rankRef.current,
-      nameRef.current,
-      tagRef.current,
-      scoreRef.current,
-    ];
-    gsap.to(headerTargets, {
+    gsap.to([rankRef.current, nameRef.current, scoreRef.current], {
       color: "#ffffff",
+      duration: 0.3,
+      overwrite: true,
+    });
+
+    // Tag → white text + white border
+    gsap.to(tagRef.current, {
+      color: "rgba(255,255,255,0.6)",
+      borderColor: "rgba(255,255,255,0.3)",
       duration: 0.3,
       overwrite: true,
     });
 
     gsap.to(sepRef.current, {
       backgroundColor: "rgba(255,255,255,0.3)",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    gsap.to(tagRef.current, {
-      borderColor: "rgba(255,255,255,0.3)",
       duration: 0.3,
       overwrite: true,
     });
@@ -142,26 +138,22 @@ export default function TrendCard({ item }: TrendCardProps) {
     });
 
     // Header text → blue
-    const headerTargets = [
-      rankRef.current,
-      nameRef.current,
-      tagRef.current,
-      scoreRef.current,
-    ];
-    gsap.to(headerTargets, {
+    gsap.to([rankRef.current, nameRef.current, scoreRef.current], {
       color: "#1925aa",
+      duration: 0.3,
+      overwrite: true,
+    });
+
+    // Tag → original blue/40 + border blue/20
+    gsap.to(tagRef.current, {
+      color: "rgba(25,37,170,0.4)",
+      borderColor: "rgba(25,37,170,0.2)",
       duration: 0.3,
       overwrite: true,
     });
 
     gsap.to(sepRef.current, {
       backgroundColor: "rgba(25,37,170,0.2)",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    gsap.to(tagRef.current, {
-      borderColor: "rgba(25,37,170,0.2)",
       duration: 0.3,
       overwrite: true,
     });
@@ -226,7 +218,8 @@ export default function TrendCard({ item }: TrendCardProps) {
             </span>
             <span
               ref={tagRef}
-              className="oci-label-sm text-oci-blue/40 border border-oci-blue/20 px-2 py-0.5 shrink-0"
+              className="oci-label-sm border px-2 py-0.5 shrink-0"
+              style={{ color: "rgba(25,37,170,0.4)", borderColor: "rgba(25,37,170,0.2)" }}
             >
               {item.candidateType}
             </span>
