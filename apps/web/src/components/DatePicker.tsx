@@ -121,7 +121,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
         <div
           className="absolute top-full left-0 mt-1 z-50 border border-white/20"
           style={{
-            backgroundColor: "#111b80",
+            backgroundColor: "#1925aa",
             minWidth: "280px",
             boxShadow: "0 8px 30px rgba(0,0,0,0.3)",
           }}
@@ -181,7 +181,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                   className={[
                     "py-2 text-center text-xs font-mono transition-colors duration-150",
                     isSelected
-                      ? "bg-oci-mercury text-oci-blue font-medium"
+                      ? "bg-white text-[#111b80] font-medium"
                       : isToday
                         ? "text-oci-mercury border border-oci-mercury/50"
                         : isFuture

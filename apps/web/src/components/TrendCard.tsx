@@ -91,6 +91,9 @@ export default function TrendCard({ item }: TrendCardProps) {
         );
       }
 
+      // Ensure card is fully visible (in case scroll animation was interrupted)
+      gsap.set(cardRef.current, { opacity: 1, x: 0 });
+
       // Card lift + shadow
       gsap.to(cardRef.current, {
         y: -4,
