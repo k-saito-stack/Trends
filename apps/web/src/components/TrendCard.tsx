@@ -308,27 +308,25 @@ export default function TrendCard({ item }: TrendCardProps) {
               </h4>
               <div className="space-y-2">
                 {item.evidenceTop3.map((ev, i) => (
-                  <div key={i} className="pl-1">
-                    <div className="text-xs font-sans">
-                      {ev.url ? (
-                        <a
-                          href={ev.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline underline-offset-2 inline"
-                        >
-                          {ev.title || ev.url}
-                        </a>
-                      ) : (
-                        <span>{ev.title}</span>
-                      )}
-                      <span className="oci-label-sm opacity-30 mx-1">
-                        {ev.sourceId}
-                      </span>
-                      {ev.metric && (
-                        <span className="opacity-30">({ev.metric})</span>
-                      )}
-                    </div>
+                  <div key={i} className="text-xs font-sans">
+                    {ev.url ? (
+                      <a
+                        href={ev.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 inline"
+                      >
+                        {ev.title || ev.url}
+                      </a>
+                    ) : (
+                      <span>{ev.title}</span>
+                    )}
+                    <span className="oci-label-sm opacity-30 mx-1">
+                      {ev.sourceId}
+                    </span>
+                    {ev.metric && (
+                      <span className="opacity-30">({ev.metric})</span>
+                    )}
                   </div>
                 ))}
               </div>
