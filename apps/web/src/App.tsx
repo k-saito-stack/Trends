@@ -10,7 +10,6 @@ import SettingsDrawer from "./components/SettingsDrawer";
 import Loader from "./components/Loader";
 import CustomCursor from "./components/CustomCursor";
 import CustomScrollbar from "./components/CustomScrollbar";
-import GridLines from "./components/GridLines";
 import { useAuth } from "./hooks/useAuth";
 import { useLenis } from "./hooks/useLenis";
 import { useDailyRanking } from "./hooks/useDailyRanking";
@@ -59,8 +58,6 @@ export default function App() {
     <div className="min-h-screen bg-oci-mercury">
       <CustomCursor />
       <CustomScrollbar />
-      <GridLines />
-
       <Header
         date={date}
         onDateChange={setDate}

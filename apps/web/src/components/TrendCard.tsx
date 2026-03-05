@@ -133,8 +133,6 @@ export default function TrendCard({ item }: TrendCardProps) {
         });
         const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
         gsap.to(borders, { borderColor: "rgba(255,255,255,0.2)", duration: 0.3, overwrite: true });
-        const bars = detailRef.current.querySelectorAll(".w-1");
-        gsap.to(bars, { backgroundColor: "rgba(255,255,255,0.3)", duration: 0.3, overwrite: true });
       }
 
       // Scramble: name + summary + labels (all concurrent)
@@ -215,8 +213,6 @@ export default function TrendCard({ item }: TrendCardProps) {
         });
         const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
         gsap.to(borders, { borderColor: "", duration: 0.3, overwrite: true });
-        const bars = detailRef.current.querySelectorAll(".w-1");
-        gsap.to(bars, { backgroundColor: "", duration: 0.3, overwrite: true });
       }
     },
     [],
@@ -312,11 +308,7 @@ export default function TrendCard({ item }: TrendCardProps) {
               </h4>
               <div className="space-y-2">
                 {item.evidenceTop3.map((ev, i) => (
-                  <div key={i} className="flex items-start gap-3 pl-1">
-                    <div
-                      className="w-1 bg-oci-blue/20 shrink-0 mt-0.5"
-                      style={{ minHeight: "1rem" }}
-                    />
+                  <div key={i} className="pl-1">
                     <div className="text-xs font-sans">
                       {ev.url ? (
                         <a
