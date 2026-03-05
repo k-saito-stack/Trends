@@ -95,7 +95,7 @@ class TestDailyRankingItem:
 class TestAppConfig:
     def test_from_dict(self) -> None:
         data = {
-            "topK": 15,
+            "topK": 20,
             "timezone": "Asia/Tokyo",
             "runTimeJST": "07:00",
             "retentionMonths": 12,
@@ -109,13 +109,13 @@ class TestAppConfig:
             },
         }
         config = AppConfig.from_dict(data)
-        assert config.top_k == 15
+        assert config.top_k == 20
         assert config.monthly_budget_jpy == 5000
         assert config.template_at_ratio == 0.6
 
     def test_defaults(self) -> None:
         config = AppConfig.from_dict({})
-        assert config.top_k == 15
+        assert config.top_k == 20
         assert config.monthly_budget_jpy == 5000
 
     def test_roundtrip(self) -> None:

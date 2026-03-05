@@ -198,7 +198,7 @@ class DailyRankingMeta:
     date: str
     generated_at: str
     run_id: str
-    top_k: int = 15
+    top_k: int = 20
     degrade_state: dict[str, bool] = field(default_factory=dict)
     algorithm_version: str = "v1"
     music_weights: dict[str, float] = field(default_factory=lambda: {"JP": 1.0, "GLOBAL": 0.25})
@@ -234,7 +234,7 @@ class RawCandidate:
 @dataclass
 class AppConfig:
     """Config from /config/app."""
-    top_k: int = 15
+    top_k: int = 20
     timezone: str = "Asia/Tokyo"
     run_time_jst: str = "07:00"
     retention_months: int = 12
@@ -248,7 +248,7 @@ class AppConfig:
         degrade = data.get("degrade", {})
         thresholds = degrade.get("thresholds", {})
         return cls(
-            top_k=data.get("topK", 15),
+            top_k=data.get("topK", 20),
             timezone=data.get("timezone", "Asia/Tokyo"),
             run_time_jst=data.get("runTimeJST", "07:00"),
             retention_months=data.get("retentionMonths", 12),
