@@ -239,14 +239,17 @@
   position: fixed;
   width: 40px;
   height: 40px;
-  border: 1px solid #1925aa;
+  border: 1.5px solid rgba(25, 37, 170, 0.6);
   border-radius: 9999px !important;
   pointer-events: none;
   z-index: 9998;
   transform: translate(-50%, -50%) scale(0);
   transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1),
-              border-color 0.3s;
-  mix-blend-mode: difference;
+              border-color 0.3s,
+              box-shadow 0.3s;
+  background: rgba(25, 37, 170, 0.08);
+  box-shadow: 0 0 15px rgba(25, 37, 170, 0.25),
+              0 0 40px rgba(25, 37, 170, 0.1);
 }
 
 .oci-cursor.active {

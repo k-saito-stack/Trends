@@ -119,38 +119,42 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
       {/* Calendar dropdown */}
       {open && (
         <div
-          className="absolute top-full left-0 mt-1 z-50 border border-oci-mercury/30"
-          style={{ backgroundColor: "#1925aa", minWidth: "260px" }}
+          className="absolute top-full left-0 mt-1 z-50 border border-white/20"
+          style={{
+            backgroundColor: "#111b80",
+            minWidth: "280px",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.3)",
+          }}
         >
           {/* Month/Year header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
             <button
               onClick={goToPrevMonth}
-              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors p-1"
+              className="text-oci-mercury/60 hover:text-oci-mercury transition-colors p-1"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <span className="oci-label-sm text-oci-mercury">
-              {viewYear}/{pad2(viewMonth + 1)}
+            <span className="oci-label text-oci-mercury tracking-wider">
+              {viewYear} / {pad2(viewMonth + 1)}
             </span>
             <button
               onClick={goToNextMonth}
-              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors p-1"
+              className="text-oci-mercury/60 hover:text-oci-mercury transition-colors p-1"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
 
           {/* Weekday labels */}
-          <div className="grid grid-cols-7 px-2 pt-2">
+          <div className="grid grid-cols-7 px-3 pt-3">
             {WEEKDAYS.map((wd) => (
               <div
                 key={wd}
-                className="text-center oci-label-sm text-oci-mercury/30 py-1"
+                className="text-center oci-label-sm text-oci-mercury/40 py-1"
               >
                 {wd}
               </div>
@@ -158,7 +162,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
           </div>
 
           {/* Day grid */}
-          <div className="grid grid-cols-7 px-2 pb-2">
+          <div className="grid grid-cols-7 px-3 pb-3 gap-0.5">
             {cells.map((day, i) => {
               if (day === null) {
                 return <div key={`empty-${i}`} />;
@@ -175,14 +179,14 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
                   onClick={() => !isFuture && selectDate(day)}
                   disabled={isFuture}
                   className={[
-                    "py-1.5 text-center oci-label-sm transition-colors duration-150",
+                    "py-2 text-center text-xs font-mono transition-colors duration-150",
                     isSelected
-                      ? "bg-oci-mercury text-oci-blue"
+                      ? "bg-oci-mercury text-oci-blue font-medium"
                       : isToday
-                        ? "text-oci-mercury border border-oci-mercury/40"
+                        ? "text-oci-mercury border border-oci-mercury/50"
                         : isFuture
-                          ? "text-oci-mercury/15 cursor-not-allowed"
-                          : "text-oci-mercury/60 hover:bg-white/10 hover:text-oci-mercury cursor-pointer",
+                          ? "text-white/15 cursor-not-allowed"
+                          : "text-white/70 hover:bg-white/15 hover:text-white cursor-pointer",
                   ].join(" ")}
                 >
                   {day}
@@ -192,10 +196,10 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end px-3 py-2 border-t border-white/10">
+          <div className="flex items-center justify-end px-4 py-2.5 border-t border-white/10">
             <button
               onClick={goToToday}
-              className="oci-label-sm text-oci-mercury/50 hover:text-oci-mercury transition-colors"
+              className="oci-label-sm text-oci-mercury/60 hover:text-oci-mercury transition-colors"
             >
               Today
             </button>

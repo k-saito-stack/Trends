@@ -70,13 +70,29 @@ export default function Header({
     if (titleRef.current) scramble(titleRef.current, "TRENDS");
   };
 
-  const handleLogoutEnter = () => {
-    gsap.to(logoutBgRef.current, {
-      scaleY: 1,
-      duration: 0.5,
-      ease: "power4.out",
-      overwrite: true,
-    });
+  const getDirection = (e: React.MouseEvent, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+    const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+    if (Math.abs(nx) > Math.abs(ny)) {
+      return nx > 0
+        ? { from: { scaleX: 0, scaleY: 1 }, origin: "right center" }
+        : { from: { scaleX: 0, scaleY: 1 }, origin: "left center" };
+    }
+    return ny > 0
+      ? { from: { scaleY: 0, scaleX: 1 }, origin: "center bottom" }
+      : { from: { scaleY: 0, scaleX: 1 }, origin: "center top" };
+  };
+
+  const handleLogoutEnter = (e: React.MouseEvent) => {
+    const btn = (magLogout.ref as React.RefObject<HTMLButtonElement>).current;
+    if (logoutBgRef.current && btn) {
+      const { from, origin } = getDirection(e, btn);
+      logoutBgRef.current.style.transformOrigin = origin;
+      gsap.fromTo(logoutBgRef.current, { ...from }, {
+        scaleX: 1, scaleY: 1, duration: 0.4, ease: "power4.out", overwrite: true,
+      });
+    }
     gsap.to(logoutTextRef.current, {
       color: "#1925aa",
       duration: 0.3,
@@ -84,13 +100,15 @@ export default function Header({
     });
   };
 
-  const handleLogoutLeave = () => {
-    gsap.to(logoutBgRef.current, {
-      scaleY: 0,
-      duration: 0.5,
-      ease: "power4.out",
-      overwrite: true,
-    });
+  const handleLogoutLeave = (e: React.MouseEvent) => {
+    const btn = (magLogout.ref as React.RefObject<HTMLButtonElement>).current;
+    if (logoutBgRef.current && btn) {
+      const { from, origin } = getDirection(e, btn);
+      logoutBgRef.current.style.transformOrigin = origin;
+      gsap.to(logoutBgRef.current, {
+        ...from, duration: 0.4, ease: "power4.out", overwrite: true,
+      });
+    }
     gsap.to(logoutTextRef.current, {
       color: "#e8e6e0",
       duration: 0.3,
@@ -111,9 +129,9 @@ export default function Header({
             TRENDS
           </h1>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-5" style={{ lineHeight: 1 }}>
             {userEmail && (
-              <span className="oci-label-sm text-oci-mercury/50 hidden sm:inline">
+              <span className="oci-label-sm text-oci-mercury/50 hidden sm:inline leading-none">
                 {userEmail}
               </span>
             )}
@@ -122,8 +140,8 @@ export default function Header({
               onClick={onLogout}
               onMouseEnter={handleLogoutEnter}
               onMouseMove={magLogout.onMouseMove}
-              onMouseLeave={() => {
-                handleLogoutLeave();
+              onMouseLeave={(e) => {
+                handleLogoutLeave(e);
                 magLogout.onMouseLeave();
               }}
               className="oci-btn border-oci-mercury/30"

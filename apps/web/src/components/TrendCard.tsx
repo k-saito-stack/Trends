@@ -2,7 +2,7 @@
  * TrendCard — OCI style. The most important component.
  *
  * Effects:
- *   - Hover bg reveals from bottom (OCI style)
+ *   - Hover bg reveals from cursor entry direction
  *   - Card lift + shadow on hover
  *   - ALL text inverts to white on hover (high contrast on blue bg)
  *   - Name, summary, section labels all scramble on hover
@@ -16,6 +16,41 @@ import Sparkline from "./Sparkline";
 
 interface TrendCardProps {
   item: RankingItem;
+}
+
+type Direction = "top" | "bottom" | "left" | "right";
+
+/** Detect which edge the mouse crossed to enter/leave the element */
+function getDirection(e: React.MouseEvent, el: HTMLElement): Direction {
+  const rect = el.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const w = rect.width;
+  const h = rect.height;
+
+  // Normalize to [-1, 1] range
+  const nx = (x / w - 0.5) * 2;
+  const ny = (y / h - 0.5) * 2;
+
+  // Compare horizontal vs vertical distance to edge
+  if (Math.abs(nx) > Math.abs(ny)) {
+    return nx > 0 ? "right" : "left";
+  }
+  return ny > 0 ? "bottom" : "top";
+}
+
+/** Get GSAP `from` values and transformOrigin for a given direction */
+function getDirectionProps(dir: Direction) {
+  switch (dir) {
+    case "top":
+      return { from: { scaleY: 0, scaleX: 1 }, origin: "center top" };
+    case "bottom":
+      return { from: { scaleY: 0, scaleX: 1 }, origin: "center bottom" };
+    case "left":
+      return { from: { scaleX: 0, scaleY: 1 }, origin: "left center" };
+    case "right":
+      return { from: { scaleX: 0, scaleY: 1 }, origin: "right center" };
+  }
 }
 
 export default function TrendCard({ item }: TrendCardProps) {
@@ -40,137 +75,149 @@ export default function TrendCard({ item }: TrendCardProps) {
   const { scramble } = useScrambleText();
 
   // --- Hover enter ---
-  const handleMouseEnter = useCallback(() => {
-    setHovered(true);
+  const handleMouseEnter = useCallback(
+    (e: React.MouseEvent) => {
+      setHovered(true);
 
-    // Card lift + shadow
-    gsap.to(cardRef.current, {
-      y: -4,
-      boxShadow: "0 8px 30px rgba(25,37,170,0.15)",
-      duration: 0.4,
-      ease: "power4.out",
-      overwrite: true,
-    });
+      // Direction-aware bg reveal
+      if (hoverBgRef.current && cardRef.current) {
+        const dir = getDirection(e, cardRef.current);
+        const { from, origin } = getDirectionProps(dir);
+        hoverBgRef.current.style.transformOrigin = origin;
+        gsap.fromTo(
+          hoverBgRef.current,
+          { ...from },
+          { scaleX: 1, scaleY: 1, duration: 0.5, ease: "power4.out", overwrite: true },
+        );
+      }
 
-    // Bg reveal from bottom
-    gsap.to(hoverBgRef.current, {
-      scaleY: 1,
-      duration: 0.5,
-      ease: "power4.out",
-      overwrite: true,
-    });
+      // Card lift + shadow
+      gsap.to(cardRef.current, {
+        y: -4,
+        boxShadow: "0 8px 30px rgba(25,37,170,0.15)",
+        duration: 0.4,
+        ease: "power4.out",
+        overwrite: true,
+      });
 
-    // Header text → white
-    gsap.to([rankRef.current, nameRef.current, scoreRef.current], {
-      color: "#ffffff",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    // Tag → white text + white border
-    gsap.to(tagRef.current, {
-      color: "rgba(255,255,255,0.6)",
-      borderColor: "rgba(255,255,255,0.3)",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    gsap.to(sepRef.current, {
-      backgroundColor: "rgba(255,255,255,0.3)",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    // Detail section — all text to white
-    if (detailRef.current) {
-      gsap.to(detailRef.current, {
+      // Header text → white
+      gsap.to([rankRef.current, nameRef.current, scoreRef.current], {
         color: "#ffffff",
         duration: 0.3,
         overwrite: true,
       });
-      // Borders inside detail
-      const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
-      gsap.to(borders, { borderColor: "rgba(255,255,255,0.2)", duration: 0.3, overwrite: true });
-      // Evidence bars
-      const bars = detailRef.current.querySelectorAll(".w-1");
-      gsap.to(bars, { backgroundColor: "rgba(255,255,255,0.3)", duration: 0.3, overwrite: true });
-    }
 
-    // Scramble: name + summary + labels (all concurrent)
-    if (nameRef.current) {
-      scramble(nameRef.current, item.displayName);
-    }
-    if (summaryRef.current && item.summary) {
-      // Lock height before scramble so line count changes don't cause layout shift
-      summaryRef.current.style.minHeight = `${summaryRef.current.offsetHeight}px`;
-      scramble(summaryRef.current, item.summary, 600);
-    }
-    if (labelBreakdownRef.current) {
-      scramble(labelBreakdownRef.current, "Score Breakdown", 300);
-    }
-    if (labelEvidenceRef.current) {
-      scramble(labelEvidenceRef.current, "Evidence", 300);
-    }
-    if (labelPowerRef.current) {
-      scramble(labelPowerRef.current, `Power: ${item.power?.toFixed(1)}`, 300);
-    }
-  }, [scramble, item.displayName, item.summary, item.power]);
+      // Tag → white text + white border
+      gsap.to(tagRef.current, {
+        color: "rgba(255,255,255,0.6)",
+        borderColor: "rgba(255,255,255,0.3)",
+        duration: 0.3,
+        overwrite: true,
+      });
+
+      gsap.to(sepRef.current, {
+        backgroundColor: "rgba(255,255,255,0.3)",
+        duration: 0.3,
+        overwrite: true,
+      });
+
+      // Detail section — all text to white
+      if (detailRef.current) {
+        gsap.to(detailRef.current, {
+          color: "#ffffff",
+          duration: 0.3,
+          overwrite: true,
+        });
+        const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
+        gsap.to(borders, { borderColor: "rgba(255,255,255,0.2)", duration: 0.3, overwrite: true });
+        const bars = detailRef.current.querySelectorAll(".w-1");
+        gsap.to(bars, { backgroundColor: "rgba(255,255,255,0.3)", duration: 0.3, overwrite: true });
+      }
+
+      // Scramble: name + summary + labels (all concurrent)
+      if (nameRef.current) {
+        scramble(nameRef.current, item.displayName);
+      }
+      if (summaryRef.current && item.summary) {
+        summaryRef.current.style.minHeight = `${summaryRef.current.offsetHeight}px`;
+        scramble(summaryRef.current, item.summary, 600);
+      }
+      if (labelBreakdownRef.current) {
+        scramble(labelBreakdownRef.current, "Score Breakdown", 300);
+      }
+      if (labelEvidenceRef.current) {
+        scramble(labelEvidenceRef.current, "Evidence", 300);
+      }
+      if (labelPowerRef.current) {
+        scramble(labelPowerRef.current, `Power: ${item.power?.toFixed(1)}`, 300);
+      }
+    },
+    [scramble, item.displayName, item.summary, item.power],
+  );
 
   // --- Hover leave ---
-  const handleMouseLeave = useCallback(() => {
-    setHovered(false);
+  const handleMouseLeave = useCallback(
+    (e: React.MouseEvent) => {
+      setHovered(false);
 
-    // Card drop back
-    gsap.to(cardRef.current, {
-      y: 0,
-      boxShadow: "0 0px 0px rgba(25,37,170,0)",
-      duration: 0.4,
-      ease: "power4.out",
-      overwrite: true,
-    });
+      // Direction-aware bg hide
+      if (hoverBgRef.current && cardRef.current) {
+        const dir = getDirection(e, cardRef.current);
+        const { from, origin } = getDirectionProps(dir);
+        hoverBgRef.current.style.transformOrigin = origin;
+        gsap.to(hoverBgRef.current, {
+          ...from,
+          duration: 0.5,
+          ease: "power4.out",
+          overwrite: true,
+        });
+      }
 
-    // Bg hide
-    gsap.to(hoverBgRef.current, {
-      scaleY: 0,
-      duration: 0.5,
-      ease: "power4.out",
-      overwrite: true,
-    });
+      // Card drop back
+      gsap.to(cardRef.current, {
+        y: 0,
+        boxShadow: "0 0px 0px rgba(25,37,170,0)",
+        duration: 0.4,
+        ease: "power4.out",
+        overwrite: true,
+      });
 
-    // Header text → blue
-    gsap.to([rankRef.current, nameRef.current, scoreRef.current], {
-      color: "#1925aa",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    // Tag → original blue/40 + border blue/20
-    gsap.to(tagRef.current, {
-      color: "rgba(25,37,170,0.4)",
-      borderColor: "rgba(25,37,170,0.2)",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    gsap.to(sepRef.current, {
-      backgroundColor: "rgba(25,37,170,0.2)",
-      duration: 0.3,
-      overwrite: true,
-    });
-
-    // Detail section — revert to blue
-    if (detailRef.current) {
-      gsap.to(detailRef.current, {
+      // Header text → blue
+      gsap.to([rankRef.current, nameRef.current, scoreRef.current], {
         color: "#1925aa",
         duration: 0.3,
         overwrite: true,
       });
-      const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
-      gsap.to(borders, { borderColor: "", duration: 0.3, overwrite: true });
-      const bars = detailRef.current.querySelectorAll(".w-1");
-      gsap.to(bars, { backgroundColor: "", duration: 0.3, overwrite: true });
-    }
-  }, []);
+
+      // Tag → original blue/40 + border blue/20
+      gsap.to(tagRef.current, {
+        color: "rgba(25,37,170,0.4)",
+        borderColor: "rgba(25,37,170,0.2)",
+        duration: 0.3,
+        overwrite: true,
+      });
+
+      gsap.to(sepRef.current, {
+        backgroundColor: "rgba(25,37,170,0.2)",
+        duration: 0.3,
+        overwrite: true,
+      });
+
+      // Detail section — revert to blue
+      if (detailRef.current) {
+        gsap.to(detailRef.current, {
+          color: "#1925aa",
+          duration: 0.3,
+          overwrite: true,
+        });
+        const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
+        gsap.to(borders, { borderColor: "", duration: 0.3, overwrite: true });
+        const bars = detailRef.current.querySelectorAll(".w-1");
+        gsap.to(bars, { backgroundColor: "", duration: 0.3, overwrite: true });
+      }
+    },
+    [],
+  );
 
   return (
     <div
@@ -179,7 +226,7 @@ export default function TrendCard({ item }: TrendCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Hover background — grows up from bottom on hover */}
+      {/* Hover background — direction-aware reveal */}
       <div
         ref={hoverBgRef}
         style={{
