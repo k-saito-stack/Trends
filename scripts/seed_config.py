@@ -108,6 +108,14 @@ SOURCE_CONFIGS = [
         "description": "Netflix Top 10 Japan Films (weekly, HTML scraping)",
     },
     {
+        "sourceId": "TVER_RANKING_JP",
+        "enabled": True,
+        "stability": "B",
+        "fetchLimit": 20,
+        "killSwitch": {"maxConsecutiveFailures": 3},
+        "description": "TVer daily ranking via achikochi-data.com (HTML scraping)",
+    },
+    {
         "sourceId": "IG_BOOST",
         "enabled": False,
         "stability": "C",

@@ -16,6 +16,7 @@ from packages.connectors.google_trends import GoogleTrendsConnector
 from packages.connectors.netflix import NetflixTop10Connector
 from packages.connectors.rakuten_magazine import RakutenMagazineConnector
 from packages.connectors.rss_feeds import RSSFeedConnector
+from packages.connectors.tver import TVerRankingConnector
 from packages.connectors.x_search import XTrendingConnector
 from packages.connectors.youtube import YouTubeConnector
 
@@ -62,6 +63,11 @@ FACTORIES: dict[str, Callable[[dict[str, Any]], BaseConnector]] = {
     "NETFLIX_FILMS_JP": lambda cfg: NetflixTop10Connector(
         category="films",
         max_results=cfg.get("fetchLimit", 10),
+        max_consecutive_failures=cfg.get("killSwitch", {}).get("maxConsecutiveFailures", 3),
+        enabled=cfg.get("enabled", True),
+    ),
+    "TVER_RANKING_JP": lambda cfg: TVerRankingConnector(
+        max_results=cfg.get("fetchLimit", 20),
         max_consecutive_failures=cfg.get("killSwitch", {}).get("maxConsecutiveFailures", 3),
         enabled=cfg.get("enabled", True),
     ),
