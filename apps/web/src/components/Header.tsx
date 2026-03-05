@@ -4,7 +4,7 @@
  *   Row 1: TRENDS + SETTINGS/LOGOUT buttons
  *   Row 2: Date nav + Generated + Run + email
  */
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { gsap } from "../hooks/useGSAPSetup";
 import { useMagnetic } from "../hooks/useMagnetic";
 import { useScrambleText } from "../hooks/useScrambleText";
@@ -30,11 +30,21 @@ export default function Header({
   runId,
 }: HeaderProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const generatedRef = useRef<HTMLSpanElement>(null);
+  const runRef = useRef<HTMLSpanElement>(null);
+  const emailRef = useRef<HTMLSpanElement>(null);
   const logoutBgRef = useRef<HTMLDivElement>(null);
   const logoutTextRef = useRef<HTMLSpanElement>(null);
   const settingsBgRef = useRef<HTMLDivElement>(null);
   const settingsTextRef = useRef<HTMLSpanElement>(null);
   const { scramble } = useScrambleText();
+
+  // Display texts for Row 2 info
+  const generatedText = generatedAt
+    ? `Generated: ${new Date(generatedAt).toLocaleString("ja-JP")}`
+    : "";
+  const runText = runId ? `Run: ${runId.slice(0, 8)}` : "";
+  const emailText = userEmail || "";
 
   // Magnetic cursor for interactive elements
   const magLogout = useMagnetic(0.3);
@@ -42,21 +52,33 @@ export default function Header({
   const magPrev = useMagnetic(0.4);
   const magNext = useMagnetic(0.4);
 
-  // Auto-scramble TRENDS title every 8 seconds
+  // Chain scramble: TRENDS → Generated → Run → email
+  // Use refs to always read latest text without recreating interval
+  const generatedTextRef = useRef(generatedText);
+  const runTextRef = useRef(runText);
+  const emailTextRef = useRef(emailText);
+  generatedTextRef.current = generatedText;
+  runTextRef.current = runText;
+  emailTextRef.current = emailText;
+
+  const runChainScramble = useCallback(async () => {
+    if (titleRef.current) await scramble(titleRef.current, "TRENDS", 500);
+    if (generatedRef.current && generatedTextRef.current)
+      await scramble(generatedRef.current, generatedTextRef.current, 400);
+    if (runRef.current && runTextRef.current)
+      await scramble(runRef.current, runTextRef.current, 300);
+    if (emailRef.current && emailTextRef.current)
+      await scramble(emailRef.current, emailTextRef.current, 400);
+  }, [scramble]);
+
   useEffect(() => {
-    const initTimer = setTimeout(() => {
-      if (titleRef.current) scramble(titleRef.current, "TRENDS", 500);
-    }, 800);
-
-    const interval = setInterval(() => {
-      if (titleRef.current) scramble(titleRef.current, "TRENDS", 500);
-    }, 8000);
-
+    const initTimer = setTimeout(() => runChainScramble(), 800);
+    const interval = setInterval(() => runChainScramble(), 8000);
     return () => {
       clearTimeout(initTimer);
       clearInterval(interval);
     };
-  }, [scramble]);
+  }, [runChainScramble]);
 
   const handlePrevDay = () => {
     const d = new Date(date);
@@ -283,18 +305,18 @@ export default function Header({
           {/* Right: Generated + Run + email */}
           <div className="flex items-center gap-4">
             {generatedAt && (
-              <span className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
-                Generated: {new Date(generatedAt).toLocaleString("ja-JP")}
+              <span ref={generatedRef} className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+                {generatedText}
               </span>
             )}
             {runId && (
-              <span className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
-                Run: {runId.slice(0, 8)}
+              <span ref={runRef} className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+                {runText}
               </span>
             )}
             {userEmail && (
-              <span className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
-                {userEmail}
+              <span ref={emailRef} className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+                {emailText}
               </span>
             )}
           </div>
