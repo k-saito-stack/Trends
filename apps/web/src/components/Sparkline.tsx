@@ -1,19 +1,31 @@
 /**
- * Mini sparkline — OCI blue (#1925aa) strokes, no fill.
+ * Mini sparkline — OCI blue strokes.
+ * Supports `inverted` prop for when card hover bg is blue.
  */
 interface SparklineProps {
   data: (number | null)[];
   width?: number;
   height?: number;
+  inverted?: boolean;
 }
 
 export default function Sparkline({
   data,
   width = 80,
   height = 24,
+  inverted = false,
 }: SparklineProps) {
   const values = data.filter((v): v is number => v !== null && v !== undefined);
-  if (values.length < 2) return <span className="oci-label text-oci-blue/30 text-[0.625rem]">-</span>;
+  if (values.length < 2) {
+    return (
+      <span
+        className="oci-label-sm opacity-30"
+        style={{ color: inverted ? "#e8e6e0" : "#1925aa" }}
+      >
+        —
+      </span>
+    );
+  }
 
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -28,10 +40,20 @@ export default function Sparkline({
     .join(" ");
 
   const trend = values[values.length - 1] >= values[0];
-  const color = trend ? "#1925aa" : "#1925aa80";
+  const baseColor = inverted ? "#e8e6e0" : "#1925aa";
+  const color = trend ? baseColor : `${baseColor}80`;
+
+  const lastX = width;
+  const lastY =
+    height - ((values[values.length - 1] - min) / range) * (height - 4) - 2;
 
   return (
-    <svg width={width} height={height} className="inline-block">
+    <svg
+      width={width}
+      height={height}
+      className="inline-block"
+      style={{ transition: "filter 0.3s" }}
+    >
       <polyline
         points={points}
         fill="none"
@@ -39,15 +61,15 @@ export default function Sparkline({
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
+        style={{ transition: "stroke 0.3s" }}
       />
-      {values.length > 0 && (
-        <circle
-          cx={(values.length - 1) / (values.length - 1) * width}
-          cy={height - ((values[values.length - 1] - min) / range) * (height - 4) - 2}
-          r="2"
-          fill={color}
-        />
-      )}
+      <circle
+        cx={lastX}
+        cy={lastY}
+        r="2"
+        fill={color}
+        style={{ transition: "fill 0.3s" }}
+      />
     </svg>
   );
 }

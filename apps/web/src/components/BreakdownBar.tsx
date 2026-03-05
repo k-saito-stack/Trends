@@ -1,9 +1,11 @@
 /**
- * Breakdown bar — OCI blue monochrome palette.
+ * Breakdown bar — OCI blue monochrome.
+ * Bar animates scaleX: 0→1 on mount via GSAP.
  */
+import { useRef } from "react";
 import type { BucketScore } from "../hooks/useDailyRanking";
+import { gsap, useGSAP } from "../hooks/useGSAPSetup";
 
-/* Monochrome blue palette using opacity variations of #1925aa */
 const BUCKET_COLORS: Record<string, string> = {
   TRENDS: "#1925aa",
   YOUTUBE: "#1925aacc",
@@ -21,11 +23,33 @@ interface BreakdownBarProps {
 }
 
 export default function BreakdownBar({ buckets, totalScore }: BreakdownBarProps) {
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(
+    () => {
+      gsap.fromTo(
+        barRef.current,
+        { scaleX: 0 },
+        {
+          scaleX: 1,
+          duration: 0.5,
+          ease: "power4.out",
+          transformOrigin: "left center",
+        },
+      );
+    },
+    { scope: barRef },
+  );
+
   if (!buckets.length || totalScore <= 0) return null;
 
   return (
     <div>
-      <div className="flex h-3 overflow-hidden bg-oci-mercury">
+      <div
+        ref={barRef}
+        className="flex h-2 overflow-hidden bg-oci-mercury"
+        style={{ transformOrigin: "left center" }}
+      >
         {buckets.map((b) => {
           const pct = (b.score / totalScore) * 100;
           if (pct <= 0) return null;
@@ -48,7 +72,7 @@ export default function BreakdownBar({ buckets, totalScore }: BreakdownBarProps)
               className="w-2 h-2 mr-1"
               style={{ backgroundColor: BUCKET_COLORS[b.bucket] || "#1925aa66" }}
             />
-            <span className="oci-label text-oci-blue/60 text-[0.625rem]">
+            <span className="oci-label-sm text-oci-blue/60">
               {b.bucket} ({b.score.toFixed(1)})
             </span>
           </div>

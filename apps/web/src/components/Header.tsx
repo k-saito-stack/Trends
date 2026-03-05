@@ -1,6 +1,11 @@
 /**
- * Header — OCI style: blue bg, mercury text, mono uppercase labels.
+ * Header — OCI style.
+ * Blue bg, 2 rows (logo + nav), scramble title, reveal-from-bottom logout.
  */
+import { useRef } from "react";
+import { gsap } from "../hooks/useGSAPSetup";
+import { useScrambleText } from "../hooks/useScrambleText";
+
 interface HeaderProps {
   date: string;
   onDateChange: (date: string) => void;
@@ -16,6 +21,11 @@ export default function Header({
   onLogout,
   userName,
 }: HeaderProps) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const logoutBgRef = useRef<HTMLDivElement>(null);
+  const logoutTextRef = useRef<HTMLSpanElement>(null);
+  const { scramble } = useScrambleText();
+
   const handlePrevDay = () => {
     const d = new Date(date);
     d.setDate(d.getDate() - 1);
@@ -27,65 +37,140 @@ export default function Header({
     d.setDate(d.getDate() + 1);
     const today = new Date().toISOString().split("T")[0];
     const next = d.toISOString().split("T")[0];
-    if (next <= today) {
-      onDateChange(next);
-    }
+    if (next <= today) onDateChange(next);
+  };
+
+  const handleTitleHover = () => {
+    if (titleRef.current) scramble(titleRef.current, "TRENDS");
+  };
+
+  const handleLogoutEnter = () => {
+    gsap.to(logoutBgRef.current, {
+      yPercent: 0,
+      scaleX: 1,
+      duration: 0.5,
+      ease: "power4.out",
+      overwrite: true,
+    });
+    gsap.to(logoutTextRef.current, {
+      color: "#1925aa",
+      duration: 0.3,
+      overwrite: true,
+    });
+  };
+
+  const handleLogoutLeave = () => {
+    gsap.to(logoutBgRef.current, {
+      yPercent: 101,
+      scaleX: 0.5,
+      duration: 0.5,
+      ease: "power4.out",
+      overwrite: true,
+    });
+    gsap.to(logoutTextRef.current, {
+      color: "#e8e6e0",
+      duration: 0.3,
+      overwrite: true,
+    });
   };
 
   return (
     <header className="oci-section-blue">
-      <div className="max-w-3xl mx-auto px-4 lg:px-10 py-5 flex items-center justify-between">
-        {/* Left: Title + date nav */}
-        <div className="flex items-center gap-5">
-          <h1 className="oci-heading text-oci-mercury text-2xl">Trends</h1>
+      <div className="max-w-5xl mx-auto px-6 lg:px-10">
+        {/* Row 1: Logo + user */}
+        <div className="flex items-center justify-between py-4 border-b border-white/10">
+          <h1
+            ref={titleRef}
+            className="oci-heading text-oci-mercury text-2xl cursor-default"
+            onMouseEnter={handleTitleHover}
+          >
+            TRENDS
+          </h1>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            {userName && (
+              <span className="oci-label-sm text-oci-mercury/40 hidden sm:inline">
+                {userName}
+              </span>
+            )}
+            <button
+              onClick={onLogout}
+              onMouseEnter={handleLogoutEnter}
+              onMouseLeave={handleLogoutLeave}
+              className="oci-btn border-oci-mercury/30"
+            >
+              <div
+                ref={logoutBgRef}
+                className="oci-btn__bg"
+                style={{ backgroundColor: "#e8e6e0" }}
+              />
+              <span
+                ref={logoutTextRef}
+                className="oci-btn__text oci-label-sm text-oci-mercury px-4 py-1.5"
+              >
+                Logout
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Date nav + settings */}
+        <div className="flex items-center justify-between py-3">
+          <div className="flex items-center gap-3">
             <button
               onClick={handlePrevDay}
-              className="oci-hover text-oci-mercury/70 p-1"
+              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
             </button>
             <input
               type="date"
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              className="oci-label bg-transparent border border-oci-mercury/30 text-oci-mercury px-3 py-1.5 outline-none"
+              className="oci-label bg-transparent border border-oci-mercury/20 text-oci-mercury
+                         px-3 py-1.5 outline-none focus:border-oci-mercury/50
+                         transition-colors duration-300"
             />
             <button
               onClick={handleNextDay}
-              className="oci-hover text-oci-mercury/70 p-1"
+              className="text-oci-mercury/50 hover:text-oci-mercury transition-colors duration-300 p-1"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </button>
           </div>
-        </div>
 
-        {/* Right: user + controls */}
-        <div className="flex items-center gap-4">
-          {userName && (
-            <span className="oci-label text-oci-mercury/50 hidden sm:inline text-[0.625rem]">
-              {userName}
-            </span>
-          )}
           <button
             onClick={onSettingsClick}
-            className="oci-hover text-oci-mercury/70 p-1"
-            title="Settings"
+            className="oci-link text-oci-mercury/50 gap-2"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-            </svg>
-          </button>
-          <button
-            onClick={onLogout}
-            className="oci-hover oci-label border border-oci-mercury/30 text-oci-mercury px-4 py-1.5 text-[0.625rem]"
-          >
-            Logout
+            <span className="oci-link__dot" style={{ backgroundColor: "#e8e6e0" }} />
+            <span className="oci-label-sm">Settings</span>
           </button>
         </div>
       </div>
