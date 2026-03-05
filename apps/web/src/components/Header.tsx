@@ -1,7 +1,8 @@
 /**
  * Header — OCI style.
- * Blue bg, 2 rows (logo + nav), auto-scramble title, reveal-from-bottom logout.
- * Magnetic cursor on interactive elements.
+ * Blue bg, 2 rows:
+ *   Row 1: TRENDS + SETTINGS/LOGOUT buttons
+ *   Row 2: Date nav + Generated + Run + email
  */
 import { useRef, useEffect } from "react";
 import { gsap } from "../hooks/useGSAPSetup";
@@ -16,6 +17,7 @@ interface HeaderProps {
   onLogout: () => void;
   userEmail: string | null;
   generatedAt: string | null;
+  runId: string | null;
 }
 
 export default function Header({
@@ -25,21 +27,23 @@ export default function Header({
   onLogout,
   userEmail,
   generatedAt,
+  runId,
 }: HeaderProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const logoutBgRef = useRef<HTMLDivElement>(null);
   const logoutTextRef = useRef<HTMLSpanElement>(null);
+  const settingsBgRef = useRef<HTMLDivElement>(null);
+  const settingsTextRef = useRef<HTMLSpanElement>(null);
   const { scramble } = useScrambleText();
 
   // Magnetic cursor for interactive elements
   const magLogout = useMagnetic(0.3);
+  const magSettings = useMagnetic(0.3);
   const magPrev = useMagnetic(0.4);
   const magNext = useMagnetic(0.4);
-  const magSettings = useMagnetic(0.3);
 
   // Auto-scramble TRENDS title every 8 seconds
   useEffect(() => {
-    // Initial scramble on mount
     const initTimer = setTimeout(() => {
       if (titleRef.current) scramble(titleRef.current, "TRENDS", 500);
     }, 800);
@@ -72,6 +76,7 @@ export default function Header({
     if (titleRef.current) scramble(titleRef.current, "TRENDS");
   };
 
+  // Direction-aware hover helpers
   const getDirection = (e: React.MouseEvent, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
     const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
@@ -86,6 +91,7 @@ export default function Header({
       : { from: { scaleY: 0, scaleX: 1 }, origin: "center top" };
   };
 
+  // Logout hover
   const handleLogoutEnter = (e: React.MouseEvent) => {
     const btn = (magLogout.ref as React.RefObject<HTMLButtonElement>).current;
     if (logoutBgRef.current && btn) {
@@ -96,9 +102,7 @@ export default function Header({
       });
     }
     gsap.to(logoutTextRef.current, {
-      color: "#1925aa",
-      duration: 0.3,
-      overwrite: true,
+      color: "#1925aa", duration: 0.3, overwrite: true,
     });
   };
 
@@ -112,16 +116,43 @@ export default function Header({
       });
     }
     gsap.to(logoutTextRef.current, {
-      color: "#e8e6e0",
-      duration: 0.3,
-      overwrite: true,
+      color: "#e8e6e0", duration: 0.3, overwrite: true,
+    });
+  };
+
+  // Settings hover (same pattern as Logout)
+  const handleSettingsEnter = (e: React.MouseEvent) => {
+    const btn = (magSettings.ref as React.RefObject<HTMLButtonElement>).current;
+    if (settingsBgRef.current && btn) {
+      const { from, origin } = getDirection(e, btn);
+      settingsBgRef.current.style.transformOrigin = origin;
+      gsap.fromTo(settingsBgRef.current, { ...from }, {
+        scaleX: 1, scaleY: 1, duration: 0.4, ease: "power4.out", overwrite: true,
+      });
+    }
+    gsap.to(settingsTextRef.current, {
+      color: "#1925aa", duration: 0.3, overwrite: true,
+    });
+  };
+
+  const handleSettingsLeave = (e: React.MouseEvent) => {
+    const btn = (magSettings.ref as React.RefObject<HTMLButtonElement>).current;
+    if (settingsBgRef.current && btn) {
+      const { from, origin } = getDirection(e, btn);
+      settingsBgRef.current.style.transformOrigin = origin;
+      gsap.to(settingsBgRef.current, {
+        ...from, duration: 0.4, ease: "power4.out", overwrite: true,
+      });
+    }
+    gsap.to(settingsTextRef.current, {
+      color: "#e8e6e0", duration: 0.3, overwrite: true,
     });
   };
 
   return (
     <header className="oci-section-blue">
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
-        {/* Row 1: Logo + user */}
+        {/* Row 1: TRENDS + SETTINGS / LOGOUT */}
         <div className="flex items-center justify-between py-5 border-b border-white/10">
           <h1
             ref={titleRef}
@@ -131,12 +162,40 @@ export default function Header({
             TRENDS
           </h1>
 
-          <div className="flex items-center gap-5" style={{ lineHeight: 1 }}>
-            {userEmail && (
-              <span className="oci-label-sm text-oci-mercury/50 hidden sm:inline leading-none">
-                {userEmail}
+          <div className="flex items-center gap-3" style={{ lineHeight: 1 }}>
+            {/* Settings button */}
+            <button
+              ref={magSettings.ref as React.RefObject<HTMLButtonElement>}
+              onClick={onSettingsClick}
+              onMouseEnter={handleSettingsEnter}
+              onMouseMove={magSettings.onMouseMove}
+              onMouseLeave={(e) => {
+                handleSettingsLeave(e);
+                magSettings.onMouseLeave();
+              }}
+              className="oci-btn border-oci-mercury/30"
+            >
+              <div
+                ref={settingsBgRef}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundColor: "#e8e6e0",
+                  transform: "scaleY(0)",
+                  transformOrigin: "center bottom",
+                  zIndex: 0,
+                  pointerEvents: "none",
+                }}
+              />
+              <span
+                ref={settingsTextRef}
+                className="oci-btn__text oci-label-sm text-oci-mercury px-4 py-1.5"
+              >
+                Settings
               </span>
-            )}
+            </button>
+
+            {/* Logout button */}
             <button
               ref={magLogout.ref as React.RefObject<HTMLButtonElement>}
               onClick={onLogout}
@@ -170,9 +229,9 @@ export default function Header({
           </div>
         </div>
 
-        {/* Row 2: Date nav + settings */}
+        {/* Row 2: Date nav + Generated + Run + email */}
         <div className="flex items-center justify-between py-3">
-          {/* Date nav — arrow sticks out left, date box aligns with card content */}
+          {/* Left: Date nav */}
           <div className="flex items-center">
             <button
               ref={magPrev.ref as React.RefObject<HTMLButtonElement>}
@@ -221,22 +280,23 @@ export default function Header({
             </button>
           </div>
 
-          <div className="flex items-center gap-5">
+          {/* Right: Generated + Run + email */}
+          <div className="flex items-center gap-4">
             {generatedAt && (
               <span className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
-                {new Date(generatedAt).toLocaleString("ja-JP")}
+                Generated: {new Date(generatedAt).toLocaleString("ja-JP")}
               </span>
             )}
-            <button
-              ref={magSettings.ref as React.RefObject<HTMLButtonElement>}
-              onClick={onSettingsClick}
-              onMouseMove={magSettings.onMouseMove}
-              onMouseLeave={magSettings.onMouseLeave}
-              className="oci-link text-oci-mercury/50 gap-2"
-            >
-              <span className="oci-link__dot" style={{ backgroundColor: "#e8e6e0" }} />
-              <span className="oci-label-sm">Settings</span>
-            </button>
+            {runId && (
+              <span className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+                Run: {runId.slice(0, 8)}
+              </span>
+            )}
+            {userEmail && (
+              <span className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+                {userEmail}
+              </span>
+            )}
           </div>
         </div>
       </div>

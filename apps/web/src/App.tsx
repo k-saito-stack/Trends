@@ -68,6 +68,7 @@ export default function App() {
         onLogout={logout}
         userEmail={user.email}
         generatedAt={meta?.generatedAt ?? null}
+        runId={meta?.runId ?? null}
       />
 
       <main className="relative z-10 max-w-5xl mx-auto px-6 lg:px-10 pt-8 pb-20">
