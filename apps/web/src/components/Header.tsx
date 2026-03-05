@@ -86,11 +86,13 @@ export default function Header({
 
       if (usePrimary) {
         titleRef.current.style.fontFamily = '"Zen Kaku Gothic New", system-ui, sans-serif';
+        titleRef.current.style.letterSpacing = "-0.02em";
         titleRef.current.style.textTransform = "uppercase";
         await scramble(titleRef.current, "TRENDS", 500);
       } else {
         const font = SECONDARY_FONTS[Math.floor(Math.random() * SECONDARY_FONTS.length)];
         titleRef.current.style.fontFamily = `"${font}", system-ui, sans-serif`;
+        titleRef.current.style.letterSpacing = "normal";
         titleRef.current.style.textTransform = "none";
         await scramble(titleRef.current, "Trends", 500);
       }
@@ -208,14 +210,14 @@ export default function Header({
   };
 
   return (
-    <header className="oci-section-blue">
+    <header className="oci-section-blue sticky top-0 z-30">
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
         {/* Row 1: TRENDS + SETTINGS / LOGOUT */}
         <div className="flex items-center justify-between py-5 border-b border-white/10">
           <h1
             ref={titleRef}
             className="oci-heading text-oci-mercury text-6xl cursor-default"
-            style={{ height: "1em", lineHeight: 1, overflow: "hidden" }}
+            style={{ height: "1em", lineHeight: 1 }}
             onMouseEnter={handleTitleHover}
           >
             TRENDS
