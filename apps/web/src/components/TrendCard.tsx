@@ -189,8 +189,19 @@ export default function TrendCard({ item }: TrendCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Hover background — z-0 so it sits above card bg but below z-10 content */}
-      <div ref={hoverBgRef} className="oci-btn__bg bg-oci-blue" style={{ zIndex: 0 }} />
+      {/* Hover background — slides up from bottom on hover */}
+      <div
+        ref={hoverBgRef}
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundColor: "#1925aa",
+          transform: "translateY(101%) scaleX(0.5)",
+          transformOrigin: "center bottom",
+          zIndex: 1,
+          pointerEvents: "none",
+        }}
+      />
 
       {/* Card header */}
       <div className="relative z-10 w-full px-6 py-5 flex items-center gap-5">
