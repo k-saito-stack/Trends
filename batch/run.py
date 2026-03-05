@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -672,6 +674,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     except Exception as e:
         logger.warning("Failed to release lock: %s", e)
 
+    # Write connector result summary for CI notification
+    _write_connector_summary(source_ok, errors)
+
     logger.info("=== Batch Complete (%s) ===", run_status)
     logger.info(
         "Result: %d candidates scored, %d in Top-%d, cost=%.1f JPY",
@@ -680,6 +685,40 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         app_config.top_k,
         cost_jpy,
     )
+
+
+def _write_connector_summary(
+    source_ok: dict[str, bool], errors: list[str]
+) -> None:
+    """Write connector results to a JSON file for CI notification.
+
+    The file path is read from BATCH_RESULT_PATH env var,
+    defaulting to /tmp/batch_result.json.
+    """
+    result_path = os.environ.get("BATCH_RESULT_PATH", "/tmp/batch_result.json")
+    failed = {sid: False for sid, ok in source_ok.items() if not ok}
+    # Extract error messages per source
+    error_map: dict[str, str] = {}
+    for err in errors:
+        if ":" in err:
+            sid, msg = err.split(":", 1)
+            sid = sid.strip()
+            if sid in failed:
+                error_map[sid] = msg.strip()
+
+    summary = {
+        "sources": {
+            sid: {"ok": ok, "error": error_map.get(sid, "")}
+            for sid, ok in source_ok.items()
+        },
+        "failed_sources": list(failed.keys()),
+    }
+    try:
+        with open(result_path, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+        logger.info("Connector summary written to %s", result_path)
+    except Exception as e:
+        logger.warning("Failed to write connector summary: %s", e)
 
 
 if __name__ == "__main__":

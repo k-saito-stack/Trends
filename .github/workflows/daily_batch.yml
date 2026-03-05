@@ -41,10 +41,60 @@ jobs:
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           TARGET_DATE: ${{ github.event.inputs.date || 'today' }}
+          BATCH_RESULT_PATH: /tmp/batch_result.json
         run: |
           python -m batch.run --date "${TARGET_DATE}"
 
-      - name: Create issue on failure
+      - name: Notify connector failures
+        if: always()
+        run: |
+          RESULT_FILE="/tmp/batch_result.json"
+          if [ ! -f "${RESULT_FILE}" ]; then
+            echo "No batch result file found, skipping connector check."
+            exit 0
+          fi
+
+          FAILED=$(python3 -c "
+          import json, sys
+          with open('${RESULT_FILE}') as f:
+              data = json.load(f)
+          failed = data.get('failed_sources', [])
+          if failed:
+              print('\n'.join(failed))
+          " 2>/dev/null || true)
+
+          if [ -z "${FAILED}" ]; then
+            echo "All connectors OK."
+            exit 0
+          fi
+
+          echo "Failed connectors detected: ${FAILED}"
+
+          BODY=$(python3 -c "
+          import json
+          with open('${RESULT_FILE}') as f:
+              data = json.load(f)
+          lines = ['The following connectors failed during the daily batch:\n']
+          for sid in data.get('failed_sources', []):
+              info = data['sources'].get(sid, {})
+              err = info.get('error', 'unknown error')
+              lines.append(f'- **{sid}**: {err}')
+          lines.append(f'\nRun: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}')
+          lines.append(f'Date: ${TARGET_DATE}')
+          lines.append('\nThis may indicate a page structure change (HTML scraping) or an API issue.')
+          lines.append('Check the connector and fix if needed.')
+          print('\n'.join(lines))
+          ")
+
+          gh issue create \
+            --title "Connector failure: ${FAILED}" \
+            --body "${BODY}" \
+            --label "connector-failure"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_DATE: ${{ github.event.inputs.date || 'today' }}
+
+      - name: Create issue on batch failure
         if: failure()
         run: |
           gh issue create \
