@@ -3,8 +3,7 @@
  *
  * Effects:
  *   - Hover bg reveals from bottom (OCI style)
- *   - Spotlight glow follows mouse
- *   - Detail text blur reveals on hover
+ *   - Text color inverts blue→mercury
  *   - Name scramble on hover
  */
 import { useRef, useState, useCallback } from "react";
@@ -21,11 +20,8 @@ interface TrendCardProps {
 export default function TrendCard({ item }: TrendCardProps) {
   const [hovered, setHovered] = useState(false);
 
-  const cardRef = useRef<HTMLDivElement>(null);
   const hoverBgRef = useRef<HTMLDivElement>(null);
-  const spotlightRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLSpanElement>(null);
-  const detailRef = useRef<HTMLDivElement>(null);
 
   const rankRef = useRef<HTMLSpanElement>(null);
   const sepRef = useRef<HTMLDivElement>(null);
@@ -33,16 +29,6 @@ export default function TrendCard({ item }: TrendCardProps) {
   const scoreRef = useRef<HTMLSpanElement>(null);
 
   const { scramble } = useScrambleText();
-
-  // --- Spotlight: track mouse position ---
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!cardRef.current || !spotlightRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    spotlightRef.current.style.background =
-      `radial-gradient(circle 200px at ${x}px ${y}px, rgba(255,255,255,0.15) 0%, transparent 100%)`;
-  }, []);
 
   // --- Hover: bg reveal from bottom ---
   const handleMouseEnter = useCallback(() => {
@@ -53,13 +39,6 @@ export default function TrendCard({ item }: TrendCardProps) {
       scaleX: 1,
       duration: 0.5,
       ease: "power4.out",
-      overwrite: true,
-    });
-
-    // Spotlight fade in
-    gsap.to(spotlightRef.current, {
-      opacity: 1,
-      duration: 0.3,
       overwrite: true,
     });
 
@@ -87,16 +66,6 @@ export default function TrendCard({ item }: TrendCardProps) {
       overwrite: true,
     });
 
-    // Blur reveal
-    if (detailRef.current) {
-      gsap.to(detailRef.current, {
-        filter: "blur(0px)",
-        opacity: 1,
-        duration: 0.5,
-        ease: "power4.out",
-      });
-    }
-
     if (nameRef.current) {
       scramble(nameRef.current, item.displayName);
     }
@@ -110,13 +79,6 @@ export default function TrendCard({ item }: TrendCardProps) {
       scaleX: 0.5,
       duration: 0.5,
       ease: "power4.out",
-      overwrite: true,
-    });
-
-    // Spotlight fade out
-    gsap.to(spotlightRef.current, {
-      opacity: 0,
-      duration: 0.3,
       overwrite: true,
     });
 
@@ -143,37 +105,18 @@ export default function TrendCard({ item }: TrendCardProps) {
       duration: 0.3,
       overwrite: true,
     });
-
-    // Re-blur
-    if (detailRef.current) {
-      gsap.to(detailRef.current, {
-        filter: "blur(3px)",
-        opacity: 0.7,
-        duration: 0.4,
-        ease: "power4.inOut",
-      });
-    }
   }, []);
 
   return (
     <div
-      ref={cardRef}
       className="oci-card"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onMouseMove={handleMouseMove}
     >
-      {/* Layer 1: Hover background */}
+      {/* Hover background */}
       <div ref={hoverBgRef} className="oci-btn__bg bg-oci-blue" />
 
-      {/* Layer 2: Spotlight glow overlay */}
-      <div
-        ref={spotlightRef}
-        className="absolute inset-0 z-[5] pointer-events-none"
-        style={{ opacity: 0 }}
-      />
-
-      {/* Layer 3: Card header */}
+      {/* Card header */}
       <div className="relative z-10 w-full px-6 py-5 flex items-center gap-5">
         <span
           ref={rankRef}
@@ -216,12 +159,8 @@ export default function TrendCard({ item }: TrendCardProps) {
         </div>
       </div>
 
-      {/* Detail — blur reveal on hover */}
-      <div
-        ref={detailRef}
-        className="relative z-10"
-        style={{ filter: "blur(3px)", opacity: 0.7 }}
-      >
+      {/* Detail — always visible */}
+      <div className="relative z-10">
         <div className="px-6 pb-6 border-t border-oci-blue/10">
           {item.summary && (
             <p className="text-oci-blue/80 text-xs leading-relaxed mt-4 mb-5 font-sans">
