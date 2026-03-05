@@ -305,17 +305,17 @@ export default function Header({
           {/* Right: Generated + Run + email */}
           <div className="flex items-center gap-4">
             {generatedAt && (
-              <span ref={generatedRef} className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+              <span ref={generatedRef} className="oci-label-sm text-oci-mercury/50 hidden sm:inline">
                 {generatedText}
               </span>
             )}
             {runId && (
-              <span ref={runRef} className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+              <span ref={runRef} className="oci-label-sm text-oci-mercury/50 hidden sm:inline">
                 {runText}
               </span>
             )}
             {userEmail && (
-              <span ref={emailRef} className="oci-label-sm text-oci-mercury/30 hidden sm:inline">
+              <span ref={emailRef} className="oci-label-sm text-oci-mercury/50 hidden sm:inline">
                 {emailText}
               </span>
             )}

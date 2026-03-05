@@ -318,9 +318,6 @@ export default function TrendCard({ item }: TrendCardProps) {
                       style={{ minHeight: "1rem" }}
                     />
                     <div className="text-xs font-sans">
-                      <span className="oci-label-sm opacity-30 mr-1">
-                        {ev.sourceId}
-                      </span>
                       {ev.url ? (
                         <a
                           href={ev.url}
@@ -333,8 +330,11 @@ export default function TrendCard({ item }: TrendCardProps) {
                       ) : (
                         <span>{ev.title}</span>
                       )}
+                      <span className="oci-label-sm opacity-30 mx-1">
+                        {ev.sourceId}
+                      </span>
                       {ev.metric && (
-                        <span className="opacity-30 ml-1">({ev.metric})</span>
+                        <span className="opacity-30">({ev.metric})</span>
                       )}
                     </div>
                   </div>
