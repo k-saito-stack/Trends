@@ -21,7 +21,7 @@ class DegradeState:
     """Current degradation state for this run."""
     summary_mode: str = "LLM"        # LLM / TEMPLATE / OFF
     x_search_enabled: bool = True
-    x_search_max: int = 15           # Max candidates to search
+    x_search_max: int = 20           # Max candidates to search (= top_k)
     reason: str = ""                  # Why degraded
 
     def to_dict(self) -> dict[str, object]:
@@ -78,7 +78,7 @@ def compute_degrade_state(
         return DegradeState(
             summary_mode="TEMPLATE",
             x_search_enabled=True,
-            x_search_max=15,
+            x_search_max=20,
             reason=f"Budget at {budget_ratio:.0%}, template summaries",
         )
 
@@ -86,6 +86,6 @@ def compute_degrade_state(
     return DegradeState(
         summary_mode="LLM",
         x_search_enabled=True,
-        x_search_max=15,
+        x_search_max=20,
         reason="",
     )

@@ -11,13 +11,13 @@ class TestComputeDegradeState:
         state = compute_degrade_state(0.3, AppConfig())
         assert state.summary_mode == "LLM"
         assert state.x_search_enabled is True
-        assert state.x_search_max == 15
+        assert state.x_search_max == 20
 
     def test_template_mode_at_60_percent(self) -> None:
         state = compute_degrade_state(0.65, AppConfig())
         assert state.summary_mode == "TEMPLATE"
         assert state.x_search_enabled is True
-        assert state.x_search_max == 15
+        assert state.x_search_max == 20
 
     def test_reduced_x_search_at_80_percent(self) -> None:
         state = compute_degrade_state(0.85, AppConfig())
