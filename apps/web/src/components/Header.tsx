@@ -228,7 +228,7 @@ export default function Header({
           <h1
             ref={titleRef}
             className="oci-heading text-oci-mercury text-6xl cursor-default"
-            style={{ height: "1em", lineHeight: 1 }}
+            style={{ height: "1em", lineHeight: 1, display: "flex", alignItems: "center" }}
             onMouseEnter={handleTitleHover}
           >
             TRENDS
