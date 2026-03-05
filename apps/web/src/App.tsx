@@ -8,6 +8,7 @@ import Header from "./components/Header";
 import LoginPage from "./components/LoginPage";
 import SettingsDrawer from "./components/SettingsDrawer";
 import Loader from "./components/Loader";
+import CustomCursor from "./components/CustomCursor";
 import CustomScrollbar from "./components/CustomScrollbar";
 import GridLines from "./components/GridLines";
 import { useAuth } from "./hooks/useAuth";
@@ -52,6 +53,7 @@ export default function App() {
   // Authenticated
   return (
     <div className="min-h-screen bg-oci-mercury">
+      <CustomCursor />
       <CustomScrollbar />
       <GridLines />
 

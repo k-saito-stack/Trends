@@ -234,6 +234,34 @@
   font-weight: 400;
 }
 
+/* ---- Custom cursor ---- */
+.oci-cursor {
+  position: fixed;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #1925aa;
+  border-radius: 9999px !important;
+  pointer-events: none;
+  z-index: 9998;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+              border-color 0.3s;
+  mix-blend-mode: difference;
+}
+
+.oci-cursor.active {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.oci-card--interactive {
+  cursor: none;
+}
+
+@media (pointer: coarse) {
+  .oci-cursor { display: none; }
+  .oci-card--interactive { cursor: auto; }
+}
+
 /* ---- Date input on blue bg ---- */
 input[type="date"] {
   color-scheme: dark;
