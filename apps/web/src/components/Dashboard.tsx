@@ -1,10 +1,10 @@
 /**
  * Dashboard — OCI style.
- * Cards appear with stagger animation.
+ * Cards appear from bottom-right with ScrollTrigger as you scroll.
  */
 import { useRef, useEffect } from "react";
 import { useDailyRanking } from "../hooks/useDailyRanking";
-import { gsap } from "../hooks/useGSAPSetup";
+import { gsap, ScrollTrigger } from "../hooks/useGSAPSetup";
 import TrendCard from "./TrendCard";
 
 interface DashboardProps {
@@ -32,21 +32,49 @@ export default function Dashboard({ date }: DashboardProps) {
     }
   }, [loading]);
 
-  // Stagger card entry
+  // ScrollTrigger: cards reveal from bottom-right as you scroll
   useEffect(() => {
     if (!loading && items.length > 0 && cardListRef.current) {
       const cards = cardListRef.current.querySelectorAll(".oci-card");
-      gsap.fromTo(
-        cards,
-        { opacity: 0, y: 20 },
-        {
+
+      cards.forEach((card) => {
+        gsap.set(card, { opacity: 0, y: 60, x: 30 });
+
+        ScrollTrigger.create({
+          trigger: card,
+          start: "top 90%",
+          once: true,
+          onEnter: () => {
+            gsap.to(card, {
+              opacity: 1,
+              y: 0,
+              x: 0,
+              duration: 0.7,
+              ease: "power4.out",
+            });
+          },
+        });
+      });
+
+      // First few cards visible without scroll get a stagger
+      const visibleCards = Array.from(cards).filter((card) => {
+        const rect = card.getBoundingClientRect();
+        return rect.top < window.innerHeight;
+      });
+      if (visibleCards.length > 0) {
+        gsap.to(visibleCards, {
           opacity: 1,
           y: 0,
-          duration: 0.3,
+          x: 0,
+          duration: 0.6,
           ease: "power4.out",
-          stagger: { amount: 0.3 },
-        },
-      );
+          stagger: 0.08,
+        });
+      }
+
+      return () => {
+        ScrollTrigger.getAll().forEach((st) => st.kill());
+      };
     }
   }, [loading, items]);
 

@@ -22,7 +22,7 @@ interface TrendCardProps {
 }
 
 export default function TrendCard({ item }: TrendCardProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [hovered, setHovered] = useState(false);
 
   const hoverBgRef = useRef<HTMLDivElement>(null);
@@ -129,11 +129,10 @@ export default function TrendCard({ item }: TrendCardProps) {
         { height: 0, opacity: 0 },
         { height: "auto", opacity: 1, duration: 0.4, ease: "power4.out" },
       );
-      gsap.to(chevronRef.current, {
-        rotation: 180,
-        duration: 0.3,
-        ease: "power4.out",
-      });
+      gsap.fromTo(chevronRef.current,
+        { rotation: 0 },
+        { rotation: 180, duration: 0.3, ease: "power4.out" },
+      );
 
       if (detailInnerRef.current) {
         const children = detailInnerRef.current.children;
@@ -222,6 +221,7 @@ export default function TrendCard({ item }: TrendCardProps) {
             ref={chevronRef}
             xmlns="http://www.w3.org/2000/svg"
             className="h-4 w-4 text-oci-blue/30"
+            style={{ transform: "rotate(180deg)" }}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -240,7 +240,7 @@ export default function TrendCard({ item }: TrendCardProps) {
       <div
         ref={detailRef}
         className="relative z-10 overflow-hidden"
-        style={{ height: 0, opacity: 0, display: "none" }}
+        style={{ height: "auto", opacity: 1, display: "block" }}
       >
         <div ref={detailInnerRef} className="px-6 pb-6 border-t border-oci-blue/10">
           {item.summary && (
