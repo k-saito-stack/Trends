@@ -2,31 +2,76 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #0039d6;
+/* ─── OCI Design System ─── */
+
+@layer base {
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #e8e6e0;
+    color: #1925aa;
+  }
+
+  * {
+    border-radius: 0;
+  }
 }
 
-.white-card {
-  background-color: #f0f1f3;
-  border: 1px solid #0039d6;
+@layer components {
+  /* Card: white bg, 1px blue border, no radius */
+  .oci-card {
+    background-color: #fff;
+    border: 1px solid #1925aa;
+  }
+
+  /* Section on blue bg */
+  .oci-section-blue {
+    background-color: #1925aa;
+    color: #e8e6e0;
+  }
+
+  /* Mono label style: uppercase, GT America Mono */
+  .oci-label {
+    font-family: "GT America Mono", ui-monospace, monospace;
+    font-weight: 400;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    line-height: 1.33;
+    letter-spacing: 0;
+  }
+
+  /* Heading style: PP Neue Montreal */
+  .oci-heading {
+    font-family: "PP Neue Montreal", system-ui, sans-serif;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+
+  /* 1px separator line */
+  .oci-line {
+    border-color: #1925aa;
+    border-width: 0;
+    border-bottom-width: 1px;
+  }
+
+  .oci-line-mercury {
+    border-color: #e8e6e0;
+    border-width: 0;
+    border-bottom-width: 1px;
+  }
 }
 
-.pattern-bg {
-  background-image: repeating-linear-gradient(
-    45deg,
-    #0039d6 0,
-    #0039d6 1px,
-    transparent 1px,
-    transparent 6px
-  );
-  opacity: 0.15;
+/* Hover = opacity 50% */
+.oci-hover {
+  transition: opacity 0.2s ease;
+}
+.oci-hover:hover {
+  opacity: 0.5;
 }
 
+/* Scrollbar hide */
 .scroll-hide::-webkit-scrollbar {
   display: none;
 }
@@ -35,7 +80,7 @@ body {
   scrollbar-width: none;
 }
 
-/* date input on blue bg */
+/* Date input on mercury bg */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
+  filter: none;
 }

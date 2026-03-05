@@ -1,6 +1,6 @@
 /**
- * Single trend candidate card with expandable detail.
- * Design: white card (#f0f1f3) on blue background, blue text, no border-radius.
+ * Trend card — OCI style: white card, 1px blue border, mono labels.
+ * Expandable detail with breakdown + evidence.
  */
 import { useState } from "react";
 import type { RankingItem } from "../hooks/useDailyRanking";
@@ -15,63 +15,65 @@ export default function TrendCard({ item }: TrendCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="white-card overflow-hidden">
+    <div className="oci-card overflow-hidden">
       {/* Collapsed header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-5 py-4 flex items-center gap-3 text-left
-                   hover:bg-blue-50/30 transition-colors"
+        className="w-full px-5 py-4 flex items-center gap-4 text-left
+                   hover:bg-oci-mercury/50 transition-colors duration-200"
       >
-        {/* Rank with blue dot */}
+        {/* Rank number */}
         <div className="flex flex-col items-center shrink-0 w-8">
-          <span className="text-blue-600 text-lg font-bold">{item.rank}</span>
+          <span className="oci-heading text-oci-blue text-xl">{item.rank}</span>
         </div>
+
+        {/* 1px vertical separator */}
+        <div className="w-px h-8 bg-oci-blue/20 shrink-0" />
 
         {/* Name + type tag */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-blue-600 truncate">
+            <span className="font-sans font-medium text-oci-blue truncate">
               {item.displayName}
             </span>
-            <span className="text-[10px] text-blue-600/60 border border-blue-600/30 px-2 py-0.5 shrink-0 uppercase tracking-wider">
+            <span className="oci-label text-oci-blue/40 border border-oci-blue/20 px-2 py-0.5 shrink-0 text-[0.625rem]">
               {item.candidateType}
             </span>
           </div>
         </div>
 
-        {/* Sparkline + score + arrow */}
+        {/* Sparkline + score + chevron */}
         <div className="flex items-center gap-3 shrink-0">
           <Sparkline data={item.sparkline7d} />
-          <span className="font-bold text-blue-600 text-sm w-12 text-right">
+          <span className="font-mono font-normal text-oci-blue text-sm w-12 text-right">
             {item.trendScore.toFixed(1)}
           </span>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className={`h-4 w-4 text-blue-600/50 transition-transform ${expanded ? "rotate-180" : ""}`}
+            className={`h-4 w-4 text-oci-blue/30 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
           </svg>
         </div>
       </button>
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="px-5 pb-5 border-t border-blue-600/10">
+        <div className="px-5 pb-5 border-t border-oci-blue/10">
           {/* Summary */}
           {item.summary && (
-            <p className="text-blue-600 text-xs leading-relaxed mt-3 mb-4">
+            <p className="text-oci-blue text-xs leading-relaxed mt-4 mb-5 font-sans">
               {item.summary}
             </p>
           )}
 
           {/* Breakdown */}
           {item.breakdownBuckets.length > 0 && (
-            <div className="mb-4">
-              <div className="flex items-start mb-2">
-                <div className="w-1 h-4 bg-blue-600 mr-2 mt-0.5" />
-                <h4 className="text-blue-600 text-xs font-medium">スコア内訳</h4>
-              </div>
+            <div className="mb-5">
+              <h4 className="oci-label text-oci-blue/50 mb-2 text-[0.625rem]">
+                Score Breakdown
+              </h4>
               <BreakdownBar
                 buckets={item.breakdownBuckets}
                 totalScore={item.trendScore}
@@ -82,32 +84,31 @@ export default function TrendCard({ item }: TrendCardProps) {
           {/* Evidence */}
           {item.evidenceTop3.length > 0 && (
             <div className="mb-3">
-              <div className="flex items-start mb-2">
-                <div className="w-1 h-4 bg-blue-600 mr-2 mt-0.5" />
-                <h4 className="text-blue-600 text-xs font-medium">エビデンス</h4>
-              </div>
-              <div className="space-y-2 pl-3">
+              <h4 className="oci-label text-oci-blue/50 mb-2 text-[0.625rem]">
+                Evidence
+              </h4>
+              <div className="space-y-2">
                 {item.evidenceTop3.map((ev, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <div className="w-2 h-2 bg-blue-600 rounded-full mt-1.5 shrink-0" />
-                    <div className="text-xs">
-                      <span className="text-blue-600/50 mr-1">
-                        [{ev.sourceId}]
+                  <div key={i} className="flex items-start gap-3 pl-1">
+                    <div className="w-1 bg-oci-blue/20 shrink-0 mt-0.5" style={{ minHeight: "1rem" }} />
+                    <div className="text-xs font-sans">
+                      <span className="oci-label text-oci-blue/30 mr-1 text-[0.625rem]">
+                        {ev.sourceId}
                       </span>
                       {ev.url ? (
                         <a
                           href={ev.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 underline underline-offset-2"
+                          className="text-oci-blue underline underline-offset-2 oci-hover"
                         >
                           {ev.title || ev.url}
                         </a>
                       ) : (
-                        <span className="text-blue-600">{ev.title}</span>
+                        <span className="text-oci-blue">{ev.title}</span>
                       )}
                       {ev.metric && (
-                        <span className="text-blue-600/40 ml-1">
+                        <span className="text-oci-blue/30 ml-1">
                           ({ev.metric})
                         </span>
                       )}
@@ -120,9 +121,8 @@ export default function TrendCard({ item }: TrendCardProps) {
 
           {/* Power score */}
           {item.power != null && (
-            <div className="flex items-center gap-2 mt-2">
-              <div className="w-2 h-2 pattern-bg" />
-              <span className="text-blue-600/60 text-xs">
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-oci-blue/10">
+              <span className="oci-label text-oci-blue/30 text-[0.625rem]">
                 Power: {item.power.toFixed(1)}
               </span>
             </div>

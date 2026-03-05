@@ -1,5 +1,5 @@
 /**
- * Main dashboard showing the daily ranking cards.
+ * Main dashboard — OCI style: mercury bg, blue text, mono labels.
  */
 import { useDailyRanking } from "../hooks/useDailyRanking";
 import TrendCard from "./TrendCard";
@@ -14,7 +14,7 @@ export default function Dashboard({ date }: DashboardProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="text-white/50">読み込み中...</div>
+        <span className="oci-label text-oci-blue/40">Loading...</span>
       </div>
     );
   }
@@ -22,10 +22,8 @@ export default function Dashboard({ date }: DashboardProps) {
   if (error) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="white-card p-5">
-          <div className="text-blue-600 text-sm">
-            エラー: {error}
-          </div>
+        <div className="oci-card p-6">
+          <span className="oci-label text-oci-error">{error}</span>
         </div>
       </div>
     );
@@ -34,9 +32,11 @@ export default function Dashboard({ date }: DashboardProps) {
   if (items.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="white-card p-8 text-center">
-          <p className="text-blue-600 text-lg mb-2">{date} のデータがありません</p>
-          <p className="text-blue-600 text-sm">バッチが実行されるとデータが表示されます</p>
+        <div className="oci-card p-10 text-center">
+          <p className="oci-heading text-oci-blue text-xl mb-3">
+            {date}
+          </p>
+          <p className="oci-label text-oci-blue/40">No data available</p>
         </div>
       </div>
     );
@@ -45,12 +45,12 @@ export default function Dashboard({ date }: DashboardProps) {
   return (
     <div>
       {meta && (
-        <div className="text-xs text-white/40 mb-3 px-1">
-          生成: {new Date(meta.generatedAt).toLocaleString("ja-JP")}
+        <div className="oci-label text-oci-blue/30 mb-4 text-[0.625rem]">
+          Generated: {new Date(meta.generatedAt).toLocaleString("ja-JP")}
           {" / "}Run: {meta.runId.slice(0, 8)}...
         </div>
       )}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {items.map((item) => (
           <TrendCard key={item.candidateId} item={item} />
         ))}

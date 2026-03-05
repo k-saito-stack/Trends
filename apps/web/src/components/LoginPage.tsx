@@ -1,5 +1,5 @@
 /**
- * Google login page — blue full-screen background with white card.
+ * Login page — OCI style: mercury bg, centered white card, blue accent.
  */
 interface LoginPageProps {
   onLogin: () => void;
@@ -8,31 +8,31 @@ interface LoginPageProps {
 
 export default function LoginPage({ onLogin, error }: LoginPageProps) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0039d6] p-4">
-      <div className="white-card max-w-sm w-full p-8 text-center">
-        {/* Section header bar */}
-        <div className="flex items-start justify-center mb-6">
-          <div className="w-1 h-6 bg-blue-600 mr-3" />
-          <div>
-            <h1 className="text-blue-600 font-medium text-lg">Trends</h1>
-            <p className="text-blue-600 text-sm">トレンド兆し検知</p>
-          </div>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-oci-mercury p-4">
+      <div className="oci-card max-w-sm w-full p-10">
+        {/* Title */}
+        <h1 className="oci-heading text-oci-blue text-4xl mb-2">Trends</h1>
+        <p className="oci-label text-oci-blue/50 mb-10">
+          Trend Detection Platform
+        </p>
+
+        {/* Divider */}
+        <div className="oci-line mb-8" />
 
         <button
           onClick={onLogin}
-          className="w-full bg-blue-600 text-white py-3 px-4 text-sm
-                     uppercase tracking-wider hover:bg-blue-700 transition-colors"
+          className="oci-hover w-full bg-oci-blue text-oci-mercury py-3 px-4
+                     oci-label text-xs tracking-wider"
         >
-          Google でログイン
+          Sign in with Google
         </button>
 
         {error && (
-          <p className="mt-4 text-red-500 text-sm">{error}</p>
+          <p className="mt-4 text-oci-error text-xs">{error}</p>
         )}
 
-        <p className="mt-6 text-xs text-blue-600/60">
-          @kodansha.co.jp アカウントでログインしてください
+        <p className="mt-8 oci-label text-oci-blue/40 text-[0.625rem]">
+          @kodansha.co.jp accounts only
         </p>
       </div>
     </div>

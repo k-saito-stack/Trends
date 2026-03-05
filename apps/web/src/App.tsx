@@ -1,6 +1,6 @@
 /**
- * Main application component.
- * Handles auth guard and renders dashboard or login page.
+ * Main application — OCI design system.
+ * Mercury (#e8e6e0) base, Blue (#1925aa) accent.
  */
 import { useState } from "react";
 import Dashboard from "./components/Dashboard";
@@ -20,8 +20,8 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0039d6]">
-        <div className="text-white/60">読み込み中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-oci-mercury">
+        <span className="oci-label text-oci-blue opacity-50">LOADING...</span>
       </div>
     );
   }
@@ -31,7 +31,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0039d6]">
+    <div className="min-h-screen bg-oci-mercury">
       <Header
         date={date}
         onDateChange={setDate}
@@ -40,7 +40,7 @@ export default function App() {
         userName={user.displayName}
       />
 
-      <main className="max-w-2xl mx-auto px-4 py-4 pb-12">
+      <main className="max-w-3xl mx-auto px-4 lg:px-10 pt-6 pb-20">
         <Dashboard date={date} />
       </main>
 

@@ -1,5 +1,5 @@
 /**
- * Dashboard header — blue background with white text and SVG icons.
+ * Header — OCI style: blue bg, mercury text, mono uppercase labels.
  */
 interface HeaderProps {
   date: string;
@@ -33,58 +33,59 @@ export default function Header({
   };
 
   return (
-    <header className="bg-[#0039d6]">
-      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Left: title + date nav */}
-        <div className="flex items-center gap-3">
-          <h1 className="text-white text-lg font-medium">Trends</h1>
-          <div className="flex items-center gap-1">
+    <header className="oci-section-blue">
+      <div className="max-w-3xl mx-auto px-4 lg:px-10 py-5 flex items-center justify-between">
+        {/* Left: Title + date nav */}
+        <div className="flex items-center gap-5">
+          <h1 className="oci-heading text-oci-mercury text-2xl">Trends</h1>
+
+          <div className="flex items-center gap-2">
             <button
               onClick={handlePrevDay}
-              className="text-white/70 hover:text-white p-1"
+              className="oci-hover text-oci-mercury/70 p-1"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <input
               type="date"
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              className="text-sm bg-transparent border border-white/30 text-white px-2 py-1 outline-none"
+              className="oci-label bg-transparent border border-oci-mercury/30 text-oci-mercury px-3 py-1.5 outline-none"
             />
             <button
               onClick={handleNextDay}
-              className="text-white/70 hover:text-white p-1"
+              className="oci-hover text-oci-mercury/70 p-1"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
         </div>
 
-        {/* Right: user + settings + logout */}
-        <div className="flex items-center gap-2">
+        {/* Right: user + controls */}
+        <div className="flex items-center gap-4">
           {userName && (
-            <span className="text-xs text-white/50 hidden sm:inline">
+            <span className="oci-label text-oci-mercury/50 hidden sm:inline text-[0.625rem]">
               {userName}
             </span>
           )}
           <button
             onClick={onSettingsClick}
-            className="text-white/70 hover:text-white p-1"
-            title="設定"
+            className="oci-hover text-oci-mercury/70 p-1"
+            title="Settings"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
           </button>
           <button
             onClick={onLogout}
-            className="text-white/70 hover:text-white text-xs border border-white/30 px-3 py-1"
+            className="oci-hover oci-label border border-oci-mercury/30 text-oci-mercury px-4 py-1.5 text-[0.625rem]"
           >
-            ログアウト
+            Logout
           </button>
         </div>
       </div>
