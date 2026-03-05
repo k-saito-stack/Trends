@@ -62,7 +62,7 @@ export default function App() {
         onDateChange={setDate}
         onSettingsClick={() => setSettingsOpen(true)}
         onLogout={logout}
-        userName={user.displayName}
+        userEmail={user.email}
       />
 
       <main className="relative z-10 max-w-5xl mx-auto px-6 lg:px-10 pt-8 pb-20">

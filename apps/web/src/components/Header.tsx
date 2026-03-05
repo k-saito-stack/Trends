@@ -1,19 +1,20 @@
 /**
  * Header — OCI style.
- * Blue bg, 2 rows (logo + nav), scramble title, reveal-from-bottom logout.
+ * Blue bg, 2 rows (logo + nav), auto-scramble title, reveal-from-bottom logout.
  * Magnetic cursor on interactive elements.
  */
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { gsap } from "../hooks/useGSAPSetup";
 import { useMagnetic } from "../hooks/useMagnetic";
 import { useScrambleText } from "../hooks/useScrambleText";
+import DatePicker from "./DatePicker";
 
 interface HeaderProps {
   date: string;
   onDateChange: (date: string) => void;
   onSettingsClick: () => void;
   onLogout: () => void;
-  userName: string | null;
+  userEmail: string | null;
 }
 
 export default function Header({
@@ -21,7 +22,7 @@ export default function Header({
   onDateChange,
   onSettingsClick,
   onLogout,
-  userName,
+  userEmail,
 }: HeaderProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const logoutBgRef = useRef<HTMLDivElement>(null);
@@ -33,6 +34,23 @@ export default function Header({
   const magPrev = useMagnetic(0.4);
   const magNext = useMagnetic(0.4);
   const magSettings = useMagnetic(0.3);
+
+  // Auto-scramble TRENDS title every 8 seconds
+  useEffect(() => {
+    // Initial scramble on mount
+    const initTimer = setTimeout(() => {
+      if (titleRef.current) scramble(titleRef.current, "TRENDS", 500);
+    }, 800);
+
+    const interval = setInterval(() => {
+      if (titleRef.current) scramble(titleRef.current, "TRENDS", 500);
+    }, 8000);
+
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(interval);
+    };
+  }, [scramble]);
 
   const handlePrevDay = () => {
     const d = new Date(date);
@@ -84,7 +102,7 @@ export default function Header({
     <header className="oci-section-blue">
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
         {/* Row 1: Logo + user */}
-        <div className="flex items-center justify-between py-4 border-b border-white/10">
+        <div className="flex items-center justify-between py-5 border-b border-white/10">
           <h1
             ref={titleRef}
             className="oci-heading text-oci-mercury text-5xl cursor-default"
@@ -93,10 +111,10 @@ export default function Header({
             TRENDS
           </h1>
 
-          <div className="flex items-center gap-4">
-            {userName && (
-              <span className="oci-label-sm text-oci-mercury/40 hidden sm:inline">
-                {userName}
+          <div className="flex items-center gap-5">
+            {userEmail && (
+              <span className="oci-label-sm text-oci-mercury/50 hidden sm:inline">
+                {userEmail}
               </span>
             )}
             <button
@@ -135,7 +153,7 @@ export default function Header({
         {/* Row 2: Date nav + settings */}
         <div className="flex items-center justify-between py-3">
           {/* Date nav — arrow sticks out left, date box aligns with card content */}
-          <div className="flex items-center gap-0">
+          <div className="flex items-center">
             <button
               ref={magPrev.ref as React.RefObject<HTMLButtonElement>}
               onClick={handlePrevDay}
@@ -158,14 +176,7 @@ export default function Header({
                 />
               </svg>
             </button>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="oci-label bg-transparent border border-oci-mercury/20 text-oci-mercury
-                         px-3 py-1.5 outline-none focus:border-oci-mercury/50
-                         transition-colors duration-300"
-            />
+            <DatePicker value={date} onChange={onDateChange} />
             <button
               ref={magNext.ref as React.RefObject<HTMLButtonElement>}
               onClick={handleNextDay}
