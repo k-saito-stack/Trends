@@ -54,8 +54,7 @@ export default function TrendCard({ item }: TrendCardProps) {
 
     // Bg reveal from bottom
     gsap.to(hoverBgRef.current, {
-      yPercent: 0,
-      scaleX: 1,
+      scaleY: 1,
       duration: 0.5,
       ease: "power4.out",
       overwrite: true,
@@ -136,8 +135,7 @@ export default function TrendCard({ item }: TrendCardProps) {
 
     // Bg hide
     gsap.to(hoverBgRef.current, {
-      yPercent: 101,
-      scaleX: 0.5,
+      scaleY: 0,
       duration: 0.5,
       ease: "power4.out",
       overwrite: true,
@@ -189,14 +187,14 @@ export default function TrendCard({ item }: TrendCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Hover background — slides up from bottom on hover */}
+      {/* Hover background — grows up from bottom on hover */}
       <div
         ref={hoverBgRef}
         style={{
           position: "absolute",
           inset: 0,
           backgroundColor: "#1925aa",
-          transform: "translateY(101%) scaleX(0.5)",
+          transform: "scaleY(0)",
           transformOrigin: "center bottom",
           zIndex: 1,
           pointerEvents: "none",
