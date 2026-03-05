@@ -124,8 +124,7 @@ export default function Dashboard({ date }: DashboardProps) {
 
       <div
         ref={cardListRef}
-        className="flex flex-col"
-        style={{ gap: "1px", backgroundColor: "rgba(25,37,170,0.08)" }}
+        className="flex flex-col gap-5"
       >
         {items.map((item) => (
           <TrendCard key={item.candidateId} item={item} />

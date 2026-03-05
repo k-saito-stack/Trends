@@ -20,7 +20,7 @@ export default function Sparkline({
     return (
       <span
         className="oci-label-sm opacity-30"
-        style={{ color: inverted ? "#e8e6e0" : "#1925aa" }}
+        style={{ color: inverted ? "#ffffff" : "#1925aa" }}
       >
         —
       </span>
@@ -40,7 +40,7 @@ export default function Sparkline({
     .join(" ");
 
   const trend = values[values.length - 1] >= values[0];
-  const baseColor = inverted ? "#e8e6e0" : "#1925aa";
+  const baseColor = inverted ? "#ffffff" : "#1925aa";
   const color = trend ? baseColor : `${baseColor}80`;
 
   const lastX = width;
