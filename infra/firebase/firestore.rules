@@ -14,6 +14,12 @@ service cloud.firestore {
         && request.auth.token.email.matches(".*@kodansha\\.co\\.jp$");
     }
 
+    // Helper: user has admin custom claim
+    function isAdmin() {
+      return isAllowedDomain()
+        && request.auth.token.admin == true;
+    }
+
     // Daily rankings (read-only for users, write by Admin SDK only)
     match /daily_rankings/{date} {
       allow read: if isAllowedDomain();
@@ -24,27 +30,32 @@ service cloud.firestore {
       }
     }
 
-    // Config (read/write for authorized users)
+    // Config (read for authorized users, write for admin only)
     match /config/{doc} {
-      allow read, write: if isAllowedDomain();
+      allow read: if isAllowedDomain();
+      allow write: if isAdmin();
     }
     match /config/sources/{sourceId} {
-      allow read, write: if isAllowedDomain();
+      allow read: if isAllowedDomain();
+      allow write: if isAdmin();
     }
 
-    // Queries (read/write for authorized users)
+    // Queries (read for authorized users, write for admin only)
     match /queries/{queryId} {
-      allow read, write: if isAllowedDomain();
+      allow read: if isAllowedDomain();
+      allow write: if isAdmin();
     }
 
-    // Candidates (read/write for authorized users)
+    // Candidates (read-only for users, write by Admin SDK only)
     match /candidates/{candidateId} {
-      allow read, write: if isAllowedDomain();
+      allow read: if isAllowedDomain();
+      allow write: if false;
     }
 
-    // Change logs (read/write for authorized users)
+    // Change logs (read for authorized users, write for admin only)
     match /change_logs/{logId} {
-      allow read, write: if isAllowedDomain();
+      allow read: if isAllowedDomain();
+      allow write: if isAdmin();
     }
 
     // Run logs (read-only for users, write by Admin SDK only)

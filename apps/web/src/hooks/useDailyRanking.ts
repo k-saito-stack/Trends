@@ -38,6 +38,7 @@ export interface RankingMeta {
   runId: string;
   topK: number;
   degradeState: Record<string, unknown>;
+  status?: string;
 }
 
 export function useDailyRanking(date: string) {
@@ -53,10 +54,23 @@ export function useDailyRanking(date: string) {
       // Fetch metadata
       const metaSnap = await getDoc(doc(db, "daily_rankings", date));
       if (metaSnap.exists()) {
-        setMeta(metaSnap.data() as RankingMeta);
+        const metaData = metaSnap.data() as RankingMeta;
+        setMeta(metaData);
+
+        // If ranking is still being built, show "updating" state
+        if (metaData.status === "BUILDING") {
+          setError("ランキングを更新中です。しばらくお待ちください。");
+          setItems([]);
+          return;
+        }
+        if (metaData.status === "FAILED") {
+          setError("ランキングの生成に失敗しました。");
+          setItems([]);
+          return;
+        }
       }
 
-      // Fetch items subcollection
+      // Fetch items subcollection (only when PUBLISHED or no status field)
       const itemsRef = collection(db, "daily_rankings", date, "items");
       const q = query(itemsRef, orderBy("rank"));
       const snapshot = await getDocs(q);

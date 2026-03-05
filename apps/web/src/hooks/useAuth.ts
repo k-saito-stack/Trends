@@ -10,6 +10,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   error: string | null;
+  isAdmin: boolean;
 }
 
 export function useAuth() {
@@ -17,11 +18,18 @@ export function useAuth() {
     user: null,
     loading: true,
     error: null,
+    isAdmin: false,
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setState({ user, loading: false, error: null });
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const tokenResult = await user.getIdTokenResult();
+        const isAdmin = tokenResult.claims.admin === true;
+        setState({ user, loading: false, error: null, isAdmin });
+      } else {
+        setState({ user: null, loading: false, error: null, isAdmin: false });
+      }
     });
     return unsubscribe;
   }, []);

@@ -72,6 +72,24 @@ def get_document(collection: str, document_id: str) -> dict[str, Any] | None:
     return None
 
 
+def create_document(collection: str, document_id: str, data: dict[str, Any]) -> bool:
+    """Create a document only if it does not exist.
+
+    Returns True if created, False if already exists.
+    Uses Firestore's create() which is atomic.
+    """
+    db = get_db()
+    doc_ref = db.collection(collection).document(document_id)
+    try:
+        doc_ref.create(data)
+        return True
+    except Exception as e:
+        # google.cloud.exceptions.Conflict (409) when doc already exists
+        if "already exists" in str(e).lower() or "conflict" in str(e).lower():
+            return False
+        raise
+
+
 def set_document(collection: str, document_id: str, data: dict[str, Any]) -> None:
     """Write a document to Firestore (overwrite)."""
     db = get_db()

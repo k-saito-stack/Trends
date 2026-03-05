@@ -202,6 +202,7 @@ class DailyRankingMeta:
     degrade_state: dict[str, bool] = field(default_factory=dict)
     algorithm_version: str = "v1"
     music_weights: dict[str, float] = field(default_factory=lambda: {"JP": 1.0, "GLOBAL": 0.25})
+    status: str = "PUBLISHED"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -212,6 +213,7 @@ class DailyRankingMeta:
             "degradeState": self.degrade_state,
             "algorithmVersion": self.algorithm_version,
             "musicWeights": self.music_weights,
+            "status": self.status,
         }
 
 

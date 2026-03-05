@@ -67,12 +67,96 @@ logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
 
+# Lock timeout: if a run has been RUNNING for longer than this, it's considered stale
+LOCK_TIMEOUT_MINUTES = 30
+
 
 def get_target_date(date_arg: str) -> str:
     """Parse the --date argument and return YYYY-MM-DD in JST."""
     if date_arg == "today":
         return datetime.now(JST).strftime("%Y-%m-%d")
     return date_arg
+
+
+def acquire_lock(target_date: str, run_id: str) -> bool:
+    """Acquire a per-date lock to prevent duplicate runs.
+
+    Returns True if the lock was acquired (proceed with batch).
+    Returns False if the date was already processed or another run is active.
+    """
+    from packages.core import firestore_client
+
+    lock_id = f"_lock_{target_date}"
+    now_iso = datetime.now(JST).isoformat()
+
+    # Try atomic create (fails if doc already exists)
+    created = firestore_client.create_document("runs", lock_id, {
+        "status": "RUNNING",
+        "runId": run_id,
+        "targetDate": target_date,
+        "startedAt": now_iso,
+    })
+
+    if created:
+        return True
+
+    # Lock doc exists — check its status
+    lock_doc = firestore_client.get_document("runs", lock_id)
+    if lock_doc is None:
+        return False
+
+    lock_status = lock_doc.get("status", "")
+
+    if lock_status == "COMPLETED":
+        logger.info("Date %s already completed (run=%s). Skipping.",
+                     target_date, lock_doc.get("runId", "?"))
+        return False
+
+    if lock_status == "RUNNING":
+        # Check if the lock is stale (timed out)
+        started_at = lock_doc.get("startedAt", "")
+        if started_at:
+            try:
+                started = datetime.fromisoformat(started_at)
+                elapsed = datetime.now(JST) - started
+                if elapsed.total_seconds() > LOCK_TIMEOUT_MINUTES * 60:
+                    logger.warning(
+                        "Stale lock for %s (started %s). Overriding.",
+                        target_date, started_at,
+                    )
+                    firestore_client.set_document("runs", lock_id, {
+                        "status": "RUNNING",
+                        "runId": run_id,
+                        "targetDate": target_date,
+                        "startedAt": now_iso,
+                    })
+                    return True
+            except (ValueError, TypeError):
+                pass
+
+        logger.info("Another run is active for %s. Skipping.", target_date)
+        return False
+
+    # Unknown status — treat as stale and override
+    firestore_client.set_document("runs", lock_id, {
+        "status": "RUNNING",
+        "runId": run_id,
+        "targetDate": target_date,
+        "startedAt": now_iso,
+    })
+    return True
+
+
+def release_lock(target_date: str, run_id: str, status: str = "COMPLETED") -> None:
+    """Release the per-date lock by marking it as completed."""
+    from packages.core import firestore_client
+
+    lock_id = f"_lock_{target_date}"
+    firestore_client.update_document("runs", lock_id, {
+        "status": status,
+        "runId": run_id,
+        "endedAt": datetime.now(JST).isoformat(),
+    })
 
 
 def _create_connectors() -> list[BaseConnector]:
@@ -97,6 +181,15 @@ def main(date_arg: str = "today") -> None:
     logger.info("=== Trends Daily Batch ===")
     logger.info("Run ID: %s", run_id)
     logger.info("Target date: %s", target_date)
+
+    # Acquire per-date lock (prevent duplicate runs)
+    try:
+        if not acquire_lock(target_date, run_id):
+            logger.info("=== Batch skipped (lock not acquired) ===")
+            return
+        logger.info("Lock acquired for %s", target_date)
+    except Exception as e:
+        logger.warning("Lock check failed (proceeding anyway): %s", e)
 
     # ── Step 0: Load config + candidates ──
     logger.info("Step 0: Loading config and candidates...")
@@ -407,7 +500,7 @@ def main(date_arg: str = "today") -> None:
         if degrade.summary_mode == "LLM" and llm_client and llm_client.available:
             llm_summary_calls += 1
 
-    # ── Step 11: Write to Firestore ──
+    # ── Step 11: Write to Firestore (status flag pattern) ──
     logger.info("Step 11: Writing results to Firestore...")
 
     try:
@@ -429,8 +522,9 @@ def main(date_arg: str = "today") -> None:
             )
             ranking_items.append(item)
 
-        # Write metadata
         from packages.core import firestore_client
+
+        # Phase 1: Write metadata with status=BUILDING
         meta = DailyRankingMeta(
             date=target_date,
             generated_at=datetime.now(JST).isoformat(),
@@ -438,28 +532,43 @@ def main(date_arg: str = "today") -> None:
             top_k=app_config.top_k,
             degrade_state=degrade.to_dict(),  # type: ignore[arg-type]
             music_weights=music_config.weights,
+            status="BUILDING",
         )
         firestore_client.set_document(
             "daily_rankings", target_date, meta.to_dict()
         )
 
-        # Write items as subcollection
+        # Phase 2: Write items as subcollection (batch write)
+        item_ops: list[tuple[str, str, dict[str, Any]]] = []
         for item in ranking_items:
-            firestore_client.set_subcollection_document(
-                "daily_rankings", target_date,
-                "items", item.candidate_id,
+            item_ops.append((
+                f"daily_rankings/{target_date}/items",
+                item.candidate_id,
                 item.to_dict(),
-            )
+            ))
+        if item_ops:
+            firestore_client.batch_write(item_ops)
 
-        # Save updated candidates
+        # Phase 3: Save updated candidates
         candidate_store.save_candidates_batch(existing_candidates)
 
-        logger.info("Written %d ranking items to Firestore", len(ranking_items))
+        # Phase 4: Mark as PUBLISHED (atomic switch)
+        firestore_client.update_document(
+            "daily_rankings", target_date, {"status": "PUBLISHED"}
+        )
+
+        logger.info("Written %d ranking items to Firestore (PUBLISHED)", len(ranking_items))
 
     except Exception as e:
         error_msg = f"Firestore write failed: {e}"
         errors.append(error_msg)
         logger.error(error_msg)
+        # Mark as FAILED if metadata was already written
+        try:
+            from packages.core import firestore_client as fc
+            fc.update_document("daily_rankings", target_date, {"status": "FAILED"})
+        except Exception:
+            pass
 
     # ── Step 12: End logging + cost_logs ──
     logger.info("Step 12: Recording run completion...")
@@ -486,6 +595,12 @@ def main(date_arg: str = "today") -> None:
         )
     except Exception as e:
         logger.warning("Failed to log run end: %s", e)
+
+    # Release per-date lock
+    try:
+        release_lock(target_date, run_id, status)
+    except Exception as e:
+        logger.warning("Failed to release lock: %s", e)
 
     logger.info("=== Batch Complete (%s) ===", status)
     logger.info(

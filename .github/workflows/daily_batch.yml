@@ -11,6 +11,10 @@ on:
         required: false
         default: "today"
 
+concurrency:
+  group: daily-batch
+  cancel-in-progress: false
+
 jobs:
   batch-run:
     runs-on: ubuntu-latest
@@ -38,3 +42,13 @@ jobs:
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         run: |
           python -m batch.run --date "${{ github.event.inputs.date || 'today' }}"
+
+      - name: Create issue on failure
+        if: failure()
+        run: |
+          gh issue create \
+            --title "Daily Batch Failed: ${{ github.event.inputs.date || 'today' }}" \
+            --body "Batch run failed.\n\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\nDate: ${{ github.event.inputs.date || 'today' }}\nTriggered: ${{ github.event_name }}" \
+            --label "batch-failure"
+        env:
+          GH_TOKEN: ${{ github.token }}
