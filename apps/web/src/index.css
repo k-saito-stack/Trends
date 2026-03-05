@@ -17,7 +17,7 @@
     -moz-osx-font-smoothing: grayscale;
     background-color: #e8e6e0;
     color: #1925aa;
-    font-family: "Inter", system-ui, sans-serif;
+    font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
     font-weight: 400;
     overflow-x: hidden;
   }
@@ -78,7 +78,7 @@
 
   /* ---- Heading ---- */
   .oci-heading {
-    font-family: "Inter", system-ui, sans-serif;
+    font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
     font-weight: 500;
     letter-spacing: -0.02em;
     line-height: 1;
