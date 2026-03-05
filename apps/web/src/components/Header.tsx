@@ -25,6 +25,17 @@ const SECONDARY_FONTS = [
   "Pinyon Script",
   "Quicksand",
   "Schoolbell",
+  "Ballet",
+  "Black Ops One",
+  "Cinzel",
+  "Henny Penny",
+  "Jaro",
+  "Metal Mania",
+  "Monsieur La Doulaise",
+  "Princess Sofia",
+  "Rock Salt",
+  "Rubik Distressed",
+  "Special Elite",
 ];
 
 interface HeaderProps {
