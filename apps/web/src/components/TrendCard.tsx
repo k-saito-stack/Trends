@@ -243,7 +243,7 @@ export default function TrendCard({ item }: TrendCardProps) {
       <div className="relative z-10 w-full px-6 py-5 flex items-center gap-5">
         <span
           ref={rankRef}
-          className="oci-heading text-oci-blue text-xl shrink-0 w-8 text-center"
+          className="oci-heading text-oci-blue text-2xl shrink-0 w-8 text-center"
         >
           {item.rank.toString().padStart(2, "0")}
         </span>
@@ -258,7 +258,7 @@ export default function TrendCard({ item }: TrendCardProps) {
           <div className="flex items-center gap-3">
             <span
               ref={nameRef}
-              className="font-sans font-medium text-base text-oci-blue truncate"
+              className="font-sans font-bold text-lg text-oci-blue truncate"
             >
               {item.displayName}
             </span>
@@ -287,7 +287,7 @@ export default function TrendCard({ item }: TrendCardProps) {
       <div ref={detailRef} className="relative z-10 text-oci-blue">
         <div className="px-6 pb-6 border-t border-oci-blue/10">
           {item.summary && (
-            <p ref={summaryRef} className="text-inherit/80 text-xs leading-relaxed mt-4 mb-5 font-sans">
+            <p ref={summaryRef} className="text-inherit/80 text-sm leading-relaxed mt-4 mb-5 font-sans">
               {item.summary}
             </p>
           )}
@@ -308,7 +308,7 @@ export default function TrendCard({ item }: TrendCardProps) {
               </h4>
               <div className="space-y-2">
                 {item.evidenceTop3.map((ev, i) => (
-                  <div key={i} className="text-xs font-sans">
+                  <div key={i} className="text-sm font-sans">
                     {ev.url ? (
                       <a
                         href={ev.url}

@@ -103,7 +103,7 @@ export default function Dashboard({ items, loading, error }: DashboardProps) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="oci-card p-10 text-center">
-          <p className="oci-heading text-oci-blue text-xl mb-3">No data</p>
+          <p className="oci-heading text-oci-blue text-2xl mb-3">No data</p>
           <p className="oci-label-sm text-oci-blue/40">No data available</p>
         </div>
       </div>

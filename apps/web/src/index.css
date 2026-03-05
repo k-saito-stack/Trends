@@ -18,7 +18,7 @@
     background-color: #e8e6e0;
     color: #1925aa;
     font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
-    font-weight: 400;
+    font-weight: 500;
     overflow-x: hidden;
   }
 
@@ -79,7 +79,7 @@
   /* ---- Heading ---- */
   .oci-heading {
     font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
-    font-weight: 500;
+    font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1;
   }

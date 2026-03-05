@@ -178,7 +178,7 @@ export default function Header({
         <div className="flex items-center justify-between py-5 border-b border-white/10">
           <h1
             ref={titleRef}
-            className="oci-heading text-oci-mercury text-5xl cursor-default"
+            className="oci-heading text-oci-mercury text-6xl cursor-default"
             onMouseEnter={handleTitleHover}
           >
             TRENDS

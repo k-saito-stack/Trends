@@ -94,7 +94,7 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
       className="min-h-screen flex items-center justify-center bg-oci-mercury p-4"
     >
       <div ref={cardRef} className="oci-card max-w-sm w-full p-10" style={{ opacity: 0 }}>
-        <h1 ref={titleRef} className="oci-heading text-oci-blue text-4xl mb-2">
+        <h1 ref={titleRef} className="oci-heading text-oci-blue text-5xl mb-2">
           Trends
         </h1>
         <p className="oci-label-sm text-oci-blue/50 mb-10">
@@ -119,7 +119,7 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
           </span>
         </button>
 
-        {error && <p className="mt-4 text-oci-error text-xs">{error}</p>}
+        {error && <p className="mt-4 text-oci-error text-sm">{error}</p>}
 
         <p className="mt-8 oci-label-sm text-oci-blue/40">
           @kodansha.co.jp accounts only

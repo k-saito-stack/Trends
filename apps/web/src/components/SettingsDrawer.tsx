@@ -128,7 +128,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
         style={{ display: "none" }}
       >
         <div className="p-5 border-b border-oci-blue/20 flex items-center justify-between">
-          <h2 ref={titleRef} className="oci-heading text-oci-blue text-lg">
+          <h2 ref={titleRef} className="oci-heading text-oci-blue text-xl">
             SETTINGS
           </h2>
           <button
@@ -154,7 +154,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
 
         <div className="p-5 overflow-y-auto h-full pb-20 hide-native-scrollbar">
           <div className="bg-oci-mercury p-4 mb-6 border border-oci-blue/10">
-            <p className="text-oci-blue text-xs leading-relaxed font-sans">
+            <p className="text-oci-blue text-sm leading-relaxed font-sans">
               ソースのON/OFFやアルゴリズム設定は Firestore Console
               から変更できます。変更はchange_logsに記録されます。
             </p>
@@ -177,7 +177,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
                     className="log-entry border border-oci-blue/10 p-3"
                     style={{ opacity: 0 }}
                   >
-                    <span className="text-oci-blue text-xs font-sans">
+                    <span className="text-oci-blue text-sm font-sans">
                       {log.documentPath}
                     </span>
                     <div className="oci-label-sm text-oci-blue/30 text-[0.5625rem] mt-1">
