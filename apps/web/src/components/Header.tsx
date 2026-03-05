@@ -10,6 +10,23 @@ import { useMagnetic } from "../hooks/useMagnetic";
 import { useScrambleText } from "../hooks/useScrambleText";
 import DatePicker from "./DatePicker";
 
+/** Secondary fonts for TRENDS title alternation */
+const SECONDARY_FONTS = [
+  "Bangers",
+  "Bitcount Prop Double",
+  "Emilys Candy",
+  "Jacquard 12",
+  "Jost",
+  "Kings",
+  "Luckiest Guy",
+  "Michroma",
+  "Micro 5",
+  "Pacifico",
+  "Pinyon Script",
+  "Quicksand",
+  "Schoolbell",
+];
+
 interface HeaderProps {
   date: string;
   onDateChange: (date: string) => void;
@@ -38,6 +55,7 @@ export default function Header({
   const settingsBgRef = useRef<HTMLDivElement>(null);
   const settingsTextRef = useRef<HTMLSpanElement>(null);
   const { scramble } = useScrambleText();
+  const isPrimaryRef = useRef(true);
 
   // Display texts for Row 2 info
   const generatedText = generatedAt
@@ -62,7 +80,21 @@ export default function Header({
   emailTextRef.current = emailText;
 
   const runChainScramble = useCallback(async () => {
-    if (titleRef.current) await scramble(titleRef.current, "TRENDS", 500);
+    if (titleRef.current) {
+      const usePrimary = isPrimaryRef.current;
+      isPrimaryRef.current = !isPrimaryRef.current;
+
+      if (usePrimary) {
+        titleRef.current.style.fontFamily = '"Zen Kaku Gothic New", system-ui, sans-serif';
+        titleRef.current.style.textTransform = "uppercase";
+        await scramble(titleRef.current, "TRENDS", 500);
+      } else {
+        const font = SECONDARY_FONTS[Math.floor(Math.random() * SECONDARY_FONTS.length)];
+        titleRef.current.style.fontFamily = `"${font}", system-ui, sans-serif`;
+        titleRef.current.style.textTransform = "none";
+        await scramble(titleRef.current, "Trends", 500);
+      }
+    }
     if (generatedRef.current && generatedTextRef.current)
       await scramble(generatedRef.current, generatedTextRef.current, 400);
     if (runRef.current && runTextRef.current)
@@ -95,7 +127,11 @@ export default function Header({
   };
 
   const handleTitleHover = () => {
-    if (titleRef.current) scramble(titleRef.current, "TRENDS");
+    if (titleRef.current) {
+      // Re-scramble with current text (preserve primary/secondary state)
+      const currentText = titleRef.current.textContent || "TRENDS";
+      scramble(titleRef.current, currentText);
+    }
   };
 
   // Direction-aware hover helpers
@@ -179,6 +215,7 @@ export default function Header({
           <h1
             ref={titleRef}
             className="oci-heading text-oci-mercury text-6xl cursor-default"
+            style={{ height: "1em", lineHeight: 1, overflow: "hidden" }}
             onMouseEnter={handleTitleHover}
           >
             TRENDS
