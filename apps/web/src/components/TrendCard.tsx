@@ -106,6 +106,8 @@ export default function TrendCard({ item }: TrendCardProps) {
       scramble(nameRef.current, item.displayName);
     }
     if (summaryRef.current && item.summary) {
+      // Lock height before scramble so line count changes don't cause layout shift
+      summaryRef.current.style.minHeight = `${summaryRef.current.offsetHeight}px`;
       scramble(summaryRef.current, item.summary, 600);
     }
     if (labelBreakdownRef.current) {
@@ -187,8 +189,8 @@ export default function TrendCard({ item }: TrendCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Hover background */}
-      <div ref={hoverBgRef} className="oci-btn__bg bg-oci-blue" />
+      {/* Hover background — z-0 so it sits above card bg but below z-10 content */}
+      <div ref={hoverBgRef} className="oci-btn__bg bg-oci-blue" style={{ zIndex: 0 }} />
 
       {/* Card header */}
       <div className="relative z-10 w-full px-6 py-5 flex items-center gap-5">
@@ -247,7 +249,7 @@ export default function TrendCard({ item }: TrendCardProps) {
               <h4 ref={labelBreakdownRef} className="oci-label-sm opacity-50 mb-2">
                 Score Breakdown
               </h4>
-              <BreakdownBar buckets={item.breakdownBuckets} totalScore={item.trendScore} />
+              <BreakdownBar buckets={item.breakdownBuckets} totalScore={item.trendScore} inverted={hovered} />
             </div>
           )}
 

@@ -17,12 +17,24 @@ const BUCKET_COLORS: Record<string, string> = {
   INSTAGRAM_BOOST: "#1925aaee",
 };
 
+const BUCKET_COLORS_INVERTED: Record<string, string> = {
+  TRENDS: "#ffffff",
+  YOUTUBE: "#ffffffcc",
+  X: "#ffffff99",
+  NEWS_RSS: "#ffffff80",
+  RANKINGS_STREAM: "#ffffffdd",
+  MUSIC: "#ffffff99",
+  MAGAZINES: "#ffffff66",
+  INSTAGRAM_BOOST: "#ffffffee",
+};
+
 interface BreakdownBarProps {
   buckets: BucketScore[];
   totalScore: number;
+  inverted?: boolean;
 }
 
-export default function BreakdownBar({ buckets, totalScore }: BreakdownBarProps) {
+export default function BreakdownBar({ buckets, totalScore, inverted = false }: BreakdownBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
 
   useGSAP(
@@ -47,18 +59,24 @@ export default function BreakdownBar({ buckets, totalScore }: BreakdownBarProps)
     <div>
       <div
         ref={barRef}
-        className="flex h-2 overflow-hidden bg-oci-mercury"
-        style={{ transformOrigin: "left center" }}
+        className="flex h-2 overflow-hidden"
+        style={{
+          transformOrigin: "left center",
+          backgroundColor: inverted ? "rgba(255,255,255,0.15)" : "#e8e6e0",
+          transition: "background-color 0.3s",
+        }}
       >
         {buckets.map((b) => {
           const pct = (b.score / totalScore) * 100;
           if (pct <= 0) return null;
+          const colors = inverted ? BUCKET_COLORS_INVERTED : BUCKET_COLORS;
           return (
             <div
               key={b.bucket}
               style={{
                 width: `${pct}%`,
-                backgroundColor: BUCKET_COLORS[b.bucket] || "#1925aa66",
+                backgroundColor: colors[b.bucket] || (inverted ? "#ffffff66" : "#1925aa66"),
+                transition: "background-color 0.3s",
               }}
               title={`${b.bucket}: ${b.score.toFixed(1)}`}
             />
@@ -66,17 +84,29 @@ export default function BreakdownBar({ buckets, totalScore }: BreakdownBarProps)
         })}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-        {buckets.map((b) => (
-          <div key={b.bucket} className="flex items-center">
-            <div
-              className="w-2 h-2 mr-1"
-              style={{ backgroundColor: BUCKET_COLORS[b.bucket] || "#1925aa66" }}
-            />
-            <span className="oci-label-sm text-oci-blue/60">
-              {b.bucket} ({b.score.toFixed(1)})
-            </span>
-          </div>
-        ))}
+        {buckets.map((b) => {
+          const colors = inverted ? BUCKET_COLORS_INVERTED : BUCKET_COLORS;
+          return (
+            <div key={b.bucket} className="flex items-center">
+              <div
+                className="w-2 h-2 mr-1"
+                style={{
+                  backgroundColor: colors[b.bucket] || (inverted ? "#ffffff66" : "#1925aa66"),
+                  transition: "background-color 0.3s",
+                }}
+              />
+              <span
+                className="oci-label-sm"
+                style={{
+                  color: inverted ? "rgba(255,255,255,0.6)" : "rgba(25,37,170,0.6)",
+                  transition: "color 0.3s",
+                }}
+              >
+                {b.bucket} ({b.score.toFixed(1)})
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
