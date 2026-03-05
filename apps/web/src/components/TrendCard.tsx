@@ -1,14 +1,12 @@
 /**
  * TrendCard — OCI style. The most important component.
  *
- * 3-layer structure:
+ * 2-layer structure (always expanded):
  *   Layer 1: oci-btn__bg (blue) — reveals from bottom on hover
- *   Layer 2: Header (z-10) — rank, name, sparkline, score
- *   Layer 3: Detail (z-10, height:0) — expandable breakdown/evidence
+ *   Layer 2: Content (z-10) — header + detail always visible
  *
  * Hover: bg slides up from bottom, text color inverts blue→mercury.
  * Name gets scramble effect on hover.
- * Expand/collapse animated with GSAP.
  */
 import { useRef, useState, useCallback } from "react";
 import type { RankingItem } from "../hooks/useDailyRanking";
@@ -22,14 +20,10 @@ interface TrendCardProps {
 }
 
 export default function TrendCard({ item }: TrendCardProps) {
-  const [expanded, setExpanded] = useState(true);
   const [hovered, setHovered] = useState(false);
 
   const hoverBgRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLSpanElement>(null);
-  const detailRef = useRef<HTMLDivElement>(null);
-  const detailInnerRef = useRef<HTMLDivElement>(null);
-  const chevronRef = useRef<SVGSVGElement>(null);
 
   const rankRef = useRef<HTMLSpanElement>(null);
   const sepRef = useRef<HTMLDivElement>(null);
@@ -55,7 +49,6 @@ export default function TrendCard({ item }: TrendCardProps) {
       nameRef.current,
       tagRef.current,
       scoreRef.current,
-      chevronRef.current,
     ];
     gsap.to(targets, {
       color: "#e8e6e0",
@@ -96,7 +89,6 @@ export default function TrendCard({ item }: TrendCardProps) {
       nameRef.current,
       tagRef.current,
       scoreRef.current,
-      chevronRef.current,
     ];
     gsap.to(targets, {
       color: "#1925aa",
@@ -117,68 +109,17 @@ export default function TrendCard({ item }: TrendCardProps) {
     });
   }, []);
 
-  // --- Expand/collapse ---
-  const toggleExpand = useCallback(() => {
-    const next = !expanded;
-    setExpanded(next);
-
-    if (next) {
-      gsap.set(detailRef.current, { display: "block" });
-      gsap.fromTo(
-        detailRef.current,
-        { height: 0, opacity: 0 },
-        { height: "auto", opacity: 1, duration: 0.4, ease: "power4.out" },
-      );
-      gsap.fromTo(chevronRef.current,
-        { rotation: 0 },
-        { rotation: 180, duration: 0.3, ease: "power4.out" },
-      );
-
-      if (detailInnerRef.current) {
-        const children = detailInnerRef.current.children;
-        gsap.fromTo(
-          children,
-          { opacity: 0, y: 10 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.3,
-            ease: "power4.out",
-            stagger: 0.05,
-            delay: 0.1,
-          },
-        );
-      }
-    } else {
-      gsap.to(detailRef.current, {
-        height: 0,
-        opacity: 0,
-        duration: 0.3,
-        ease: "power4.inOut",
-        onComplete: () => {
-          gsap.set(detailRef.current, { display: "none" });
-        },
-      });
-      gsap.to(chevronRef.current, {
-        rotation: 0,
-        duration: 0.3,
-        ease: "power4.inOut",
-      });
-    }
-  }, [expanded]);
-
   return (
-    <div className="oci-card">
+    <div
+      className="oci-card"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* Layer 1: Hover background */}
       <div ref={hoverBgRef} className="oci-btn__bg bg-oci-blue" />
 
       {/* Layer 2: Card header */}
-      <button
-        onClick={toggleExpand}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        className="relative z-10 w-full px-6 py-5 flex items-center gap-5 text-left cursor-pointer"
-      >
+      <div className="relative z-10 w-full px-6 py-5 flex items-center gap-5">
         <span
           ref={rankRef}
           className="oci-heading text-oci-blue text-xl shrink-0 w-8 text-center"
@@ -217,32 +158,12 @@ export default function TrendCard({ item }: TrendCardProps) {
           >
             {item.trendScore.toFixed(1)}
           </span>
-          <svg
-            ref={chevronRef}
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4 text-oci-blue/30"
-            style={{ transform: "rotate(180deg)" }}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
         </div>
-      </button>
+      </div>
 
-      {/* Layer 3: Expandable detail */}
-      <div
-        ref={detailRef}
-        className="relative z-10 overflow-hidden"
-        style={{ height: "auto", opacity: 1, display: "block" }}
-      >
-        <div ref={detailInnerRef} className="px-6 pb-6 border-t border-oci-blue/10">
+      {/* Detail — always visible */}
+      <div className="relative z-10">
+        <div className="px-6 pb-6 border-t border-oci-blue/10">
           {item.summary && (
             <p className="text-oci-blue/80 text-xs leading-relaxed mt-4 mb-5 font-sans">
               {item.summary}
