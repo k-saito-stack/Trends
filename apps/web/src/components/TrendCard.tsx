@@ -4,8 +4,8 @@
  * Effects:
  *   - Hover bg reveals from bottom (OCI style)
  *   - Card lift + shadow on hover
- *   - Text color inverts blue→white (high contrast)
- *   - Name + section labels scramble on hover
+ *   - ALL text inverts to white on hover (high contrast on blue bg)
+ *   - Name, summary, section labels all scramble on hover
  */
 import { useRef, useState, useCallback } from "react";
 import type { RankingItem } from "../hooks/useDailyRanking";
@@ -23,6 +23,7 @@ export default function TrendCard({ item }: TrendCardProps) {
 
   const cardRef = useRef<HTMLDivElement>(null);
   const hoverBgRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLSpanElement>(null);
 
   const rankRef = useRef<HTMLSpanElement>(null);
@@ -30,7 +31,8 @@ export default function TrendCard({ item }: TrendCardProps) {
   const tagRef = useRef<HTMLSpanElement>(null);
   const scoreRef = useRef<HTMLSpanElement>(null);
 
-  // Scramble targets: section labels
+  // Scramble targets
+  const summaryRef = useRef<HTMLParagraphElement>(null);
   const labelBreakdownRef = useRef<HTMLHeadingElement>(null);
   const labelEvidenceRef = useRef<HTMLHeadingElement>(null);
   const labelPowerRef = useRef<HTMLSpanElement>(null);
@@ -59,14 +61,14 @@ export default function TrendCard({ item }: TrendCardProps) {
       overwrite: true,
     });
 
-    // Text color → white for high contrast on blue bg
-    const targets = [
+    // Header text → white
+    const headerTargets = [
       rankRef.current,
       nameRef.current,
       tagRef.current,
       scoreRef.current,
     ];
-    gsap.to(targets, {
+    gsap.to(headerTargets, {
       color: "#ffffff",
       duration: 0.3,
       overwrite: true,
@@ -84,9 +86,27 @@ export default function TrendCard({ item }: TrendCardProps) {
       overwrite: true,
     });
 
-    // Scramble name + section labels
+    // Detail section — all text to white
+    if (detailRef.current) {
+      gsap.to(detailRef.current, {
+        color: "#ffffff",
+        duration: 0.3,
+        overwrite: true,
+      });
+      // Borders inside detail
+      const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
+      gsap.to(borders, { borderColor: "rgba(255,255,255,0.2)", duration: 0.3, overwrite: true });
+      // Evidence bars
+      const bars = detailRef.current.querySelectorAll(".w-1");
+      gsap.to(bars, { backgroundColor: "rgba(255,255,255,0.3)", duration: 0.3, overwrite: true });
+    }
+
+    // Scramble: name + summary + labels (all concurrent)
     if (nameRef.current) {
       scramble(nameRef.current, item.displayName);
+    }
+    if (summaryRef.current && item.summary) {
+      scramble(summaryRef.current, item.summary, 600);
     }
     if (labelBreakdownRef.current) {
       scramble(labelBreakdownRef.current, "Score Breakdown", 300);
@@ -97,7 +117,7 @@ export default function TrendCard({ item }: TrendCardProps) {
     if (labelPowerRef.current) {
       scramble(labelPowerRef.current, `Power: ${item.power?.toFixed(1)}`, 300);
     }
-  }, [scramble, item.displayName, item.power]);
+  }, [scramble, item.displayName, item.summary, item.power]);
 
   // --- Hover leave ---
   const handleMouseLeave = useCallback(() => {
@@ -121,14 +141,14 @@ export default function TrendCard({ item }: TrendCardProps) {
       overwrite: true,
     });
 
-    // Text color revert → blue
-    const targets = [
+    // Header text → blue
+    const headerTargets = [
       rankRef.current,
       nameRef.current,
       tagRef.current,
       scoreRef.current,
     ];
-    gsap.to(targets, {
+    gsap.to(headerTargets, {
       color: "#1925aa",
       duration: 0.3,
       overwrite: true,
@@ -145,6 +165,19 @@ export default function TrendCard({ item }: TrendCardProps) {
       duration: 0.3,
       overwrite: true,
     });
+
+    // Detail section — revert to blue
+    if (detailRef.current) {
+      gsap.to(detailRef.current, {
+        color: "#1925aa",
+        duration: 0.3,
+        overwrite: true,
+      });
+      const borders = detailRef.current.querySelectorAll("[class*='border-oci-blue']");
+      gsap.to(borders, { borderColor: "", duration: 0.3, overwrite: true });
+      const bars = detailRef.current.querySelectorAll(".w-1");
+      gsap.to(bars, { backgroundColor: "", duration: 0.3, overwrite: true });
+    }
   }, []);
 
   return (
@@ -201,17 +234,17 @@ export default function TrendCard({ item }: TrendCardProps) {
       </div>
 
       {/* Detail — always visible */}
-      <div className="relative z-10">
+      <div ref={detailRef} className="relative z-10 text-oci-blue">
         <div className="px-6 pb-6 border-t border-oci-blue/10">
           {item.summary && (
-            <p className="text-oci-blue/80 text-xs leading-relaxed mt-4 mb-5 font-sans">
+            <p ref={summaryRef} className="text-inherit/80 text-xs leading-relaxed mt-4 mb-5 font-sans">
               {item.summary}
             </p>
           )}
 
           {item.breakdownBuckets.length > 0 && (
             <div className="mb-5">
-              <h4 ref={labelBreakdownRef} className="oci-label-sm text-oci-blue/50 mb-2">
+              <h4 ref={labelBreakdownRef} className="oci-label-sm opacity-50 mb-2">
                 Score Breakdown
               </h4>
               <BreakdownBar buckets={item.breakdownBuckets} totalScore={item.trendScore} />
@@ -220,7 +253,7 @@ export default function TrendCard({ item }: TrendCardProps) {
 
           {item.evidenceTop3.length > 0 && (
             <div className="mb-3">
-              <h4 ref={labelEvidenceRef} className="oci-label-sm text-oci-blue/50 mb-2">
+              <h4 ref={labelEvidenceRef} className="oci-label-sm opacity-50 mb-2">
                 Evidence
               </h4>
               <div className="space-y-2">
@@ -231,7 +264,7 @@ export default function TrendCard({ item }: TrendCardProps) {
                       style={{ minHeight: "1rem" }}
                     />
                     <div className="text-xs font-sans">
-                      <span className="oci-label-sm text-oci-blue/30 mr-1">
+                      <span className="oci-label-sm opacity-30 mr-1">
                         {ev.sourceId}
                       </span>
                       {ev.url ? (
@@ -239,16 +272,15 @@ export default function TrendCard({ item }: TrendCardProps) {
                           href={ev.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="oci-link text-oci-blue underline underline-offset-2 inline"
+                          className="underline underline-offset-2 inline"
                         >
-                          <span className="oci-link__dot" />
                           {ev.title || ev.url}
                         </a>
                       ) : (
-                        <span className="text-oci-blue">{ev.title}</span>
+                        <span>{ev.title}</span>
                       )}
                       {ev.metric && (
-                        <span className="text-oci-blue/30 ml-1">({ev.metric})</span>
+                        <span className="opacity-30 ml-1">({ev.metric})</span>
                       )}
                     </div>
                   </div>
@@ -259,7 +291,7 @@ export default function TrendCard({ item }: TrendCardProps) {
 
           {item.power != null && (
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-oci-blue/10">
-              <span ref={labelPowerRef} className="oci-label-sm text-oci-blue/30">
+              <span ref={labelPowerRef} className="oci-label-sm opacity-30">
                 Power: {item.power.toFixed(1)}
               </span>
             </div>

@@ -1,6 +1,7 @@
 /**
  * Text scramble effect — free alternative to GSAP ScrambleTextPlugin.
  * Characters resolve left-to-right from random noise to target text.
+ * Supports multiple concurrent scrambles (one per element).
  */
 import { useCallback, useRef } from "react";
 
@@ -8,11 +9,13 @@ const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZx&oci0123456789#@%";
 const DURATION = 400;
 
 export function useScrambleText() {
-  const rafRef = useRef<number>(0);
+  const rafsRef = useRef<Map<HTMLElement, number>>(new Map());
 
   const scramble = useCallback(
     (element: HTMLElement, targetText: string, duration = DURATION) => {
-      cancelAnimationFrame(rafRef.current);
+      // Cancel any existing scramble on this element
+      const existing = rafsRef.current.get(element);
+      if (existing) cancelAnimationFrame(existing);
 
       const startTime = performance.now();
       const len = targetText.length;
@@ -33,19 +36,21 @@ export function useScrambleText() {
         element.textContent = display;
 
         if (progress < 1) {
-          rafRef.current = requestAnimationFrame(animate);
+          rafsRef.current.set(element, requestAnimationFrame(animate));
         } else {
           element.textContent = targetText;
+          rafsRef.current.delete(element);
         }
       };
 
-      rafRef.current = requestAnimationFrame(animate);
+      rafsRef.current.set(element, requestAnimationFrame(animate));
     },
     [],
   );
 
   const cleanup = useCallback(() => {
-    cancelAnimationFrame(rafRef.current);
+    rafsRef.current.forEach((raf) => cancelAnimationFrame(raf));
+    rafsRef.current.clear();
   }, []);
 
   return { scramble, cleanup };
