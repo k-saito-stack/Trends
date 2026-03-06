@@ -10,6 +10,7 @@ import SettingsDrawer from "./components/SettingsDrawer";
 import Loader from "./components/Loader";
 import CustomCursor from "./components/CustomCursor";
 import CustomScrollbar from "./components/CustomScrollbar";
+import ScrambleBackground from "./components/ScrambleBackground";
 import { useAuth } from "./hooks/useAuth";
 import { useLenis } from "./hooks/useLenis";
 import { useDailyRanking } from "./hooks/useDailyRanking";
@@ -53,6 +54,7 @@ export default function App() {
   // Authenticated
   return (
     <div className="min-h-screen bg-oci-mercury">
+      <ScrambleBackground />
       <CustomCursor />
       <CustomScrollbar />
       <Header
