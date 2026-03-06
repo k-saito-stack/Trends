@@ -1,10 +1,4 @@
-"""Ranking: aggregate scores and select Top-K candidates.
-
-Combines per-source momentum scores into TrendScore,
-applies multi-source bonus, and selects top candidates.
-
-Spec reference: Section 10.7 (Integrated TrendScore)
-"""
+"""Ranking helpers for both the legacy score and the v2 lane-based ranking."""
 
 from __future__ import annotations
 
@@ -14,8 +8,13 @@ from packages.core.models import (
     AlgorithmConfig,
     BucketScore,
     DisplayBucket,
+    DailyCandidateFeature,
+    DomainClass,
     MusicConfig,
+    RankedCandidateV2,
+    RankingLane,
 )
+from packages.core.diversification import interleave_ranked_items
 from packages.core.scoring import momentum, multi_source_bonus
 
 # Maps source_id -> display bucket
@@ -117,51 +116,85 @@ def compute_final_score(
     candidate_scores: list[dict[str, Any]],
     power_weight: float = 0.15,
 ) -> None:
-    """Compute final_score incorporating Wikipedia power.
+    """Compatibility helper.
 
-    Formula:
-      power_norm = normalize power across current batch to 0..1
-      power_boost = trend_score * power_weight * power_norm
-      final_score = trend_score + power_boost
-
-    This avoids "always-strong" candidates dominating by making
-    power a multiplier of trend (not an independent additive term).
-    Modifies candidate_scores in-place.
+    v2 no longer boosts by Wikipedia power. If `primary_score` is already
+    present we preserve it; otherwise we carry forward the legacy score.
     """
-    import math
-
-    # Collect raw power values for normalization
-    powers = [c.get("power", 0) or 0 for c in candidate_scores]
-    max_power = max(powers) if powers else 0
-
+    del power_weight
     for entry in candidate_scores:
-        trend = entry.get("trend_score", 0)
-        raw_power = entry.get("power", 0) or 0
-
-        if max_power > 0 and raw_power > 0:
-            power_norm = math.log1p(raw_power) / math.log1p(max_power)
-            power_boost = trend * power_weight * power_norm
+        if "primary_score" in entry:
+            entry["final_score"] = entry["primary_score"]
         else:
-            power_boost = 0.0
-
-        entry["final_score"] = trend + power_boost
+            entry["final_score"] = entry.get("trend_score", 0.0)
 
 
 def select_top_k(
     candidate_scores: list[dict[str, Any]],
     top_k: int = 20,
 ) -> list[dict[str, Any]]:
-    """Select top K candidates by final_score (or trend_score as fallback).
-
-    final_score incorporates Wikipedia power as a boost proportional to trend.
-    Tiebreaker: multiBonus.
-    Returns sorted list of candidate score dicts.
-    """
+    """Select top K candidates by v2 primary/final score with legacy fallback."""
     sorted_candidates = sorted(
         candidate_scores,
         key=lambda c: (
-            -c.get("final_score", c.get("trend_score", 0)),
+            -c.get("primary_score", c.get("final_score", c.get("trend_score", 0))),
             -c.get("multi_bonus", 0),
         ),
     )
     return sorted_candidates[:top_k]
+
+
+def build_ranked_candidates_v2(
+    candidate_features: list[DailyCandidateFeature],
+    candidates_by_id: dict[str, Any],
+    top_k: int = 20,
+) -> list[RankedCandidateV2]:
+    eligible = [
+        {
+            "candidate_id": feature.candidate_id,
+            "display_name": feature.display_name,
+            "candidate_type": feature.candidate_type,
+            "candidate_kind": feature.candidate_kind,
+            "lane": feature.lane.value,
+            "domain_class": feature.domain_class,
+            "coming_score": feature.coming_score,
+            "mass_heat": feature.mass_heat,
+            "primary_score": feature.primary_score,
+            "source_families": feature.source_families,
+            "evidence": feature.evidence,
+            "summary": "",
+            "feature": feature,
+        }
+        for feature in candidate_features
+        if feature.ranking_gate_passed
+        and feature.domain_class in {
+            DomainClass.ENTERTAINMENT,
+            DomainClass.FASHION_BEAUTY,
+            DomainClass.CONSUMER_CULTURE,
+        }
+    ]
+
+    interleaved = interleave_ranked_items(eligible, top_k=top_k)
+    ranked: list[RankedCandidateV2] = []
+    for rank, entry in enumerate(interleaved, start=1):
+        candidate = candidates_by_id[entry["candidate_id"]]
+        ranked.append(
+            RankedCandidateV2(
+                rank=rank,
+                candidate_id=entry["candidate_id"],
+                display_name=entry["display_name"],
+                candidate_type=entry["candidate_type"],
+                candidate_kind=entry["candidate_kind"],
+                lane=RankingLane(entry["lane"]),
+                domain_class=entry["domain_class"],
+                coming_score=float(entry["coming_score"]),
+                mass_heat=float(entry["mass_heat"]),
+                primary_score=float(entry["primary_score"]),
+                maturity=float(getattr(candidate, "maturity", 0.0)),
+                source_families=list(entry["source_families"]),
+                evidence=list(entry["evidence"])[:5],
+                summary=str(entry.get("summary", "")),
+                metadata={"feature": entry["feature"].to_dict()},
+            )
+        )
+    return ranked

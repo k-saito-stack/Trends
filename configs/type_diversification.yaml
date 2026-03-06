@@ -1,0 +1,24 @@
+{
+  "lane_by_type": {
+    "PERSON": "people_music",
+    "GROUP": "people_music",
+    "MUSIC_ARTIST": "people_music",
+    "MUSIC_TRACK": "people_music",
+    "WORK": "shows_formats",
+    "SHOW": "shows_formats",
+    "REALITY_SHOW": "shows_formats",
+    "PHRASE": "words_behaviors",
+    "HASHTAG": "words_behaviors",
+    "BEHAVIOR": "words_behaviors",
+    "KEYWORD": "words_behaviors",
+    "STYLE": "style_products",
+    "PRODUCT": "style_products",
+    "BRAND": "style_products"
+  },
+  "soft_quota": {
+    "people_music_max_ratio": 0.45,
+    "shows_formats_target_ratio": 0.2,
+    "words_behaviors_min_ratio": 0.2,
+    "style_products_min_ratio": 0.15
+  }
+}

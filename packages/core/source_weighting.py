@@ -1,9 +1,4 @@
-"""Source weighting for TrendScore aggregation.
-
-Weights are computed from source metadata and recent source_daily history.
-The current run uses config/source_weights_current when present, while the
-weights computed from today's data are stored for the next run.
-"""
+"""Source weighting for the v2 prior-weight × calibration-weight model."""
 
 from __future__ import annotations
 
@@ -40,7 +35,11 @@ def compute_prior_weights(
     weighting_cfg: SourceWeightingConfig,
     source_daily_records: list[SourceDailySnapshot] | None = None,
 ) -> dict[str, float]:
-    """Compute normalized prior-only weights (R * F * G * S)."""
+    """Compute normalized prior-only weights.
+
+    Operational stability is intentionally excluded from this value and should
+    be tracked in `source_health`.
+    """
     _, priors, _, _, _, _ = _compute_components(
         source_cfgs=source_cfgs,
         source_ids=source_ids,
@@ -228,16 +227,27 @@ def compute_s_stability(
     return stability
 
 
+def compute_calibration_weights(
+    predictive: dict[str, float],
+    independence: dict[str, float],
+) -> dict[str, float]:
+    """Compute calibration weights from future spread and family independence."""
+    raw_weights = {
+        source_id: predictive.get(source_id, 1.0) * independence.get(source_id, 1.0)
+        for source_id in set(predictive) | set(independence)
+    }
+    return normalize_average_to_one(raw_weights)
+
+
 def combine_and_normalize(
     priors: dict[str, float],
     predictive: dict[str, float],
     independence: dict[str, float],
 ) -> dict[str, float]:
-    """Combine factors and normalize to mean 1."""
+    """Combine prior and calibration weights, then normalize to mean 1."""
+    calibration = compute_calibration_weights(predictive, independence)
     raw_weights = {
-        source_id: priors.get(source_id, 1.0)
-        * predictive.get(source_id, 1.0)
-        * independence.get(source_id, 1.0)
+        source_id: priors.get(source_id, 1.0) * calibration.get(source_id, 1.0)
         for source_id in priors
     }
     return normalize_average_to_one(raw_weights)
@@ -331,6 +341,7 @@ def compute_weight_snapshot(
         source_daily_records=source_daily_records,
         as_of_date=target_date,
     )
+    calibration = compute_calibration_weights(predictive, independence)
     weights = combine_and_normalize(priors, predictive, independence)
 
     factors: dict[str, dict[str, Any]] = {}
@@ -339,7 +350,8 @@ def compute_weight_snapshot(
         source_factors["C"] = predictive.get(source_id, 1.0)
         source_factors["I"] = independence.get(source_id, 1.0)
         source_factors["S"] = stability.get(source_id, 1.0)
-        source_factors["prior"] = priors.get(source_id, 1.0)
+        source_factors["priorWeight"] = priors.get(source_id, 1.0)
+        source_factors["calibrationWeight"] = calibration.get(source_id, 1.0)
         source_factors["weight"] = weights.get(source_id, 1.0)
         factors[source_id] = source_factors
 
@@ -501,7 +513,7 @@ def _compute_components(
             1.0,
             math.log1p(granularity_n) / math.log1p(max(weighting_cfg.n_ref, 1)),
         )
-        prior = region * freshness * granularity * stability.get(source_id, 1.0)
+        prior = region * freshness * granularity
         priors[source_id] = prior
         factor_base[source_id] = {
             "R": region,

@@ -1,22 +1,20 @@
-"""Candidate ID resolution.
-
-Resolves raw candidate names to canonical candidate IDs.
-Priority: alias dict -> key dict -> new creation.
-
-Spec reference: Section 9 (Candidate Model - Resolve)
-"""
+"""Compatibility layer around entity/topic resolution."""
 
 from __future__ import annotations
 
-import logging
-from datetime import datetime, timedelta, timezone
-
-from packages.core.models import Candidate, CandidateStatus, CandidateType
-from packages.core.normalize import normalize_for_matching, normalize_name
-
-logger = logging.getLogger(__name__)
-
-JST = timezone(timedelta(hours=9))
+from packages.core.entity_resolve import (
+    build_entity_key_index,
+    create_entity_candidate,
+    resolve_entity_candidate,
+)
+from packages.core.models import Candidate, CandidateKind, CandidateStatus, CandidateType
+from packages.core.normalize import normalize_for_matching
+from packages.core.topic_resolve import (
+    build_topic_key_index,
+    create_topic_candidate,
+    resolve_topic_candidate,
+)
+from packages.core.topic_normalize import topic_match_key
 
 
 def resolve_candidate(
@@ -26,71 +24,39 @@ def resolve_candidate(
     alias_index: dict[str, str],
     key_index: dict[str, str],
 ) -> str | None:
-    """Resolve a raw candidate name to an existing or new candidate ID.
+    if candidate_type.default_kind == CandidateKind.TOPIC:
+        topic_index = build_topic_key_index(existing_candidates.values())
+        candidate_id = resolve_topic_candidate(name, alias_index, topic_index)
+    else:
+        entity_index = build_entity_key_index(existing_candidates.values())
+        candidate_id = resolve_entity_candidate(name, candidate_type, entity_index, alias_index)
 
-    Resolution priority (spec):
-    1. alias_index[normalized_name] -> existing candidate ID
-    2. key_index[type:normalized_name] -> existing candidate ID
-    3. New candidate creation (returns None to signal creation needed)
-
-    Args:
-        name: Raw candidate name
-        candidate_type: Type of the candidate
-        existing_candidates: Map of candidateId -> Candidate
-        alias_index: Map of normalized alias -> candidateId
-        key_index: Map of "type:normalizedName" -> candidateId
-
-    Returns:
-        candidateId if resolved, None if new creation needed
-    """
-    norm = normalize_for_matching(name)
-
-    # Priority 1: Alias lookup
-    if norm in alias_index:
-        cand_id = alias_index[norm]
-        if cand_id in existing_candidates:
-            candidate = existing_candidates[cand_id]
-            if candidate.status != CandidateStatus.BLOCKED:
-                return cand_id
-
-    # Priority 2: Key lookup (type:normalizedName)
-    key = f"{candidate_type.value}:{norm}"
-    if key in key_index:
-        cand_id = key_index[key]
-        if cand_id in existing_candidates:
-            candidate = existing_candidates[cand_id]
-            if candidate.status != CandidateStatus.BLOCKED:
-                return cand_id
-
-    # Priority 3: New creation needed
-    return None
+    if candidate_id is None:
+        return None
+    candidate = existing_candidates.get(candidate_id)
+    if candidate is None or candidate.status == CandidateStatus.BLOCKED:
+        return None
+    return candidate_id
 
 
 def build_alias_index(candidates: dict[str, Candidate]) -> dict[str, str]:
-    """Build a lookup index from normalized aliases to candidate IDs."""
-    index: dict[str, str] = {}
-    for cand_id, candidate in candidates.items():
+    alias_index: dict[str, str] = {}
+    for candidate in candidates.values():
         if candidate.status == CandidateStatus.BLOCKED:
             continue
-        # Canonical name
-        norm_canonical = normalize_for_matching(candidate.canonical_name)
-        index[norm_canonical] = cand_id
-        # All aliases
-        for alias in candidate.aliases:
-            norm_alias = normalize_for_matching(alias)
-            index[norm_alias] = cand_id
-    return index
+        aliases = [candidate.canonical_name, *candidate.aliases]
+        for alias in aliases:
+            if candidate.kind == CandidateKind.TOPIC:
+                alias_index[topic_match_key(alias)] = candidate.candidate_id
+            else:
+                alias_index[normalize_for_matching(alias)] = candidate.candidate_id
+    return alias_index
 
 
 def build_key_index(candidates: dict[str, Candidate]) -> dict[str, str]:
-    """Build a lookup index from type:normalizedName to candidate IDs."""
     index: dict[str, str] = {}
-    for cand_id, candidate in candidates.items():
-        if candidate.status == CandidateStatus.BLOCKED:
-            continue
-        norm = normalize_for_matching(candidate.canonical_name)
-        key = f"{candidate.type.value}:{norm}"
-        index[key] = cand_id
+    index.update(build_entity_key_index(candidates.values()))
+    index.update(build_topic_key_index(candidates.values()))
     return index
 
 
@@ -100,16 +66,11 @@ def create_new_candidate(
     candidate_id: str,
     aliases: list[str] | None = None,
 ) -> Candidate:
-    """Create a new Candidate record."""
-    now = datetime.now(JST).isoformat()
-    display_name = normalize_name(name)
-    return Candidate(
-        candidate_id=candidate_id,
-        type=candidate_type,
-        canonical_name=normalize_for_matching(name),
-        display_name=display_name,
-        aliases=aliases or [],
-        created_at=now,
-        last_seen_at=now,
-        status=CandidateStatus.ACTIVE,
-    )
+    if candidate_type.default_kind == CandidateKind.TOPIC:
+        candidate = create_topic_candidate(name, candidate_type=candidate_type)
+    else:
+        candidate = create_entity_candidate(name, candidate_type, aliases=aliases)
+    candidate.candidate_id = candidate_id
+    if aliases and candidate.kind == CandidateKind.ENTITY:
+        candidate.aliases = aliases
+    return candidate

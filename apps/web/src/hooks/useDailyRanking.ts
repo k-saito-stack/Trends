@@ -23,8 +23,15 @@ export interface RankingItem {
   rank: number;
   candidateId: string;
   candidateType: string;
+  candidateKind?: string;
   displayName: string;
   trendScore: number;
+  comingScore?: number;
+  massHeat?: number;
+  primaryScore?: number;
+  lane?: string;
+  maturity?: number;
+  sourceFamilies?: string[];
   breakdownBuckets: BucketScore[];
   sparkline7d: (number | null)[];
   evidenceTop3: EvidenceItem[];
@@ -108,8 +115,15 @@ export function useDailyRanking(date: string) {
           rank: data.rank,
           candidateId: data.candidateId,
           candidateType: data.candidateType,
+          candidateKind: data.candidateKind,
           displayName: data.displayName,
           trendScore: data.trendScore,
+          comingScore: data.comingScore,
+          massHeat: data.massHeat,
+          primaryScore: data.primaryScore,
+          lane: data.lane,
+          maturity: data.maturity,
+          sourceFamilies: data.sourceFamilies || [],
           breakdownBuckets: data.breakdownBuckets || [],
           sparkline7d: data.sparkline7d || [],
           evidenceTop3: data.evidenceTop3 || [],

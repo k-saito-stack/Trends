@@ -98,6 +98,18 @@ def set_document(collection: str, document_id: str, data: dict[str, Any]) -> Non
     doc_ref.set(data)
 
 
+def upsert_document(
+    collection: str,
+    document_id: str,
+    data: dict[str, Any],
+    merge: bool = True,
+) -> None:
+    """Idempotent upsert helper used by the observation-first pipeline."""
+    db = get_db()
+    doc_ref = db.collection(collection).document(document_id)
+    doc_ref.set(data, merge=merge)
+
+
 def update_document(collection: str, document_id: str, data: dict[str, Any]) -> None:
     """Update specific fields of a document."""
     db = get_db()
@@ -182,6 +194,21 @@ def batch_write(operations: list[tuple[str, str, dict[str, Any]]]) -> None:
         for collection_path, doc_id, data in chunk:
             doc_ref = db.collection(collection_path).document(doc_id)
             batch.set(doc_ref, data)
+        batch.commit()
+
+
+def batch_upsert(
+    operations: list[tuple[str, str, dict[str, Any]]],
+    merge: bool = True,
+) -> None:
+    """Execute idempotent set(..., merge=merge) batch writes."""
+    db = get_db()
+    for i in range(0, len(operations), MAX_BATCH_WRITE_OPERATIONS):
+        chunk = operations[i:i + MAX_BATCH_WRITE_OPERATIONS]
+        batch = db.batch()
+        for collection_path, doc_id, data in chunk:
+            doc_ref = db.collection(collection_path).document(doc_id)
+            batch.set(doc_ref, data, merge=merge)
         batch.commit()
 
 
