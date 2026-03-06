@@ -220,7 +220,7 @@ export default function Header({
 
   return (
     <header className="oci-section-blue sticky top-0 z-30 relative overflow-hidden">
-      <ScrambleBackground color={[232, 230, 224]} mode="inline" />
+      <ScrambleBackground color={[232, 230, 224]} mode="inline" maxAlpha={0.25} />
       <div className="max-w-5xl mx-auto px-6 lg:px-10 relative z-10">
         {/* Row 1: TRENDS + SETTINGS / LOGOUT */}
         <div className="flex items-center justify-between py-5 border-b border-white/10">

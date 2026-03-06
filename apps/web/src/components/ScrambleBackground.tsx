@@ -15,17 +15,21 @@ const SCRAMBLE_SPEED = 0.08;
 interface Props {
   color?: [number, number, number];
   mode?: "page" | "inline";
+  maxAlpha?: number;
 }
 
 export default function ScrambleBackground({
   color = [255, 255, 255],
   mode = "page",
+  maxAlpha = 0.9,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouseRef = useRef({ x: -9999, y: -9999 });
   const gridRef = useRef<{ char: string; nextSwap: number }[]>([]);
   const colorRef = useRef(color);
   colorRef.current = color;
+  const maxAlphaRef = useRef(maxAlpha);
+  maxAlphaRef.current = maxAlpha;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -142,7 +146,7 @@ export default function ScrambleBackground({
           // Invisible at rest, fully visible near cursor
           if (!inRange) continue;
           const proximity = 1 - dist / CURSOR_RADIUS;
-          const alpha = proximity * 0.9;
+          const alpha = proximity * maxAlphaRef.current;
 
           let drawX = cx;
           let drawY = cy;
