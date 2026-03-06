@@ -221,7 +221,7 @@ export default function Header({
     <header className="oci-section-blue sticky top-0 z-30">
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
         {/* Row 1: TRENDS + SETTINGS / LOGOUT */}
-        <div className="flex items-center justify-between py-5 border-b border-white/10">
+        <div className="flex items-center justify-between py-5">
           <h1
             ref={titleRef}
             className="oci-heading text-oci-mercury text-6xl cursor-default"

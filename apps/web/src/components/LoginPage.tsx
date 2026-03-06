@@ -15,7 +15,6 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const lineRef = useRef<HTMLDivElement>(null);
   const btnBgRef = useRef<HTMLDivElement>(null);
   const btnTextRef = useRef<HTMLSpanElement>(null);
   const { scramble, cleanup } = useScrambleText();
@@ -29,32 +28,23 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
         cardRef.current,
         { opacity: 0, y: 30 },
         { opacity: 1, y: 0, duration: 0.5, ease: "power4.out" },
-      ).fromTo(
-        lineRef.current,
-        { scaleX: 0 },
-        {
-          scaleX: 1,
-          duration: 0.5,
-          ease: "power4.out",
-          transformOrigin: "left center",
-        },
-        "-=0.2",
       );
     },
     { scope: containerRef },
   );
 
-  // Title scramble on mount
+  // Title scramble: on mount + periodic (same as Header)
   useEffect(() => {
-    if (titleRef.current) {
-      const timer = setTimeout(() => {
-        scramble(titleRef.current!, "Trends");
-      }, 400);
-      return () => {
-        clearTimeout(timer);
-        cleanup();
-      };
-    }
+    const run = () => {
+      if (titleRef.current) scramble(titleRef.current, "TRENDS", 500);
+    };
+    const initTimer = setTimeout(run, 400);
+    const interval = setInterval(run, 8000);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(interval);
+      cleanup();
+    };
   }, [scramble, cleanup]);
 
   // Button hover handlers
@@ -93,20 +83,10 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
       ref={containerRef}
       className="min-h-screen flex items-center justify-center bg-oci-mercury p-4"
     >
-      <div ref={cardRef} className="oci-card max-w-sm w-full p-10" style={{ opacity: 0 }}>
-        <h1 ref={titleRef} className="oci-heading text-oci-blue text-5xl mb-2">
-          Trends
+      <div ref={cardRef} className="oci-card max-w-sm w-full p-10 text-center" style={{ opacity: 0 }}>
+        <h1 ref={titleRef} className="oci-heading text-oci-blue text-6xl">
+          TRENDS
         </h1>
-        <p className="oci-label-sm text-oci-blue/50 mb-10">
-          Trend Detection Platform
-        </p>
-
-        <div
-          ref={lineRef}
-          className="oci-line mb-8"
-          style={{ transform: "scaleX(0)", transformOrigin: "left center" }}
-        />
-
         <button
           onClick={onLogin}
           onMouseEnter={handleBtnEnter}
