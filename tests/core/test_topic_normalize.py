@@ -14,3 +14,9 @@ def test_topic_match_key_collapses_spacing_and_symbols() -> None:
 def test_should_keep_topic_filters_generic_words() -> None:
     assert should_keep_topic("ランキング") is False
     assert should_keep_topic("お守りデザイン") is True
+
+
+def test_should_keep_topic_filters_generic_english_ui_labels() -> None:
+    assert should_keep_topic("Rank") is False
+    assert should_keep_topic("See analytics") is False
+    assert should_keep_topic("#championsleague") is True

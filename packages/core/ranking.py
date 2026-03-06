@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from packages.core.diversification import interleave_ranked_items
+from packages.core.domain_classifier import is_main_ranking_domain
 from packages.core.models import (
     AlgorithmConfig,
     BucketScore,
+    CandidateKind,
+    CandidateType,
     DailyCandidateFeature,
     DisplayBucket,
     DomainClass,
+    Evidence,
     MusicConfig,
     RankedCandidateV2,
     RankingLane,
@@ -32,6 +36,22 @@ SOURCE_TO_BUCKET: dict[str, str] = {
     "TVER_RANKING_JP": DisplayBucket.RANKINGS_STREAM,
     "IG_BOOST": DisplayBucket.INSTAGRAM_BOOST,
 }
+
+
+class _PublishEntry(TypedDict):
+    candidate_id: str
+    display_name: str
+    candidate_type: CandidateType
+    candidate_kind: CandidateKind
+    lane: str
+    domain_class: DomainClass
+    coming_score: float
+    mass_heat: float
+    primary_score: float
+    source_families: list[str]
+    evidence: list[Evidence]
+    summary: str
+    feature: DailyCandidateFeature
 
 
 def compute_candidate_score(
@@ -151,7 +171,7 @@ def build_ranked_candidates_v2(
     candidates_by_id: dict[str, Any],
     top_k: int = 20,
 ) -> list[RankedCandidateV2]:
-    eligible = [
+    main_domain_entries: list[_PublishEntry] = [
         {
             "candidate_id": feature.candidate_id,
             "display_name": feature.display_name,
@@ -168,16 +188,25 @@ def build_ranked_candidates_v2(
             "feature": feature,
         }
         for feature in candidate_features
-        if feature.ranking_gate_passed
-        and feature.domain_class
-        in {
-            DomainClass.ENTERTAINMENT,
-            DomainClass.FASHION_BEAUTY,
-            DomainClass.CONSUMER_CULTURE,
-        }
+        if is_main_ranking_domain(feature.domain_class)
     ]
+    eligible = [
+        entry for entry in main_domain_entries if entry["feature"].ranking_gate_passed
+    ]
+    if len(eligible) < top_k:
+        seen_candidate_ids = {entry["candidate_id"] for entry in eligible}
+        for entry in main_domain_entries:
+            if entry["candidate_id"] in seen_candidate_ids:
+                continue
+            eligible.append(entry)
+            seen_candidate_ids.add(entry["candidate_id"])
+            if len(eligible) >= top_k:
+                break
 
-    interleaved = interleave_ranked_items(eligible, top_k=top_k)
+    interleaved = cast(
+        list[_PublishEntry],
+        interleave_ranked_items(cast(list[dict[str, Any]], eligible), top_k=top_k),
+    )
     ranked: list[RankedCandidateV2] = []
     for rank, entry in enumerate(interleaved, start=1):
         candidate = candidates_by_id[entry["candidate_id"]]

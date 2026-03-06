@@ -15,6 +15,18 @@ STOP_PHRASES = {
     "バズ",
     "新作",
     "公式",
+    "rank",
+    "hashtags",
+    "posts",
+    "trend",
+    "creators",
+    "actions",
+    "songs",
+    "videos",
+    "industry",
+    "view more",
+    "see analytics",
+    "no related creator",
 }
 
 TRAILING_MARKS_RE = re.compile(r"[!！?？…。．・〜~]+$")

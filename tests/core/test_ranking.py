@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
-from packages.core.models import AlgorithmConfig, MusicConfig
-from packages.core.ranking import compute_candidate_score, select_top_k
+from packages.core.models import (
+    AlgorithmConfig,
+    Candidate,
+    CandidateKind,
+    CandidateType,
+    DailyCandidateFeature,
+    DomainClass,
+    MusicConfig,
+    RankingLane,
+)
+from packages.core.ranking import build_ranked_candidates_v2, compute_candidate_score, select_top_k
 
 
 class TestComputeCandidateScore:
@@ -137,3 +146,55 @@ class TestSelectTopK:
 
     def test_empty_list(self) -> None:
         assert select_top_k([], top_k=15) == []
+
+
+class TestBuildRankedCandidatesV2:
+    def test_backfills_main_domains_when_gate_passed_items_are_short(self) -> None:
+        candidates = {
+            "cand_a": Candidate(
+                candidate_id="cand_a",
+                type=CandidateType.PHRASE,
+                kind=CandidateKind.TOPIC,
+                canonical_name="a",
+                display_name="A",
+                domain_class=DomainClass.CONSUMER_CULTURE,
+            ),
+            "cand_b": Candidate(
+                candidate_id="cand_b",
+                type=CandidateType.WORK,
+                kind=CandidateKind.ENTITY,
+                canonical_name="b",
+                display_name="B",
+                domain_class=DomainClass.ENTERTAINMENT,
+            ),
+        }
+        features = [
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="cand_a",
+                display_name="A",
+                candidate_type=CandidateType.PHRASE,
+                candidate_kind=CandidateKind.TOPIC,
+                lane=RankingLane.WORDS_BEHAVIORS,
+                domain_class=DomainClass.CONSUMER_CULTURE,
+                coming_score=2.0,
+                primary_score=2.0,
+                ranking_gate_passed=True,
+            ),
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="cand_b",
+                display_name="B",
+                candidate_type=CandidateType.WORK,
+                candidate_kind=CandidateKind.ENTITY,
+                lane=RankingLane.SHOWS_FORMATS,
+                domain_class=DomainClass.ENTERTAINMENT,
+                coming_score=0.3,
+                primary_score=0.4,
+                ranking_gate_passed=False,
+            ),
+        ]
+
+        ranked = build_ranked_candidates_v2(features, candidates, top_k=2)
+
+        assert [item.candidate_id for item in ranked] == ["cand_a", "cand_b"]

@@ -23,3 +23,18 @@ def test_interleave_ranked_items_protects_topic_lanes() -> None:
     lanes = {item["lane"] for item in ranked}
     assert "words_behaviors" in lanes
     assert "style_products" in lanes
+
+
+def test_interleave_ranked_items_does_not_underfill_when_lane_missing() -> None:
+    items = [
+        {"candidate_id": "1", "lane": "people_music", "primary_score": 10.0},
+        {"candidate_id": "2", "lane": "people_music", "primary_score": 9.5},
+        {"candidate_id": "3", "lane": "people_music", "primary_score": 9.0},
+        {"candidate_id": "4", "lane": "people_music", "primary_score": 8.5},
+        {"candidate_id": "5", "lane": "words_behaviors", "primary_score": 8.4},
+    ]
+
+    ranked = interleave_ranked_items(items, top_k=5)
+
+    assert len(ranked) == 5
+    assert ranked[-1]["candidate_id"] == "4"

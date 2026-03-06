@@ -11,6 +11,7 @@ import requests
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
 from packages.core.domain_classifier import classify_domain
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
+from packages.core.topic_normalize import should_keep_topic
 
 WEAR_URL = "https://wear.jp/keyword/"
 KEYWORD_RE = re.compile(
@@ -37,7 +38,7 @@ class WearConnector(BaseConnector):
         seen: set[str] = set()
         for rank, match in enumerate(KEYWORD_RE.findall(html), start=1):
             keyword = (match[0] or match[1]).strip()
-            if not keyword or keyword in seen:
+            if not keyword or keyword in seen or not should_keep_topic(keyword):
                 continue
             seen.add(keyword)
             items.append({"keyword": keyword, "rank": rank})
@@ -48,7 +49,7 @@ class WearConnector(BaseConnector):
         for item in items:
             keyword = str(item.get("keyword", "")).strip()
             rank = int(item.get("rank", 0) or 0)
-            if not keyword:
+            if not keyword or not should_keep_topic(keyword):
                 continue
             candidate_type = _candidate_type(keyword)
             candidates.append(

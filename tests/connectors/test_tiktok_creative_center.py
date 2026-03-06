@@ -17,3 +17,49 @@ def test_parse_tiktok_creative_center_fixture() -> None:
     assert len(items) == 3
     assert any(candidate.type == CandidateType.HASHTAG for candidate in candidates)
     assert any(candidate.name == "#ラブブチャレンジ" for candidate in candidates)
+
+
+def test_parse_tiktok_creative_center_ignores_table_headers() -> None:
+    html = """
+    <div class="HashtagList_header">
+      <span class="HashtagList_hashtagListColumnRank__D49rM">Rank</span>
+      <span class="HashtagList_hashtagListColumnLeft__Xh91A">Hashtags</span>
+      <span class="HashtagList_hashtagListColumnPav__MvYe4">Posts</span>
+      <span class="HashtagList_hashtagListColumnRight__DaF0r">Trend</span>
+      <span class="HashtagList_hashtagListColumnCenter__GfgIM">Creators</span>
+      <span class="HashtagList_hashtagListColumnBtn__tzN5C">Actions</span>
+    </div>
+    <a
+      data-testid="cc_commonCom-trend_hashtag_item-0"
+      href="/business/creativecenter/hashtag/livestory/pc/en"
+    >
+      <div class="CardPc_title__Cx6Ph">
+        <span class="CardPc_titleText__RYOWo"># <!-- -->livestory</span>
+      </div>
+      <a
+        class="CardPc_hashtagDetailBtn__h_zEJ"
+        href="/business/creativecenter/hashtag/livestory?countryCode=&amp;period=7"
+      >
+        <span class="GoDetailBtn_text__UNL0i">See analytics</span>
+      </a>
+    </a>
+    <a
+      data-testid="cc_commonCom-trend_hashtag_item-1"
+      href="/business/creativecenter/hashtag/championsleague/pc/en"
+    >
+      <div class="CardPc_title__Cx6Ph">
+        <span class="CardPc_titleText__RYOWo"># <!-- -->championsleague</span>
+      </div>
+      <a
+        class="CardPc_hashtagDetailBtn__h_zEJ"
+        href="/business/creativecenter/hashtag/championsleague?countryCode=&amp;period=7"
+      >
+        <span class="GoDetailBtn_text__UNL0i">See analytics</span>
+      </a>
+    </a>
+    """
+    connector = TikTokCreativeCenterConnector()
+
+    items = connector.parse_items(html)
+
+    assert [item["keyword"] for item in items] == ["#livestory", "#championsleague"]

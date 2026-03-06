@@ -45,9 +45,9 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
 
         forced_lanes: set[RankingLane] = set()
         if remaining_slots <= unmet_words + unmet_style:
-            if unmet_words:
+            if unmet_words and grouped[RankingLane.WORDS_BEHAVIORS]:
                 forced_lanes.add(RankingLane.WORDS_BEHAVIORS)
-            if unmet_style:
+            if unmet_style and grouped[RankingLane.STYLE_PRODUCTS]:
                 forced_lanes.add(RankingLane.STYLE_PRODUCTS)
 
         best_lane: RankingLane | None = None

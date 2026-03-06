@@ -25,6 +25,7 @@ from packages.core.config import (
     load_source_weighting_config,
 )
 from packages.core.diversification import infer_lane
+from packages.core.domain_classifier import classify_domain
 from packages.core.models import (
     BucketScore,
     Candidate,
@@ -393,6 +394,8 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         candidate = touched_candidates[candidate_id]
         lane = infer_lane(candidate.type)
         domain_class = _pick_feature_domain(candidate, features)
+        if domain_class != DomainClass.OTHER:
+            candidate.domain_class = domain_class
         candidate_feature = compute_candidate_feature(
             date=target_date,
             candidate=candidate,
@@ -761,8 +764,12 @@ def _max_confidence(raw_items: list[RawCandidate]) -> ExtractionConfidence:
 
 def _pick_domain(candidate: Candidate, raw_items: list[RawCandidate]) -> DomainClass:
     for item in raw_items:
-        if item.domain_class.value != "OTHER":
+        if item.domain_class != DomainClass.OTHER:
             return item.domain_class
+    for item in raw_items:
+        inferred = classify_domain(item.type, item.source_id, text=item.name, metadata=item.extra)
+        if inferred != DomainClass.OTHER:
+            return inferred
     return candidate.domain_class
 
 
@@ -771,8 +778,18 @@ def _pick_feature_domain(
     features: list[DailySourceFeature],
 ) -> DomainClass:
     for feature in features:
-        if feature.domain_class.value != "OTHER":
+        if feature.domain_class != DomainClass.OTHER:
             return feature.domain_class
+    for feature in features:
+        metadata = {"title": feature.evidence[0].title} if feature.evidence else {}
+        inferred = classify_domain(
+            feature.candidate_type,
+            feature.source_id,
+            text=candidate.display_name or candidate.canonical_name,
+            metadata=metadata,
+        )
+        if inferred != DomainClass.OTHER:
+            return inferred
     return candidate.domain_class
 
 
