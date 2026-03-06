@@ -95,7 +95,11 @@ def get_target_date(date_arg: str) -> str:
     return date_arg
 
 
-def acquire_lock(target_date: str, run_id: str) -> bool:
+def acquire_lock(
+    target_date: str,
+    run_id: str,
+    allow_completed_rerun: bool = False,
+) -> bool:
     """Acquire a per-date lock to prevent duplicate runs.
 
     Returns True if the lock was acquired (proceed with batch).
@@ -125,6 +129,18 @@ def acquire_lock(target_date: str, run_id: str) -> bool:
     lock_status = lock_doc.get("status", "")
 
     if lock_status == "COMPLETED":
+        if allow_completed_rerun:
+            logger.info(
+                "Date %s already completed, but rerun override is enabled. Reacquiring lock.",
+                target_date,
+            )
+            firestore_client.set_document("runs", lock_id, {
+                "status": "RUNNING",
+                "runId": run_id,
+                "targetDate": target_date,
+                "startedAt": now_iso,
+            })
+            return True
         logger.info("Date %s already completed (run=%s). Skipping.",
                      target_date, lock_doc.get("runId", "?"))
         return False
@@ -232,15 +248,24 @@ def main(date_arg: str = "today") -> None:
     target_date = get_target_date(date_arg)
     run_id = str(ULID())
     errors: list[str] = []
+    allow_completed_rerun = (
+        os.environ.get("BATCH_ALLOW_RERUN_COMPLETED", "").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
 
     logger.info("=== Trends Daily Batch ===")
     logger.info("Run ID: %s", run_id)
     logger.info("Target date: %s", target_date)
+    logger.info("Allow completed rerun: %s", allow_completed_rerun)
 
     # Acquire per-date lock (prevent duplicate runs)
     lock_acquired = False
     try:
-        if not acquire_lock(target_date, run_id):
+        if not acquire_lock(
+            target_date,
+            run_id,
+            allow_completed_rerun=allow_completed_rerun,
+        ):
             logger.info("=== Batch skipped (lock not acquired) ===")
             return
         lock_acquired = True
