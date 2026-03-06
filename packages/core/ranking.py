@@ -25,6 +25,7 @@ from packages.core.scoring import momentum, multi_source_bonus
 SOURCE_TO_BUCKET: dict[str, str] = {
     "YOUTUBE_TREND_JP": DisplayBucket.YOUTUBE,
     "APPLE_MUSIC_JP": DisplayBucket.MUSIC,
+    "APPLE_MUSIC_KR": DisplayBucket.MUSIC,
     "APPLE_MUSIC_GLOBAL": DisplayBucket.MUSIC,
     "TRENDS": DisplayBucket.TRENDS,
     "NEWS_RSS": DisplayBucket.NEWS_RSS,
@@ -35,6 +36,17 @@ SOURCE_TO_BUCKET: dict[str, str] = {
     "NETFLIX_FILMS_JP": DisplayBucket.RANKINGS_STREAM,
     "TVER_RANKING_JP": DisplayBucket.RANKINGS_STREAM,
     "IG_BOOST": DisplayBucket.INSTAGRAM_BOOST,
+}
+
+APPLE_MUSIC_SOURCE_REGIONS = {
+    "APPLE_MUSIC_JP": "JP",
+    "APPLE_MUSIC_KR": "KR",
+    "APPLE_MUSIC_GLOBAL": "GLOBAL",
+}
+APPLE_MUSIC_FALLBACK_WEIGHTS = {
+    "JP": 1.0,
+    "KR": 0.85,
+    "GLOBAL": 0.1,
 }
 
 
@@ -52,6 +64,7 @@ class _PublishEntry(TypedDict):
     evidence: list[Evidence]
     summary: str
     feature: DailyCandidateFeature
+    selection_score: float
 
 
 def compute_candidate_score(
@@ -127,10 +140,9 @@ def _resolve_source_multiplier(
     if source_weights is not None and source_id in source_weights:
         return source_weights[source_id]
 
-    if source_id == "APPLE_MUSIC_GLOBAL":
-        return music_config.weights.get("GLOBAL", 0.25)
-    if source_id == "APPLE_MUSIC_JP":
-        return music_config.weights.get("JP", 1.0)
+    region = APPLE_MUSIC_SOURCE_REGIONS.get(source_id)
+    if region is not None:
+        return music_config.weights.get(region, APPLE_MUSIC_FALLBACK_WEIGHTS[region])
     return 1.0
 
 
@@ -166,6 +178,25 @@ def select_top_k(
     return sorted_candidates[:top_k]
 
 
+def _selection_score(feature: DailyCandidateFeature) -> float:
+    base_score = feature.primary_score
+    role_scores = feature.metadata.get("roleScores", {})
+    discovery_score = float(role_scores.get("DISCOVERY", 0.0))
+    chart_only_confirmation = (
+        discovery_score == 0.0
+        and len(feature.source_families) == 1
+        and feature.source_families[0] in {"MUSIC_CHART", "SHOW_CHART"}
+    )
+
+    if feature.ranking_gate_passed:
+        return base_score + 1.0
+    if discovery_score > 0 and feature.candidate_kind == CandidateKind.TOPIC:
+        return base_score + 0.12
+    if chart_only_confirmation:
+        return max(0.0, base_score - 0.25)
+    return base_score
+
+
 def build_ranked_candidates_v2(
     candidate_features: list[DailyCandidateFeature],
     candidates_by_id: dict[str, Any],
@@ -186,6 +217,7 @@ def build_ranked_candidates_v2(
             "evidence": feature.evidence,
             "summary": "",
             "feature": feature,
+            "selection_score": _selection_score(feature),
         }
         for feature in candidate_features
         if is_main_ranking_domain(feature.domain_class)

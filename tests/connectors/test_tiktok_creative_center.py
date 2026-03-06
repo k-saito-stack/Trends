@@ -122,3 +122,24 @@ def test_merge_tiktok_regional_items_prefers_japan_and_multi_market_overlap() ->
     assert items[0]["countries"] == ["JP", "KR", "TH"]
     assert items[0]["countryRanks"] == {"JP": 1, "KR": 3, "TH": 4}
     assert items[1]["countries"] == ["JP"]
+
+
+def test_extract_candidates_preserves_regional_metadata() -> None:
+    connector = TikTokCreativeCenterConnector(country_codes=["JP", "KR"])
+
+    candidates = connector.extract_candidates(
+        [
+            {
+                "keyword": "#ライブ配信",
+                "rank": 1,
+                "countries": ["JP", "KR"],
+                "countryRanks": {"JP": 1, "KR": 3},
+                "regionalScore": 0.82,
+            }
+        ]
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].extra["countries"] == ["JP", "KR"]
+    assert candidates[0].extra["countryRanks"] == {"JP": 1, "KR": 3}
+    assert candidates[0].extra["regionalScore"] == 0.82

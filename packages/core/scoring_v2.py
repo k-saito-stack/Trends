@@ -15,8 +15,10 @@ from packages.core.models import (
     DailyCandidateFeature,
     DailySourceFeature,
     DomainClass,
+    ExtractionConfidence,
     RankingLane,
     SourceFamily,
+    SourceRole,
 )
 from packages.core.scoring import momentum, update_source_state
 
@@ -225,7 +227,6 @@ def passes_ranking_gate(
     novelty: float,
     algo_config: AlgorithmConfig,
 ) -> bool:
-    del feature_list
     has_discovery = bool(aggregate["has_discovery"])
     support_families = len(aggregate["source_families"])
 
@@ -236,9 +237,10 @@ def passes_ranking_gate(
 
     if has_discovery:
         if candidate_kind == CandidateKind.TOPIC and support_families == 1:
+            min_threshold = 0.75 if _has_priority_regional_tiktok_signal(feature_list) else 0.9
             return float(aggregate["discovery_rise"]) >= max(
                 algo_config.ranking_gate_discovery_threshold,
-                0.9,
+                min_threshold,
             )
         if coming_score >= algo_config.ranking_gate_discovery_threshold:
             return True
@@ -251,6 +253,7 @@ def passes_ranking_gate(
         CandidateType.WORK,
     } and (
         novelty >= 0.4
+        and len(feature_list) >= 2
         and (
             aggregate["music_confirmation"] > 0.35
             or aggregate["show_confirmation"] > 0.35
@@ -271,9 +274,40 @@ def _ungated_primary_multiplier(
         and support_families == 1
     ):
         return 0.25
+    if (
+        not bool(aggregate["has_discovery"])
+        and support_families == 1
+        and (aggregate["music_confirmation"] > 0 or aggregate["show_confirmation"] > 0)
+    ):
+        return 0.2
     if support_families >= 2:
         return 0.45
     return 0.35
+
+
+def _has_priority_regional_tiktok_signal(features: list[DailySourceFeature]) -> bool:
+    for feature in features:
+        if (
+            feature.source_id != "TIKTOK_CREATIVE_CENTER"
+            or feature.source_role != SourceRole.DISCOVERY
+            or feature.extraction_confidence != ExtractionConfidence.HIGH
+        ):
+            continue
+
+        countries = [
+            str(country)
+            for country in feature.metadata.get("countries", [])
+            if isinstance(country, str) and country
+        ]
+        country_ranks = feature.metadata.get("countryRanks", {})
+        jp_present = "JP" in countries or (
+            isinstance(country_ranks, dict) and "JP" in country_ranks
+        )
+        multi_market_overlap = len(countries) >= 2
+
+        if jp_present or multi_market_overlap:
+            return True
+    return False
 
 
 def _compute_novelty(candidate: Candidate) -> float:

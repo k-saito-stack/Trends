@@ -121,6 +121,10 @@ class RankingLane(StrEnum):
     SHADOW = "shadow"
 
 
+DEFAULT_MUSIC_WEIGHTS = {"JP": 1.0, "KR": 0.85, "GLOBAL": 0.1}
+DEFAULT_MUSIC_SOURCES = ["APPLE_MUSIC_JP", "APPLE_MUSIC_KR"]
+
+
 class AliasProvenance(StrEnum):
     MANUAL = "manual"
     SOURCE_ID_LINKED = "source_id_linked"
@@ -349,7 +353,7 @@ class DailyRankingMeta:
     top_k: int = 20
     degrade_state: dict[str, bool] = field(default_factory=dict)
     algorithm_version: str = "v2-shadow"
-    music_weights: dict[str, float] = field(default_factory=lambda: {"JP": 1.0, "GLOBAL": 0.25})
+    music_weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_MUSIC_WEIGHTS))
     status: str = "PUBLISHED"
     published_at: str = ""
     latest_published_run_id: str = ""
@@ -377,7 +381,7 @@ class DailyRankingMeta:
             top_k=int(data.get("topK", 20)),
             degrade_state=dict(data.get("degradeState", {})),
             algorithm_version=data.get("algorithmVersion", "v2-shadow"),
-            music_weights=dict(data.get("musicWeights", {"JP": 1.0, "GLOBAL": 0.25})),
+            music_weights=dict(data.get("musicWeights", DEFAULT_MUSIC_WEIGHTS)),
             status=data.get("status", "PUBLISHED"),
             published_at=data.get("publishedAt", ""),
             latest_published_run_id=data.get("latestPublishedRunId", ""),
@@ -883,14 +887,14 @@ class AlgorithmConfig:
 class MusicConfig:
     """Config from /config/music."""
 
-    weights: dict[str, float] = field(default_factory=lambda: {"JP": 1.0, "GLOBAL": 0.25})
-    sources: list[str] = field(default_factory=lambda: ["APPLE_MUSIC_JP", "APPLE_MUSIC_GLOBAL"])
+    weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_MUSIC_WEIGHTS))
+    sources: list[str] = field(default_factory=lambda: list(DEFAULT_MUSIC_SOURCES))
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MusicConfig:
         return cls(
-            weights=data.get("weights", {"JP": 1.0, "GLOBAL": 0.25}),
-            sources=data.get("sources", ["APPLE_MUSIC_JP", "APPLE_MUSIC_GLOBAL"]),
+            weights=data.get("weights", DEFAULT_MUSIC_WEIGHTS),
+            sources=data.get("sources", DEFAULT_MUSIC_SOURCES),
         )
 
     def to_dict(self) -> dict[str, Any]:

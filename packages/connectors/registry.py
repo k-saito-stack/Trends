@@ -41,6 +41,9 @@ FACTORIES: dict[str, Callable[[dict[str, Any]], BaseConnector]] = {
     "APPLE_MUSIC_JP": lambda cfg: AppleMusicConnector(
         region="JP", max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)
     ),
+    "APPLE_MUSIC_KR": lambda cfg: AppleMusicConnector(
+        region="KR", max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)
+    ),
     "APPLE_MUSIC_GLOBAL": lambda cfg: AppleMusicConnector(
         region="GLOBAL", max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)
     ),

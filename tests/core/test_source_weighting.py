@@ -14,6 +14,7 @@ from packages.core.source_weighting import (
     compute_i_independence,
     compute_prior_weights,
     compute_s_stability,
+    infer_region_weight,
     load_current_source_weights,
 )
 
@@ -56,6 +57,11 @@ class TestComputePriorWeights:
         assert weights["YOUTUBE_TREND_JP"] > weights["TRENDS"]
         assert weights["TRENDS"] > weights["NETFLIX_TV_JP"]
         assert weights["NETFLIX_TV_JP"] > weights["APPLE_MUSIC_GLOBAL"]
+
+    def test_apple_music_korea_has_lower_prior_than_japan_default(self) -> None:
+        assert infer_region_weight({}, "APPLE_MUSIC_JP") == 1.0
+        assert infer_region_weight({}, "APPLE_MUSIC_KR") == 0.85
+        assert infer_region_weight({}, "APPLE_MUSIC_GLOBAL") == 0.1
 
     def test_normalized_average_is_one(self) -> None:
         source_cfgs = {

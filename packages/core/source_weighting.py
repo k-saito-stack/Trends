@@ -416,8 +416,10 @@ def infer_region_weight(source_cfg: dict[str, Any], source_id: str) -> float:
     value = source_cfg.get("regionWeightR")
     if value is not None:
         return float(value)
+    if source_id == "APPLE_MUSIC_KR":
+        return 0.85
     if source_id == "APPLE_MUSIC_GLOBAL":
-        return 0.25
+        return 0.1
     return 1.0
 
 

@@ -279,6 +279,15 @@ class TikTokCreativeCenterConnector(BaseConnector):
                 if country and country_rank
             }
             metric_value = float(item.get("regionalScore") or _rank_exposure(rank))
+            extra: dict[str, Any] = {}
+            if countries:
+                extra["countries"] = countries
+            if country_ranks:
+                extra["countryRanks"] = country_ranks
+            if item.get("countryCode"):
+                extra["countryCode"] = str(item["countryCode"])
+            if item.get("regionalScore") is not None:
+                extra["regionalScore"] = metric_value
             candidates.append(
                 RawCandidate(
                     name=keyword,
@@ -294,6 +303,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
                     ),
                     extraction_confidence=ExtractionConfidence.HIGH,
                     domain_class=classify_domain(candidate_type, self.source_id, text=keyword),
+                    extra=extra,
                 )
             )
         return candidates

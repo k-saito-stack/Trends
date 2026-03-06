@@ -383,7 +383,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
                 if obs.candidate_id == candidate_id and obs.source_id == source_id
             ],
             evidence=evidence[:5],
-            metadata={"sourceWeight": source_weight},
+            metadata=_build_source_feature_metadata(raw_items, source_weight),
         )
         source_features.append(feature)
         source_momentum[source_id].append((candidate_id, feature.surprise01))
@@ -754,6 +754,72 @@ def _dedupe_evidence(evidence_items: Any) -> list[Evidence]:
         seen.add(key)
         result.append(item)
     return result
+
+
+def _build_source_feature_metadata(
+    raw_items: list[RawCandidate],
+    source_weight: float,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {"sourceWeight": source_weight}
+    regions: list[str] = []
+    countries: list[str] = []
+    country_ranks: dict[str, int] = {}
+    best_regional_score: float | None = None
+
+    for item in raw_items:
+        region = item.extra.get("region")
+        if isinstance(region, str) and region:
+            regions.append(region)
+
+        for country in item.extra.get("countries", []):
+            if isinstance(country, str) and country:
+                countries.append(country)
+
+        raw_country_ranks = item.extra.get("countryRanks", {})
+        if isinstance(raw_country_ranks, dict):
+            for country, rank in raw_country_ranks.items():
+                if not isinstance(country, str) or not country:
+                    continue
+                try:
+                    normalized_rank = int(rank)
+                except (TypeError, ValueError):
+                    continue
+                previous = country_ranks.get(country)
+                country_ranks[country] = (
+                    normalized_rank if previous is None else min(previous, normalized_rank)
+                )
+
+        regional_score = item.extra.get("regionalScore")
+        if regional_score is not None:
+            try:
+                normalized_score = float(regional_score)
+            except (TypeError, ValueError):
+                normalized_score = None
+            if normalized_score is not None:
+                if best_regional_score is None:
+                    best_regional_score = normalized_score
+                else:
+                    best_regional_score = max(best_regional_score, normalized_score)
+
+    if regions:
+        metadata["regions"] = sorted(dict.fromkeys(regions))
+    if countries:
+        metadata["countries"] = sorted(
+            dict.fromkeys(countries),
+            key=lambda country: (country != "JP", country),
+        )
+    if country_ranks:
+        metadata["countryRanks"] = {
+            country: country_ranks[country]
+            for country in sorted(
+                country_ranks,
+                key=lambda country: (country != "JP", country_ranks[country], country),
+            )
+        }
+    if best_regional_score is not None:
+        metadata["regionalScore"] = best_regional_score
+
+    return metadata
 
 
 def _max_confidence(raw_items: list[RawCandidate]) -> ExtractionConfidence:

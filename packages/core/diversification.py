@@ -28,7 +28,11 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
     config = _load_config()["soft_quota"]
     grouped: dict[RankingLane, list[dict[str, Any]]] = defaultdict(list)
     for item in sorted(
-        items, key=lambda entry: -entry.get("primary_score", entry.get("trend_score", 0.0))
+        items,
+        key=lambda entry: -entry.get(
+            "selection_score",
+            entry.get("primary_score", entry.get("trend_score", 0.0)),
+        ),
     ):
         grouped[RankingLane(item["lane"])].append(item)
 
@@ -64,7 +68,10 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
                     continue
             candidate = queue[0]
             candidate_score = float(
-                candidate.get("primary_score", candidate.get("trend_score", 0.0))
+                candidate.get(
+                    "selection_score",
+                    candidate.get("primary_score", candidate.get("trend_score", 0.0)),
+                )
             )
             candidate_score += _lane_boost(lane, counts, config, top_k)
             if best_item is None or candidate_score > float(

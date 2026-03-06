@@ -1,4 +1,4 @@
-"""Apple Music RSS connector (JP & Global).
+"""Apple Music RSS connector (regional Apple charts).
 
 Fetches top songs/albums from Apple's RSS Generator JSON feed.
 
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Apple RSS Generator JSON endpoints
 APPLE_RSS_URLS = {
     "JP": "https://rss.marketingtools.apple.com/api/v2/jp/music/most-played/50/songs.json",
+    "KR": "https://rss.marketingtools.apple.com/api/v2/kr/music/most-played/50/songs.json",
     "GLOBAL": "https://rss.marketingtools.apple.com/api/v2/us/music/most-played/50/songs.json",
 }
 
@@ -109,7 +110,7 @@ class AppleMusicConnector(BaseConnector):
         """Compute daily signal using rank exposure.
 
         Aggregates E(rank) per candidate name.
-        Regional weighting (JP=1.0, GLOBAL=0.25) is applied
+        Regional weighting (for example JP/KR) is applied
         later in the scoring engine, NOT here.
         """
         signals: dict[str, SignalResult] = {}

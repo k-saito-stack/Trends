@@ -18,9 +18,9 @@ class TestAppleMusicConnector:
 
     def test_source_id_includes_region(self) -> None:
         jp = AppleMusicConnector(region="JP")
-        gl = AppleMusicConnector(region="GLOBAL")
+        kr = AppleMusicConnector(region="KR")
         assert jp.source_id == "APPLE_MUSIC_JP"
-        assert gl.source_id == "APPLE_MUSIC_GLOBAL"
+        assert kr.source_id == "APPLE_MUSIC_KR"
 
     def test_extract_candidates(self) -> None:
         connector = AppleMusicConnector(region="JP")

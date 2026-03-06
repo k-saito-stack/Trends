@@ -120,8 +120,8 @@
     "max_weight_cap": 1.0
   },
   {
-    "source_id": "APPLE_MUSIC_GLOBAL",
-    "display_name": "Apple Music Global",
+    "source_id": "APPLE_MUSIC_KR",
+    "display_name": "Apple Music Korea",
     "role": "CONFIRMATION",
     "family_primary": "MUSIC_CHART",
     "family_secondary": "SEARCH",
@@ -132,7 +132,22 @@
     "supports_phrase_candidates": false,
     "supports_entity_candidates": true,
     "target_domains": ["ENTERTAINMENT"],
-    "max_weight_cap": 0.55
+    "max_weight_cap": 0.9
+  },
+  {
+    "source_id": "APPLE_MUSIC_GLOBAL",
+    "display_name": "Apple Music Global",
+    "role": "CONFIRMATION",
+    "family_primary": "MUSIC_CHART",
+    "family_secondary": "SEARCH",
+    "status": "DISABLED",
+    "access_mode": "API",
+    "requires_credentials": false,
+    "requires_manual_approval": false,
+    "supports_phrase_candidates": false,
+    "supports_entity_candidates": true,
+    "target_domains": ["ENTERTAINMENT"],
+    "max_weight_cap": 0.15
   },
   {
     "source_id": "SPOTIFY_EMBED",

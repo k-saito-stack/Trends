@@ -205,8 +205,10 @@ class TestMusicConfig:
     def test_defaults(self) -> None:
         config = MusicConfig()
         assert config.weights["JP"] == 1.0
-        assert config.weights["GLOBAL"] == 0.25
+        assert config.weights["KR"] == 0.85
         assert "APPLE_MUSIC_JP" in config.sources
+        assert "APPLE_MUSIC_KR" in config.sources
+        assert "APPLE_MUSIC_GLOBAL" not in config.sources
 
 
 class TestChangeLog:

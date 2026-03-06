@@ -22,6 +22,7 @@ JST = timezone(timedelta(hours=9))
 COST_TABLE: dict[str, float] = {
     "YOUTUBE_TREND_JP": 0.0,       # YouTube Data API free tier
     "APPLE_MUSIC_JP": 0.0,         # Apple RSS is free
+    "APPLE_MUSIC_KR": 0.0,         # Apple RSS is free
     "APPLE_MUSIC_GLOBAL": 0.0,     # Apple RSS is free
     "TRENDS": 0.0,                 # Google Trends RSS is free
     "NEWS_RSS": 0.0,               # RSS is free

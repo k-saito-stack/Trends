@@ -43,41 +43,40 @@ class TestComputeCandidateScore:
         assert mb > 0  # 3 active sources
         assert score > 0
 
-    def test_music_global_weight_applied(self) -> None:
+    def test_music_kr_weight_applied_below_jp(self) -> None:
         sig_by_source_jp = {
             "APPLE_MUSIC_JP": [5.0, 3.0, 1.0],
         }
-        sig_by_source_global = {
-            "APPLE_MUSIC_GLOBAL": [5.0, 3.0, 1.0],
+        sig_by_source_kr = {
+            "APPLE_MUSIC_KR": [5.0, 3.0, 1.0],
         }
         algo = AlgorithmConfig()
-        music = MusicConfig(weights={"JP": 1.0, "GLOBAL": 0.25})
+        music = MusicConfig(weights={"JP": 1.0, "KR": 0.85, "GLOBAL": 0.1})
 
         score_jp, _, _ = compute_candidate_score(sig_by_source_jp, algo, music)
-        score_global, _, _ = compute_candidate_score(sig_by_source_global, algo, music)
+        score_kr, _, _ = compute_candidate_score(sig_by_source_kr, algo, music)
 
-        # JP score should be higher (weight 1.0 vs 0.25)
-        assert score_jp > score_global
+        assert score_jp > score_kr
 
     def test_source_weights_override_legacy_music_weights(self) -> None:
         sig_by_source_jp = {
             "APPLE_MUSIC_JP": [5.0, 3.0, 1.0],
         }
-        sig_by_source_global = {
-            "APPLE_MUSIC_GLOBAL": [5.0, 3.0, 1.0],
+        sig_by_source_kr = {
+            "APPLE_MUSIC_KR": [5.0, 3.0, 1.0],
         }
         algo = AlgorithmConfig()
-        music = MusicConfig(weights={"JP": 1.0, "GLOBAL": 0.25})
-        source_weights = {"APPLE_MUSIC_JP": 1.0, "APPLE_MUSIC_GLOBAL": 0.25}
+        music = MusicConfig(weights={"JP": 1.0, "KR": 0.85, "GLOBAL": 0.1})
+        source_weights = {"APPLE_MUSIC_JP": 1.0, "APPLE_MUSIC_KR": 0.85}
 
         score_jp, _, _ = compute_candidate_score(
             sig_by_source_jp, algo, music, source_weights=source_weights
         )
-        score_global, _, _ = compute_candidate_score(
-            sig_by_source_global, algo, music, source_weights=source_weights
+        score_kr, _, _ = compute_candidate_score(
+            sig_by_source_kr, algo, music, source_weights=source_weights
         )
 
-        assert abs(score_global - (score_jp * 0.25)) < 1e-10
+        assert abs(score_kr - (score_jp * 0.85)) < 1e-10
 
     def test_empty_sources(self) -> None:
         score, breakdown, mb = compute_candidate_score({}, AlgorithmConfig(), MusicConfig())
@@ -198,3 +197,83 @@ class TestBuildRankedCandidatesV2:
         ranked = build_ranked_candidates_v2(features, candidates, top_k=2)
 
         assert [item.candidate_id for item in ranked] == ["cand_a", "cand_b"]
+
+    def test_backfill_prefers_discovery_topics_over_single_chart_confirmation(self) -> None:
+        candidates = {
+            "cand_gate": Candidate(
+                candidate_id="cand_gate",
+                type=CandidateType.PHRASE,
+                kind=CandidateKind.TOPIC,
+                canonical_name="gate",
+                display_name="Gate",
+                domain_class=DomainClass.CONSUMER_CULTURE,
+            ),
+            "cand_tiktok": Candidate(
+                candidate_id="cand_tiktok",
+                type=CandidateType.HASHTAG,
+                kind=CandidateKind.TOPIC,
+                canonical_name="#tag",
+                display_name="#tag",
+                domain_class=DomainClass.CONSUMER_CULTURE,
+            ),
+            "cand_apple": Candidate(
+                candidate_id="cand_apple",
+                type=CandidateType.MUSIC_ARTIST,
+                kind=CandidateKind.ENTITY,
+                canonical_name="Apple Artist",
+                display_name="Apple Artist",
+                domain_class=DomainClass.ENTERTAINMENT,
+            ),
+        }
+        features = [
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="cand_gate",
+                display_name="Gate",
+                candidate_type=CandidateType.PHRASE,
+                candidate_kind=CandidateKind.TOPIC,
+                lane=RankingLane.WORDS_BEHAVIORS,
+                domain_class=DomainClass.CONSUMER_CULTURE,
+                source_families=["SOCIAL_DISCOVERY", "SEARCH"],
+                coming_score=1.8,
+                primary_score=1.8,
+                ranking_gate_passed=True,
+                metadata={"roleScores": {"DISCOVERY": 0.9}},
+            ),
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="cand_tiktok",
+                display_name="#tag",
+                candidate_type=CandidateType.HASHTAG,
+                candidate_kind=CandidateKind.TOPIC,
+                lane=RankingLane.WORDS_BEHAVIORS,
+                domain_class=DomainClass.CONSUMER_CULTURE,
+                source_families=["SOCIAL_DISCOVERY"],
+                coming_score=0.72,
+                primary_score=0.68,
+                ranking_gate_passed=False,
+                metadata={"roleScores": {"DISCOVERY": 0.78}},
+            ),
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="cand_apple",
+                display_name="Apple Artist",
+                candidate_type=CandidateType.MUSIC_ARTIST,
+                candidate_kind=CandidateKind.ENTITY,
+                lane=RankingLane.PEOPLE_MUSIC,
+                domain_class=DomainClass.ENTERTAINMENT,
+                source_families=["MUSIC_CHART"],
+                coming_score=0.3,
+                primary_score=0.92,
+                ranking_gate_passed=False,
+                metadata={"roleScores": {"CONFIRMATION": 0.92}},
+            ),
+        ]
+
+        ranked = build_ranked_candidates_v2(features, candidates, top_k=3)
+
+        assert [item.candidate_id for item in ranked] == [
+            "cand_gate",
+            "cand_tiktok",
+            "cand_apple",
+        ]

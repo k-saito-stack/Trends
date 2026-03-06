@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from batch.run import _pick_domain, _pick_feature_domain
+from batch.run import _build_source_feature_metadata, _pick_domain, _pick_feature_domain
 from packages.core.models import (
     Candidate,
     CandidateKind,
@@ -70,3 +70,25 @@ def test_pick_feature_domain_infers_show_from_confirmation_source() -> None:
     ]
 
     assert _pick_feature_domain(candidate, features) == DomainClass.ENTERTAINMENT
+
+
+def test_build_source_feature_metadata_keeps_regional_tiktok_context() -> None:
+    raw_items = [
+        RawCandidate(
+            name="#ライブ配信",
+            type=CandidateType.HASHTAG,
+            source_id="TIKTOK_CREATIVE_CENTER",
+            extra={
+                "countries": ["KR", "JP"],
+                "countryRanks": {"KR": 5, "JP": 2},
+                "regionalScore": 0.81,
+            },
+        )
+    ]
+
+    metadata = _build_source_feature_metadata(raw_items, source_weight=1.15)
+
+    assert metadata["sourceWeight"] == 1.15
+    assert metadata["countries"] == ["JP", "KR"]
+    assert metadata["countryRanks"] == {"JP": 2, "KR": 5}
+    assert metadata["regionalScore"] == 0.81
