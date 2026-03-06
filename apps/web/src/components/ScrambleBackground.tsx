@@ -113,10 +113,10 @@ export default function ScrambleBackground() {
               : 20 + Math.random() * 80;  // slow ambient swap
           }
 
-          // Only render near cursor — invisible otherwise
+          // Invisible at rest, fully visible near cursor
           if (!inRange) continue;
           const proximity = 1 - dist / CURSOR_RADIUS;
-          const alpha = proximity * 0.45;
+          const alpha = proximity * 0.9;
 
           // Draw position: slight displacement near cursor
           let drawX = cx;
