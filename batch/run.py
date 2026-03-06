@@ -9,7 +9,7 @@ Orchestrates the 12-step pipeline:
   5) Compute daily signals x(s,q,t)
   6) EWMA/EWMVar update -> sig -> momentum
   7) Aggregate to buckets + multiBonus
-  8) Select Top15
+  8) Select TopK
   9) Select EvidenceTop3
   10) Generate summary
   11) Write to Firestore
@@ -40,13 +40,21 @@ from packages.connectors.rss_feeds import RSSFeedConnector
 from packages.connectors.x_search import XTrendingConnector
 from packages.connectors.youtube import YouTubeConnector
 from packages.core import candidate_store
-from packages.core.config import load_algorithm_config, load_app_config, load_music_config
+from packages.core.config import (
+    load_algorithm_config,
+    load_all_source_configs,
+    load_app_config,
+    load_music_config,
+    load_source_weighting_config,
+)
 from packages.core.evidence import build_evidence_pool, select_evidence_top3
 from packages.core.models import (
     CandidateType,
     DailyRankingItem,
     DailyRankingMeta,
     RawCandidate,
+    SourceWeightSnapshot,
+    SourceWeightingConfig,
 )
 from packages.core.normalize import extract_bracket_aliases, normalize_name
 from packages.core.proper_noun import is_proper_noun
@@ -58,7 +66,14 @@ from packages.core.resolve import (
     resolve_candidate,
 )
 from packages.core.run_logger import end_run, start_run, update_run_source
-from packages.core.scoring import update_source_state
+from packages.core.scoring import momentum, update_source_state
+from packages.core.source_weighting import (
+    build_source_daily_snapshots,
+    compute_weight_snapshot,
+    filter_weighted_source_ids,
+    load_current_source_weights,
+    load_source_daily,
+)
 from packages.core.summary import generate_summary
 
 logging.basicConfig(
@@ -161,15 +176,13 @@ def release_lock(target_date: str, run_id: str, status: str = "COMPLETED") -> No
     })
 
 
-def _create_connectors() -> list[BaseConnector]:
+def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[BaseConnector]:
     """Create connector instances from Firestore source configs.
 
     Falls back to hardcoded defaults if config loading fails.
     """
     try:
         from packages.connectors.registry import build_connectors
-        from packages.core.config import load_all_source_configs
-        source_cfgs = load_all_source_configs()
         if source_cfgs:
             return build_connectors(source_cfgs)
         logger.warning("No source configs found, using defaults")
@@ -186,6 +199,32 @@ def _create_connectors() -> list[BaseConnector]:
         RakutenMagazineConnector(),
         XTrendingConnector(),
     ]
+
+
+def _build_runtime_source_cfg_map(
+    source_cfgs: list[dict[str, Any]],
+    connectors: list[BaseConnector],
+) -> dict[str, dict[str, Any]]:
+    """Build source config map and backfill minimal metadata from connectors."""
+    cfg_map = {
+        str(cfg["sourceId"]): dict(cfg)
+        for cfg in source_cfgs
+        if cfg.get("sourceId")
+    }
+
+    for connector in connectors:
+        source_id = connector.source_id
+        cfg = dict(cfg_map.get(source_id, {}))
+        cfg.setdefault("sourceId", source_id)
+        if not cfg.get("fetchLimit"):
+            for attr_name in ("max_results", "max_items_per_feed"):
+                value = getattr(connector, attr_name, None)
+                if isinstance(value, int) and value > 0:
+                    cfg["fetchLimit"] = value
+                    break
+        cfg_map[source_id] = cfg
+
+    return cfg_map
 
 
 def main(date_arg: str = "today") -> None:
@@ -207,7 +246,8 @@ def main(date_arg: str = "today") -> None:
         lock_acquired = True
         logger.info("Lock acquired for %s", target_date)
     except Exception as e:
-        logger.warning("Lock check failed (proceeding anyway): %s", e)
+        logger.error("Lock check failed; aborting batch run: %s", e)
+        raise
 
     try:
         _run_pipeline(target_date, run_id, errors)
@@ -224,9 +264,12 @@ def main(date_arg: str = "today") -> None:
 
 def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     """Execute the main batch pipeline (extracted for lock safety)."""
+    published_successfully = False
 
     # ── Step 0: Load config + candidates ──
     logger.info("Step 0: Loading config and candidates...")
+    source_cfg_list: list[dict[str, Any]] = []
+    source_weighting_config = SourceWeightingConfig()
     try:
         app_config = load_app_config()
         algo_config = load_algorithm_config()
@@ -238,6 +281,18 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         app_config = AppConfig()
         algo_config = AlgorithmConfig()
         music_config = MusicConfig()
+
+    try:
+        source_cfg_list = load_all_source_configs()
+    except Exception as e:
+        logger.warning("Failed to load source configs (using connector defaults): %s", e)
+        source_cfg_list = []
+
+    try:
+        source_weighting_config = load_source_weighting_config()
+    except Exception as e:
+        logger.warning("Failed to load source weighting config (using defaults): %s", e)
+        source_weighting_config = SourceWeightingConfig()
 
     try:
         existing_candidates = candidate_store.load_all_candidates()
@@ -266,10 +321,12 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
     # ── Step 2-3: Ingest + Extract raw candidates ──
     logger.info("Step 2-3: Ingesting from sources...")
-    connectors = _create_connectors()
+    connectors = _create_connectors(source_cfg_list)
+    source_cfg_map = _build_runtime_source_cfg_map(source_cfg_list, connectors)
     all_raw_candidates: list[RawCandidate] = []
     all_signals: dict[str, list[SignalResult]] = {}  # source_id -> signals
     source_ok: dict[str, bool] = {}  # source_id -> fetch success flag
+    source_item_count: dict[str, int] = {}  # source_id -> fetched item count
     sources_used: list[str] = []
 
     for connector in connectors:
@@ -278,6 +335,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         try:
             run_result: ConnectorRunResult = connector.run()
             source_ok[source_id] = run_result.ok
+            source_item_count[source_id] = run_result.item_count
             if run_result.ok:
                 sources_used.append(source_id)
             all_raw_candidates.extend(run_result.candidates)
@@ -297,6 +355,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             error_msg = f"{source_id}: {e}"
             errors.append(error_msg)
             source_ok[source_id] = False
+            source_item_count[source_id] = 0
             logger.error("  Failed: %s", error_msg)
             with contextlib.suppress(Exception):
                 update_run_source(run_id, source_id, 0, error=str(e))
@@ -400,6 +459,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     logger.info("Step 6: Updating EWMA states and computing sig...")
     # sig_history: cand_id -> {source_id -> [sig_t, sig_{t-1}, sig_{t-2}]}
     sig_by_source: dict[str, dict[str, list[float]]] = {}
+    source_momentum_scores: dict[str, list[tuple[str, float]]] = {}
 
     # Collect all OK sources for 0-observation injection
     ok_sources = [sid for sid, ok in source_ok.items() if ok]
@@ -449,12 +509,36 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             # Update per-source sig history (keep last 3)
             updated_state.sig_history = sig_history_list[:3]
 
+            source_mom = momentum(sig_history_list, algo_config.momentum_lambda)
+            if source_mom > 0:
+                source_momentum_scores.setdefault(source_id, []).append(
+                    (cand_id, source_mom)
+                )
+
         # For failed sources (ok=False), skip update entirely (x=None)
         # -> state is preserved as-is from previous day
 
     # ── Step 7: Aggregate to buckets + multiBonus ──
     logger.info("Step 7: Computing TrendScores...")
     candidate_score_list: list[dict[str, Any]] = []
+    weighted_source_ids = filter_weighted_source_ids(
+        [connector.source_id for connector in connectors]
+    )
+    source_weights: dict[str, float] | None = None
+    if source_weighting_config.enabled and weighted_source_ids:
+        try:
+            source_weights = load_current_source_weights(
+                target_date=target_date,
+                source_cfgs=source_cfg_map,
+                source_ids=weighted_source_ids,
+                algo_cfg=algo_config,
+                weighting_cfg=source_weighting_config,
+            )
+            logger.info("Loaded source weights for %d sources", len(source_weights))
+        except Exception as e:
+            logger.warning("Failed to load source weights, using legacy fallback: %s", e)
+            errors.append(f"source_weights_current: {e}")
+            source_weights = None
 
     for cand_id, source_sigs in sig_by_source.items():
         candidate = existing_candidates.get(cand_id)
@@ -462,7 +546,10 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             continue
 
         score, breakdown, multi_bonus = compute_candidate_score(
-            source_sigs, algo_config, music_config
+            source_sigs,
+            algo_config,
+            music_config,
+            source_weights=source_weights,
         )
 
         # Update trend history (keep last 7 days)
@@ -477,6 +564,36 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             "multi_bonus": multi_bonus,
             "candidate": candidate,
         })
+
+    generated_at = datetime.now(JST).isoformat()
+    source_daily_snapshots = build_source_daily_snapshots(
+        target_date=target_date,
+        generated_at=generated_at,
+        source_ids=weighted_source_ids,
+        source_ok=source_ok,
+        source_item_count=source_item_count,
+        source_momentum=source_momentum_scores,
+        source_cfgs=source_cfg_map,
+        weighting_cfg=source_weighting_config,
+    )
+    next_source_weight_snapshot: SourceWeightSnapshot | None = None
+    if source_weighting_config.enabled and weighted_source_ids:
+        try:
+            history_map = load_source_daily(target_date, source_weighting_config)
+            for snapshot in source_daily_snapshots:
+                history_map[(snapshot.date, snapshot.source_id)] = snapshot
+            next_source_weight_snapshot = compute_weight_snapshot(
+                target_date=target_date,
+                generated_at=generated_at,
+                source_cfgs=source_cfg_map,
+                source_ids=weighted_source_ids,
+                algo_cfg=algo_config,
+                weighting_cfg=source_weighting_config,
+                source_daily_records=list(history_map.values()),
+            )
+        except Exception as e:
+            logger.warning("Failed to compute next source weights: %s", e)
+            errors.append(f"source_weight_compute: {e}")
 
     # ── Step 8: Preliminary TopM (wider pool for wiki enrichment) ──
     from packages.core.ranking import compute_final_score
@@ -599,10 +716,32 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
         from packages.core import firestore_client
 
+        source_daily_ops: list[tuple[str, str, dict[str, Any]]] = []
+        for snapshot in source_daily_snapshots:
+            source_daily_ops.append((
+                "source_daily",
+                snapshot.document_id,
+                snapshot.to_dict(),
+            ))
+        if source_daily_ops:
+            firestore_client.batch_write(source_daily_ops)
+
+        if next_source_weight_snapshot is not None:
+            firestore_client.set_document(
+                "source_weights",
+                next_source_weight_snapshot.date,
+                next_source_weight_snapshot.to_dict(),
+            )
+            firestore_client.set_document(
+                "config",
+                "source_weights_current",
+                next_source_weight_snapshot.to_dict(),
+            )
+
         # Phase 1: Write metadata with status=BUILDING
         meta = DailyRankingMeta(
             date=target_date,
-            generated_at=datetime.now(JST).isoformat(),
+            generated_at=generated_at,
             run_id=run_id,
             top_k=app_config.top_k,
             degrade_state=degrade.to_dict(),  # type: ignore[arg-type]
@@ -612,6 +751,13 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         firestore_client.set_document(
             "daily_rankings", target_date, meta.to_dict()
         )
+
+        # Clear stale items from a previous rerun before writing the new set.
+        deleted_items = firestore_client.delete_collection_documents(
+            f"daily_rankings/{target_date}/items"
+        )
+        if deleted_items:
+            logger.info("Deleted %d stale ranking items for %s", deleted_items, target_date)
 
         # Phase 2: Write items as subcollection (batch write)
         item_ops: list[tuple[str, str, dict[str, Any]]] = []
@@ -631,6 +777,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         firestore_client.update_document(
             "daily_rankings", target_date, {"status": "PUBLISHED"}
         )
+        published_successfully = True
 
         logger.info("Written %d ranking items to Firestore (PUBLISHED)", len(ranking_items))
 
@@ -658,7 +805,12 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     except Exception as e:
         logger.warning("Failed to record cost: %s", e)
 
-    run_status = "SUCCESS" if not errors else "PARTIAL"
+    if published_successfully and not errors:
+        run_status = "SUCCESS"
+    elif published_successfully:
+        run_status = "PARTIAL"
+    else:
+        run_status = "FAILED"
     try:
         end_run(
             run_id,
@@ -673,7 +825,11 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
     # Release per-date lock (lock vocabulary: COMPLETED/FAILED only)
     try:
-        release_lock(target_date, run_id, status="COMPLETED")
+        release_lock(
+            target_date,
+            run_id,
+            status="COMPLETED" if published_successfully else "FAILED",
+        )
     except Exception as e:
         logger.warning("Failed to release lock: %s", e)
 
@@ -688,6 +844,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         app_config.top_k,
         cost_jpy,
     )
+
+    if not published_successfully:
+        raise RuntimeError(f"Daily ranking publish failed for {target_date}")
 
 
 def _write_connector_summary(

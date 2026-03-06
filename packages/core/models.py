@@ -217,6 +217,111 @@ class DailyRankingMeta:
         }
 
 
+# --- Source weighting snapshots ---
+
+@dataclass
+class SourceTopItem:
+    """A candidate entry in source_daily topM."""
+    candidate_id: str
+    momentum: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "candidateId": self.candidate_id,
+            "momentum": self.momentum,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SourceTopItem:
+        return cls(
+            candidate_id=data.get("candidateId", ""),
+            momentum=float(data.get("momentum", 0.0)),
+        )
+
+
+@dataclass
+class SourceDailySnapshot:
+    """Daily source-level momentum snapshot for source weighting."""
+    date: str
+    source_id: str
+    ok: bool
+    item_count: int
+    top_m: list[SourceTopItem] = field(default_factory=list)
+    generated_at: str = ""
+
+    @property
+    def document_id(self) -> str:
+        return f"{self.date}_{self.source_id}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "date": self.date,
+            "sourceId": self.source_id,
+            "ok": self.ok,
+            "itemCount": self.item_count,
+            "topM": [item.to_dict() for item in self.top_m],
+            "generatedAt": self.generated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SourceDailySnapshot:
+        return cls(
+            date=data.get("date", ""),
+            source_id=data.get("sourceId", ""),
+            ok=bool(data.get("ok", False)),
+            item_count=int(data.get("itemCount", 0)),
+            top_m=[
+                SourceTopItem.from_dict(item)
+                for item in data.get("topM", [])
+            ],
+            generated_at=data.get("generatedAt", ""),
+        )
+
+
+@dataclass
+class SourceWeightSnapshot:
+    """Computed source weights stored for next-day use."""
+    date: str
+    generated_at: str
+    window_days: int
+    horizon_days: int
+    half_life_days: float
+    n_ref: int
+    weights: dict[str, float] = field(default_factory=dict)
+    factors: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "date": self.date,
+            "generatedAt": self.generated_at,
+            "windowDays": self.window_days,
+            "horizonDays": self.horizon_days,
+            "halfLifeDays": self.half_life_days,
+            "nRef": self.n_ref,
+            "weights": self.weights,
+            "factors": self.factors,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SourceWeightSnapshot:
+        return cls(
+            date=data.get("date", ""),
+            generated_at=data.get("generatedAt", ""),
+            window_days=int(data.get("windowDays", 30)),
+            horizon_days=int(data.get("horizonDays", 3)),
+            half_life_days=float(data.get("halfLifeDays", 7.0)),
+            n_ref=int(data.get("nRef", 50)),
+            weights={
+                str(source_id): float(weight)
+                for source_id, weight in data.get("weights", {}).items()
+            },
+            factors={
+                str(source_id): dict(values)
+                for source_id, values in data.get("factors", {}).items()
+            },
+        )
+
+
 # --- Raw Candidate (intermediate, not stored directly) ---
 
 @dataclass
@@ -249,8 +354,9 @@ class AppConfig:
     def from_dict(cls, data: dict[str, Any]) -> AppConfig:
         degrade = data.get("degrade", {})
         thresholds = degrade.get("thresholds", {})
+        top_k = max(int(data.get("topK", 20)), 20)
         return cls(
-            top_k=data.get("topK", 20),
+            top_k=top_k,
             timezone=data.get("timezone", "Asia/Tokyo"),
             run_time_jst=data.get("runTimeJST", "07:00"),
             retention_months=data.get("retentionMonths", 12),
@@ -332,6 +438,52 @@ class MusicConfig:
         return {
             "weights": self.weights,
             "sources": self.sources,
+        }
+
+
+@dataclass
+class SourceWeightingConfig:
+    """Config from /config/source_weighting."""
+    enabled: bool = True
+    window_days: int = 30
+    horizon_days: int = 3
+    top_k_for_future: int = 20
+    top_m_default: int = 20
+    n_ref: int = 50
+    i_min: float = 0.2
+    s_min: float = 0.5
+    epsilon: float = 1e-9
+    apply_weights_from_next_day: bool = True
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SourceWeightingConfig:
+        return cls(
+            enabled=bool(data.get("enabled", True)),
+            window_days=int(data.get("windowDays", 30)),
+            horizon_days=int(data.get("horizonDays", 3)),
+            top_k_for_future=int(data.get("topKForFuture", 20)),
+            top_m_default=int(data.get("topMDefault", 20)),
+            n_ref=int(data.get("nRef", 50)),
+            i_min=float(data.get("iMin", 0.2)),
+            s_min=float(data.get("sMin", 0.5)),
+            epsilon=float(data.get("epsilon", 1e-9)),
+            apply_weights_from_next_day=bool(
+                data.get("applyWeightsFromNextDay", True)
+            ),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "windowDays": self.window_days,
+            "horizonDays": self.horizon_days,
+            "topKForFuture": self.top_k_for_future,
+            "topMDefault": self.top_m_default,
+            "nRef": self.n_ref,
+            "iMin": self.i_min,
+            "sMin": self.s_min,
+            "epsilon": self.epsilon,
+            "applyWeightsFromNextDay": self.apply_weights_from_next_day,
         }
 
 

@@ -13,14 +13,11 @@ import CustomScrollbar from "./components/CustomScrollbar";
 import { useAuth } from "./hooks/useAuth";
 import { useLenis } from "./hooks/useLenis";
 import { useDailyRanking } from "./hooks/useDailyRanking";
-
-function getToday(): string {
-  return new Date().toISOString().split("T")[0];
-}
+import { getTodayJstIsoDate } from "./utils/date";
 
 export default function App() {
   const { user, loading: authLoading, error: authError, login, logout } = useAuth();
-  const [date, setDate] = useState(getToday());
+  const [date, setDate] = useState(getTodayJstIsoDate());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loaderDone, setLoaderDone] = useState(false);
 

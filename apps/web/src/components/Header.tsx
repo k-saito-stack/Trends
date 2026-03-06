@@ -8,6 +8,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { gsap } from "../hooks/useGSAPSetup";
 import { useMagnetic } from "../hooks/useMagnetic";
 import { useScrambleText } from "../hooks/useScrambleText";
+import { addDaysToIsoDate, getTodayJstIsoDate } from "../utils/date";
 import DatePicker from "./DatePicker";
 
 /** Secondary fonts for TRENDS title alternation */
@@ -126,16 +127,12 @@ export default function Header({
   }, [runChainScramble]);
 
   const handlePrevDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() - 1);
-    onDateChange(d.toISOString().split("T")[0]);
+    onDateChange(addDaysToIsoDate(date, -1));
   };
 
   const handleNextDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + 1);
-    const today = new Date().toISOString().split("T")[0];
-    const next = d.toISOString().split("T")[0];
+    const today = getTodayJstIsoDate();
+    const next = addDaysToIsoDate(date, 1);
     if (next <= today) onDateChange(next);
   };
 

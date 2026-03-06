@@ -19,7 +19,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from packages.core import firestore_client
-from packages.core.models import AlgorithmConfig, AppConfig, MusicConfig, NerConfig
+from packages.core.models import (
+    AlgorithmConfig,
+    AppConfig,
+    MusicConfig,
+    NerConfig,
+    SourceWeightingConfig,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +38,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "A",
         "fetchLimit": 50,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.25,
+        "granularityN": 50,
+        "topMForStats": 20,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "YouTube mostPopular JP (official API)",
     },
@@ -40,6 +50,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "A",
         "fetchLimit": 50,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 50,
+        "topMForStats": 20,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "Apple Music RSS Japan",
     },
@@ -48,6 +62,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "A",
         "fetchLimit": 50,
+        "regionWeightR": 0.25,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 50,
+        "topMForStats": 20,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "Apple Music RSS Global",
     },
@@ -56,6 +74,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "B",
         "fetchLimit": 20,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 20,
+        "topMForStats": 20,
         "killSwitch": {"maxConsecutiveFailures": 5},
         "description": "Google Trends (alpha API preferred, fallback to public)",
     },
@@ -64,6 +86,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "B",
         "fetchLimit": 100,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 50,
+        "topMForStats": 20,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "News RSS feeds",
     },
@@ -72,6 +98,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "B",
         "fetchLimit": 30,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 50,
+        "topMForStats": 20,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "Rakuten Books magazine search API",
     },
@@ -80,6 +110,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "A",
         "fetchLimit": 0,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 0,
+        "topMForStats": 0,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "Wikipedia Pageviews (power score, display only)",
     },
@@ -88,6 +122,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "B",
         "fetchLimit": 30,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 30,
+        "topMForStats": 20,
         "killSwitch": {"budgetDegradeTarget": True},
         "description": "xAI X Search (evidence enrichment for top candidates)",
     },
@@ -96,6 +134,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "B",
         "fetchLimit": 10,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 3.5,
+        "granularityN": 10,
+        "topMForStats": 10,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "Netflix Top 10 Japan TV Shows (weekly, HTML scraping)",
     },
@@ -104,6 +146,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "B",
         "fetchLimit": 10,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 3.5,
+        "granularityN": 10,
+        "topMForStats": 10,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "Netflix Top 10 Japan Films (weekly, HTML scraping)",
     },
@@ -112,6 +158,10 @@ SOURCE_CONFIGS = [
         "enabled": True,
         "stability": "B",
         "fetchLimit": 20,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 50,
+        "topMForStats": 20,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "TVer daily ranking via achikochi-data.com (HTML scraping)",
     },
@@ -120,6 +170,10 @@ SOURCE_CONFIGS = [
         "enabled": False,
         "stability": "C",
         "fetchLimit": 0,
+        "regionWeightR": 1.0,
+        "avgLagDaysDelta": 0.5,
+        "granularityN": 0,
+        "topMForStats": 0,
         "killSwitch": {"maxConsecutiveFailures": 3},
         "description": "Instagram Business Discovery (off until PCA approved)",
     },
@@ -148,6 +202,13 @@ def seed() -> None:
     ner_config = NerConfig()
     logger.info("Writing /config/ner ...")
     firestore_client.set_document("config", "ner", ner_config.to_dict())
+
+    # /config/source_weighting
+    source_weighting_config = SourceWeightingConfig()
+    logger.info("Writing /config/source_weighting ...")
+    firestore_client.set_document(
+        "config", "source_weighting", source_weighting_config.to_dict()
+    )
 
     # /config_sources/{sourceId}
     for source in SOURCE_CONFIGS:

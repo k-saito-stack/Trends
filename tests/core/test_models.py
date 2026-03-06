@@ -12,7 +12,11 @@ from packages.core.models import (
     Evidence,
     MusicConfig,
     RawCandidate,
+    SourceDailySnapshot,
     SourceState,
+    SourceTopItem,
+    SourceWeightSnapshot,
+    SourceWeightingConfig,
 )
 
 
@@ -125,6 +129,10 @@ class TestAppConfig:
         assert original.top_k == restored.top_k
         assert original.monthly_budget_jpy == restored.monthly_budget_jpy
 
+    def test_top_k_is_clamped_to_20(self) -> None:
+        config = AppConfig.from_dict({"topK": 15})
+        assert config.top_k == 20
+
 
 class TestAlgorithmConfig:
     def test_from_dict(self) -> None:
@@ -151,6 +159,16 @@ class TestAlgorithmConfig:
         assert original.beta == restored.beta
 
 
+class TestSourceWeightingConfig:
+    def test_roundtrip(self) -> None:
+        original = SourceWeightingConfig()
+        restored = SourceWeightingConfig.from_dict(original.to_dict())
+
+        assert restored.window_days == original.window_days
+        assert restored.horizon_days == original.horizon_days
+        assert restored.top_k_for_future == original.top_k_for_future
+
+
 class TestMusicConfig:
     def test_defaults(self) -> None:
         config = MusicConfig()
@@ -174,6 +192,46 @@ class TestChangeLog:
         assert d["logId"] == "log_001"
         assert d["before"]["halfLifeDays"] == 7
         assert d["after"]["halfLifeDays"] == 10
+
+
+class TestSourceDailySnapshot:
+    def test_roundtrip(self) -> None:
+        snapshot = SourceDailySnapshot(
+            date="2026-03-03",
+            source_id="YOUTUBE_TREND_JP",
+            ok=True,
+            item_count=50,
+            top_m=[
+                SourceTopItem(candidate_id="cand_001", momentum=3.2),
+                SourceTopItem(candidate_id="cand_002", momentum=2.1),
+            ],
+            generated_at="2026-03-03T07:05:00+09:00",
+        )
+
+        restored = SourceDailySnapshot.from_dict(snapshot.to_dict())
+        assert restored.document_id == "2026-03-03_YOUTUBE_TREND_JP"
+        assert restored.top_m[0].candidate_id == "cand_001"
+        assert restored.top_m[1].momentum == 2.1
+
+
+class TestSourceWeightSnapshot:
+    def test_roundtrip(self) -> None:
+        snapshot = SourceWeightSnapshot(
+            date="2026-03-03",
+            generated_at="2026-03-03T07:10:00+09:00",
+            window_days=30,
+            horizon_days=3,
+            half_life_days=7.0,
+            n_ref=50,
+            weights={"YOUTUBE_TREND_JP": 1.2, "NETFLIX_TV_JP": 0.6},
+            factors={
+                "YOUTUBE_TREND_JP": {"R": 1.0, "F": 0.97, "G": 1.0, "C": 0.9, "I": 0.7, "S": 1.0}
+            },
+        )
+
+        restored = SourceWeightSnapshot.from_dict(snapshot.to_dict())
+        assert restored.weights["YOUTUBE_TREND_JP"] == 1.2
+        assert restored.factors["YOUTUBE_TREND_JP"]["C"] == 0.9
 
 
 class TestRawCandidate:

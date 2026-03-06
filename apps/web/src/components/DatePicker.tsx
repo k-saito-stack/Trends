@@ -3,6 +3,7 @@
  * Replaces native <input type="date"> with a styled calendar dropdown.
  */
 import { useState, useRef, useEffect, useCallback } from "react";
+import { getTodayJstIsoDate } from "../utils/date";
 
 interface DatePickerProps {
   value: string; // "YYYY-MM-DD"
@@ -76,7 +77,7 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
   const selectDate = useCallback(
     (day: number) => {
       const iso = formatISO(viewYear, viewMonth, day);
-      const today = new Date().toISOString().split("T")[0];
+      const today = getTodayJstIsoDate();
       if (iso <= today) {
         onChange(iso);
         setOpen(false);
@@ -86,16 +87,14 @@ export default function DatePicker({ value, onChange }: DatePickerProps) {
   );
 
   const goToToday = useCallback(() => {
-    const today = new Date();
-    const iso = formatISO(today.getFullYear(), today.getMonth(), today.getDate());
-    onChange(iso);
+    onChange(getTodayJstIsoDate());
     setOpen(false);
   }, [onChange]);
 
   // Build calendar grid
   const totalDays = daysInMonth(viewYear, viewMonth);
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
-  const todayISO = new Date().toISOString().split("T")[0];
+  const todayISO = getTodayJstIsoDate();
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);

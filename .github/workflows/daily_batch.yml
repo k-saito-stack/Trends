@@ -11,6 +11,10 @@ on:
         required: false
         default: "today"
 
+permissions:
+  contents: read
+  issues: write
+
 concurrency:
   group: daily-batch
   cancel-in-progress: false
@@ -47,6 +51,7 @@ jobs:
 
       - name: Notify connector failures
         if: always()
+        continue-on-error: true
         run: |
           RESULT_FILE="/tmp/batch_result.json"
           if [ ! -f "${RESULT_FILE}" ]; then
@@ -96,6 +101,7 @@ jobs:
 
       - name: Create issue on batch failure
         if: failure()
+        continue-on-error: true
         run: |
           gh issue create \
             --title "Daily Batch Failed: ${TARGET_DATE}" \

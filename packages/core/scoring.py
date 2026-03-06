@@ -121,8 +121,8 @@ def update_source_state(
             sig_history=state.sig_history,
         ), 0.0
 
-    # Compute significance
-    sig = sig_beta(x, new_m, new_v, config.beta)
+    # Measure surprise against the previous baseline, then update state.
+    sig = sig_beta(x, state.m, state.v, config.beta)
 
     return SourceState(
         m=new_m,

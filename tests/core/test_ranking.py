@@ -56,6 +56,26 @@ class TestComputeCandidateScore:
         # JP score should be higher (weight 1.0 vs 0.25)
         assert score_jp > score_global
 
+    def test_source_weights_override_legacy_music_weights(self) -> None:
+        sig_by_source_jp = {
+            "APPLE_MUSIC_JP": [5.0, 3.0, 1.0],
+        }
+        sig_by_source_global = {
+            "APPLE_MUSIC_GLOBAL": [5.0, 3.0, 1.0],
+        }
+        algo = AlgorithmConfig()
+        music = MusicConfig(weights={"JP": 1.0, "GLOBAL": 0.25})
+        source_weights = {"APPLE_MUSIC_JP": 1.0, "APPLE_MUSIC_GLOBAL": 0.25}
+
+        score_jp, _, _ = compute_candidate_score(
+            sig_by_source_jp, algo, music, source_weights=source_weights
+        )
+        score_global, _, _ = compute_candidate_score(
+            sig_by_source_global, algo, music, source_weights=source_weights
+        )
+
+        assert abs(score_global - (score_jp * 0.25)) < 1e-10
+
     def test_empty_sources(self) -> None:
         score, breakdown, mb = compute_candidate_score(
             {}, AlgorithmConfig(), MusicConfig()
@@ -79,6 +99,23 @@ class TestComputeCandidateScore:
 
         bucket_sum = sum(b.score for b in breakdown)
         assert abs(score - (bucket_sum + mb)) < 1e-10
+
+    def test_breakdown_details_include_weighted_contribution(self) -> None:
+        sig_by_source = {
+            "YOUTUBE_TREND_JP": [5.0, 2.0, 1.0],
+        }
+        algo = AlgorithmConfig(min_sig=0.0)
+        music = MusicConfig()
+
+        _, breakdown, _ = compute_candidate_score(
+            sig_by_source,
+            algo,
+            music,
+            source_weights={"YOUTUBE_TREND_JP": 1.5},
+        )
+
+        assert breakdown[0].details[0]["sourceId"] == "YOUTUBE_TREND_JP"
+        assert breakdown[0].details[0]["weight"] == 1.5
 
 
 class TestSelectTopK:

@@ -130,6 +130,15 @@ class TestUpdateSourceState:
         assert sig != 0.0
         assert new_state.last_sig == sig
 
+    def test_after_warmup_uses_previous_baseline_for_sig(self) -> None:
+        state = SourceState(m=2.0, v=4.0, observation_count=4)
+        config = AlgorithmConfig(warmup_days=3, beta=0.1)
+
+        _, sig = update_source_state(state, 10.0, config, "2025-01-04")
+
+        expected = sig_beta(10.0, 2.0, 4.0, 0.1)
+        assert abs(sig - expected) < 1e-10
+
     def test_clips_extreme_values(self) -> None:
         state = SourceState(m=1.0, v=0.1, observation_count=5)
         config = AlgorithmConfig(max_x_clip=50.0)

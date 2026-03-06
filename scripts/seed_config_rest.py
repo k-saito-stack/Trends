@@ -19,7 +19,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 
-from packages.core.models import AlgorithmConfig, AppConfig, MusicConfig, NerConfig
+from packages.core.models import (
+    AlgorithmConfig,
+    AppConfig,
+    MusicConfig,
+    NerConfig,
+    SourceWeightingConfig,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -99,40 +105,64 @@ def write_document(
 # Source configs (same as seed_config.py)
 SOURCE_CONFIGS = [
     {"sourceId": "YOUTUBE_TREND_JP", "enabled": True, "stability": "A",
-     "fetchLimit": 50, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 50, "regionWeightR": 1.0, "avgLagDaysDelta": 0.25,
+     "granularityN": 50, "topMForStats": 20,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "YouTube mostPopular JP (official API)"},
     {"sourceId": "APPLE_MUSIC_JP", "enabled": True, "stability": "A",
-     "fetchLimit": 50, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 50, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 50, "topMForStats": 20,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Apple Music RSS Japan"},
     {"sourceId": "APPLE_MUSIC_GLOBAL", "enabled": True, "stability": "A",
-     "fetchLimit": 50, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 50, "regionWeightR": 0.25, "avgLagDaysDelta": 0.5,
+     "granularityN": 50, "topMForStats": 20,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Apple Music RSS Global"},
     {"sourceId": "TRENDS", "enabled": True, "stability": "B",
-     "fetchLimit": 20, "killSwitch": {"maxConsecutiveFailures": 5},
+     "fetchLimit": 20, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 20, "topMForStats": 20,
+     "killSwitch": {"maxConsecutiveFailures": 5},
      "description": "Google Trends (alpha API preferred, fallback to public)"},
     {"sourceId": "NEWS_RSS", "enabled": True, "stability": "B",
-     "fetchLimit": 100, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 100, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 50, "topMForStats": 20,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "News RSS feeds"},
     {"sourceId": "RAKUTEN_MAG", "enabled": True, "stability": "B",
-     "fetchLimit": 30, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 30, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 50, "topMForStats": 20,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Rakuten Books magazine search API"},
     {"sourceId": "WIKI_PAGEVIEWS", "enabled": True, "stability": "A",
-     "fetchLimit": 0, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 0, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 0, "topMForStats": 0,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Wikipedia Pageviews (power score, display only)"},
     {"sourceId": "X_SEARCH", "enabled": True, "stability": "B",
-     "fetchLimit": 30, "killSwitch": {"budgetDegradeTarget": True},
+     "fetchLimit": 30, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 30, "topMForStats": 20,
+     "killSwitch": {"budgetDegradeTarget": True},
      "description": "xAI X Search (evidence enrichment for top candidates)"},
     {"sourceId": "NETFLIX_TV_JP", "enabled": True, "stability": "B",
-     "fetchLimit": 10, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 10, "regionWeightR": 1.0, "avgLagDaysDelta": 3.5,
+     "granularityN": 10, "topMForStats": 10,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Netflix Top 10 Japan TV Shows (weekly, HTML scraping)"},
     {"sourceId": "NETFLIX_FILMS_JP", "enabled": True, "stability": "B",
-     "fetchLimit": 10, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 10, "regionWeightR": 1.0, "avgLagDaysDelta": 3.5,
+     "granularityN": 10, "topMForStats": 10,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Netflix Top 10 Japan Films (weekly, HTML scraping)"},
     {"sourceId": "TVER_RANKING_JP", "enabled": True, "stability": "B",
-     "fetchLimit": 20, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 20, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 50, "topMForStats": 20,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "TVer daily ranking via achikochi-data.com (HTML scraping)"},
     {"sourceId": "IG_BOOST", "enabled": False, "stability": "C",
-     "fetchLimit": 0, "killSwitch": {"maxConsecutiveFailures": 3},
+     "fetchLimit": 0, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
+     "granularityN": 0, "topMForStats": 0,
+     "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Instagram Business Discovery (off until PCA approved)"},
 ]
 
@@ -169,6 +199,18 @@ def seed() -> None:
     logger.info("Writing /config/ner ...")
     ner_config = NerConfig()
     write_document(requests, project_id, "config", "ner", ner_config.to_dict(), headers)
+
+    # /config/source_weighting
+    logger.info("Writing /config/source_weighting ...")
+    source_weighting_config = SourceWeightingConfig()
+    write_document(
+        requests,
+        project_id,
+        "config",
+        "source_weighting",
+        source_weighting_config.to_dict(),
+        headers,
+    )
 
     # /config_sources/{sourceId}
     for source in SOURCE_CONFIGS:

@@ -18,6 +18,7 @@ from google.cloud.firestore_v1 import Client as FirestoreClient
 
 _app: firebase_admin.App | None = None
 _db: FirestoreClient | None = None
+MAX_BATCH_WRITE_OPERATIONS = 500
 
 
 def _initialize() -> None:
@@ -175,11 +176,33 @@ def batch_write(operations: list[tuple[str, str, dict[str, Any]]]) -> None:
             collection_path can be nested like "daily_rankings/2026-03-03/items"
     """
     db = get_db()
-    batch = db.batch()
-    for collection_path, doc_id, data in operations:
-        doc_ref = db.collection(collection_path).document(doc_id)
-        batch.set(doc_ref, data)
-    batch.commit()
+    for i in range(0, len(operations), MAX_BATCH_WRITE_OPERATIONS):
+        chunk = operations[i:i + MAX_BATCH_WRITE_OPERATIONS]
+        batch = db.batch()
+        for collection_path, doc_id, data in chunk:
+            doc_ref = db.collection(collection_path).document(doc_id)
+            batch.set(doc_ref, data)
+        batch.commit()
+
+
+def delete_collection_documents(collection_path: str) -> int:
+    """Delete all documents in a collection path, including nested paths.
+
+    Returns the number of deleted documents.
+    """
+    db = get_db()
+    docs = list(db.collection(collection_path).stream())
+    deleted = 0
+
+    for i in range(0, len(docs), MAX_BATCH_WRITE_OPERATIONS):
+        chunk = docs[i:i + MAX_BATCH_WRITE_OPERATIONS]
+        batch = db.batch()
+        for doc in chunk:
+            batch.delete(doc.reference)
+        batch.commit()
+        deleted += len(chunk)
+
+    return deleted
 
 
 def reset_client() -> None:

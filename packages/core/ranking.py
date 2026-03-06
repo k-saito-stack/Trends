@@ -28,6 +28,9 @@ SOURCE_TO_BUCKET: dict[str, str] = {
     "RAKUTEN_MAG": DisplayBucket.MAGAZINES,
     "X_SEARCH": DisplayBucket.X,
     "X_TRENDING": DisplayBucket.X,
+    "NETFLIX_TV_JP": DisplayBucket.RANKINGS_STREAM,
+    "NETFLIX_FILMS_JP": DisplayBucket.RANKINGS_STREAM,
+    "TVER_RANKING_JP": DisplayBucket.RANKINGS_STREAM,
     "IG_BOOST": DisplayBucket.INSTAGRAM_BOOST,
 }
 
@@ -36,6 +39,7 @@ def compute_candidate_score(
     sig_by_source: dict[str, list[float]],
     algo_config: AlgorithmConfig,
     music_config: MusicConfig,
+    source_weights: dict[str, float] | None = None,
 ) -> tuple[float, list[BucketScore], float]:
     """Compute TrendScore for a single candidate.
 
@@ -48,21 +52,29 @@ def compute_candidate_score(
         (trend_score, breakdown_buckets, multi_bonus)
     """
     bucket_scores: dict[str, float] = {}
+    bucket_details: dict[str, list[dict[str, Any]]] = {}
     active_sources = 0
 
     for source_id, sig_hist in sig_by_source.items():
         # Compute momentum for this source
         mom = momentum(sig_hist, algo_config.momentum_lambda)
 
-        # Apply music regional weights
-        if source_id == "APPLE_MUSIC_GLOBAL":
-            mom *= music_config.weights.get("GLOBAL", 0.25)
-        elif source_id == "APPLE_MUSIC_JP":
-            mom *= music_config.weights.get("JP", 1.0)
+        source_multiplier = _resolve_source_multiplier(
+            source_id=source_id,
+            music_config=music_config,
+            source_weights=source_weights,
+        )
+        weighted_momentum = mom * source_multiplier
 
         # Aggregate into display bucket
         bucket = SOURCE_TO_BUCKET.get(source_id, DisplayBucket.TRENDS)
-        bucket_scores[bucket] = bucket_scores.get(bucket, 0.0) + mom
+        bucket_scores[bucket] = bucket_scores.get(bucket, 0.0) + weighted_momentum
+        bucket_details.setdefault(bucket, []).append({
+            "sourceId": source_id,
+            "weight": source_multiplier,
+            "momentum": mom,
+            "weightedMomentum": weighted_momentum,
+        })
 
         # Count active sources (sig_t >= minSig)
         if len(sig_hist) > 0 and sig_hist[0] >= algo_config.min_sig:
@@ -77,12 +89,28 @@ def compute_candidate_score(
 
     # Build breakdown list
     breakdown = [
-        BucketScore(bucket=b, score=s)
+        BucketScore(bucket=b, score=s, details=bucket_details.get(b, []))
         for b, s in sorted(bucket_scores.items(), key=lambda x: -x[1])
         if s > 0
     ]
 
     return total, breakdown, mb
+
+
+def _resolve_source_multiplier(
+    source_id: str,
+    music_config: MusicConfig,
+    source_weights: dict[str, float] | None,
+) -> float:
+    """Resolve the multiplier applied to a source momentum value."""
+    if source_weights is not None and source_id in source_weights:
+        return source_weights[source_id]
+
+    if source_id == "APPLE_MUSIC_GLOBAL":
+        return music_config.weights.get("GLOBAL", 0.25)
+    if source_id == "APPLE_MUSIC_JP":
+        return music_config.weights.get("JP", 1.0)
+    return 1.0
 
 
 def compute_final_score(
