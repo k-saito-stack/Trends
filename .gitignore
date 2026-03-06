@@ -27,6 +27,7 @@ apps/web/dist/
 
 # Data (local only)
 data/
+firebase-debug.log
 
 # IDE
 .vscode/

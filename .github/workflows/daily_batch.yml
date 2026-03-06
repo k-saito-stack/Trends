@@ -52,7 +52,6 @@ jobs:
 
       - name: Notify connector failures
         if: always()
-        continue-on-error: true
         run: |
           RESULT_FILE="/tmp/batch_result.json"
           if [ ! -f "${RESULT_FILE}" ]; then
@@ -95,19 +94,20 @@ jobs:
           gh issue create \
             --title "Connector failure: ${FAILED}" \
             --body "${BODY}" \
-            --label "connector-failure"
+            --label "connector-failure" \
+            || echo "Failed to create connector-failure issue; continuing without annotation."
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_DATE: ${{ github.event.inputs.date || 'today' }}
 
       - name: Create issue on batch failure
         if: failure()
-        continue-on-error: true
         run: |
           gh issue create \
             --title "Daily Batch Failed: ${TARGET_DATE}" \
             --body "Batch run failed.\n\nRun: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\nDate: ${TARGET_DATE}\nTriggered: ${EVENT_NAME}" \
-            --label "batch-failure"
+            --label "batch-failure" \
+            || echo "Failed to create batch-failure issue; continuing without annotation."
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_DATE: ${{ github.event.inputs.date || 'today' }}
