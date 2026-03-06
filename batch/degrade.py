@@ -21,7 +21,7 @@ class DegradeState:
     """Current degradation state for this run."""
     summary_mode: str = "LLM"        # LLM / TEMPLATE / OFF
     x_search_enabled: bool = True
-    x_search_max: int = 20           # Max candidates to search (= top_k)
+    x_search_max: int = 20           # Max candidates to search (bounded by top_k)
     reason: str = ""                  # Why degraded
 
     def to_dict(self) -> dict[str, object]:
@@ -54,6 +54,8 @@ def compute_degrade_state(
     """
     template_at = app_config.template_at_ratio
     x_reduce_at = app_config.x_search_reduce_at_ratio
+    full_x_search_max = app_config.top_k
+    reduced_x_search_max = min(5, app_config.top_k)
 
     if budget_ratio >= 1.0:
         logger.warning("Budget exceeded (%.0f%%), disabling all paid APIs", budget_ratio * 100)
@@ -69,7 +71,7 @@ def compute_degrade_state(
         return DegradeState(
             summary_mode="TEMPLATE",
             x_search_enabled=True,
-            x_search_max=5,
+            x_search_max=reduced_x_search_max,
             reason=f"Budget at {budget_ratio:.0%}, reducing X search",
         )
 
@@ -78,7 +80,7 @@ def compute_degrade_state(
         return DegradeState(
             summary_mode="TEMPLATE",
             x_search_enabled=True,
-            x_search_max=20,
+            x_search_max=full_x_search_max,
             reason=f"Budget at {budget_ratio:.0%}, template summaries",
         )
 
@@ -86,6 +88,6 @@ def compute_degrade_state(
     return DegradeState(
         summary_mode="LLM",
         x_search_enabled=True,
-        x_search_max=20,
+        x_search_max=full_x_search_max,
         reason="",
     )

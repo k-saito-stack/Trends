@@ -153,9 +153,17 @@ class TestAppConfig:
         assert original.top_k == restored.top_k
         assert original.monthly_budget_jpy == restored.monthly_budget_jpy
 
-    def test_top_k_is_clamped_to_20(self) -> None:
+    def test_top_k_accepts_arbitrary_positive_values(self) -> None:
+        config = AppConfig.from_dict({"topK": 50})
+        assert config.top_k == 50
+
+    def test_top_k_preserves_positive_values_below_20(self) -> None:
         config = AppConfig.from_dict({"topK": 15})
-        assert config.top_k == 20
+        assert config.top_k == 15
+
+    def test_top_k_falls_back_to_default_when_invalid(self) -> None:
+        invalid = AppConfig.from_dict({"topK": 0})
+        assert invalid.top_k == 20
 
 
 class TestAlgorithmConfig:

@@ -751,7 +751,7 @@ class AppConfig:
     def from_dict(cls, data: dict[str, Any]) -> AppConfig:
         degrade = data.get("degrade", {})
         thresholds = degrade.get("thresholds", {})
-        top_k = max(int(data.get("topK", 20)), 20)
+        top_k = _coerce_top_k(data.get("topK", cls.top_k))
         return cls(
             top_k=top_k,
             timezone=data.get("timezone", "Asia/Tokyo"),
@@ -780,6 +780,14 @@ class AppConfig:
                 },
             },
         }
+
+
+def _coerce_top_k(value: Any, default: int = 20) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
 
 
 @dataclass

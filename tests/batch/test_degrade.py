@@ -51,3 +51,11 @@ class TestComputeDegradeState:
         d = state.to_dict()
         assert "summaryMode" in d
         assert "xSearchEnabled" in d
+
+    def test_x_search_max_tracks_top_k_in_full_mode(self) -> None:
+        state = compute_degrade_state(0.3, AppConfig(top_k=50))
+        assert state.x_search_max == 50
+
+    def test_x_search_max_is_capped_at_five_in_reduced_mode(self) -> None:
+        state = compute_degrade_state(0.85, AppConfig(top_k=50))
+        assert state.x_search_max == 5

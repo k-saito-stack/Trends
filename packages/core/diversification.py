@@ -66,7 +66,7 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
             candidate_score = float(
                 candidate.get("primary_score", candidate.get("trend_score", 0.0))
             )
-            candidate_score += _lane_boost(lane, counts, config)
+            candidate_score += _lane_boost(lane, counts, config, top_k)
             if best_item is None or candidate_score > float(
                 best_item.get("_selectionScore", float("-inf"))
             ):
@@ -86,14 +86,17 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
 
 
 def _lane_boost(
-    lane: RankingLane, counts: dict[RankingLane, int], config: dict[str, float]
+    lane: RankingLane,
+    counts: dict[RankingLane, int],
+    config: dict[str, float],
+    top_k: int,
 ) -> float:
     if lane == RankingLane.WORDS_BEHAVIORS and counts[lane] == 0:
         return 0.08
     if lane == RankingLane.STYLE_PRODUCTS and counts[lane] == 0:
         return 0.06
     if lane == RankingLane.SHOWS_FORMATS and counts[lane] < max(
-        1, int(20 * config["shows_formats_target_ratio"])
+        1, int(top_k * config["shows_formats_target_ratio"])
     ):
         return 0.03
     return 0.0
