@@ -98,7 +98,7 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
       ref={containerRef}
       className="min-h-screen flex items-center justify-center bg-oci-mercury p-4"
     >
-      <div ref={cardRef} className="oci-card max-w-sm w-full p-10 text-center" style={{ opacity: 0 }}>
+      <div ref={cardRef} className="oci-card max-w-sm w-full px-10 py-8 text-center" style={{ opacity: 0 }}>
         <h1 ref={titleRef} className="oci-heading text-oci-blue text-6xl">
           TRENDS
         </h1>
@@ -107,7 +107,7 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
           onClick={onLogin}
           onMouseEnter={handleBtnEnter}
           onMouseLeave={handleBtnLeave}
-          className="oci-btn w-full py-3 px-4 mt-14"
+          className="oci-btn w-full py-3 px-4 mt-8"
         >
           <div
             ref={btnBgRef}
@@ -128,7 +128,7 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
 
         {error && <p className="mt-4 text-oci-error text-sm">{error}</p>}
 
-        <p className="mt-8 oci-label-sm text-oci-blue/40">
+        <p className="mt-5 oci-label-sm text-oci-blue/40">
           @kodansha.co.jp accounts only
         </p>
       </div>
