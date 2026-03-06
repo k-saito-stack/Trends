@@ -15,8 +15,8 @@ from packages.core.models import (
     SourceDailySnapshot,
     SourceState,
     SourceTopItem,
-    SourceWeightSnapshot,
     SourceWeightingConfig,
+    SourceWeightSnapshot,
 )
 
 

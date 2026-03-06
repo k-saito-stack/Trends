@@ -20,7 +20,7 @@ class FakeCollectionReference:
 
 
 class FakeBatch:
-    def __init__(self, db: "FakeDB") -> None:
+    def __init__(self, db: FakeDB) -> None:
         self._db = db
         self._ops: list[tuple[str, str]] = []
 

@@ -53,8 +53,8 @@ from packages.core.models import (
     DailyRankingItem,
     DailyRankingMeta,
     RawCandidate,
-    SourceWeightSnapshot,
     SourceWeightingConfig,
+    SourceWeightSnapshot,
 )
 from packages.core.normalize import extract_bracket_aliases, normalize_name
 from packages.core.proper_noun import is_proper_noun

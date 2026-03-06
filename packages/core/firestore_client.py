@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, cast
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -67,9 +67,9 @@ def get_document(collection: str, document_id: str) -> dict[str, Any] | None:
     """
     db = get_db()
     doc_ref = db.collection(collection).document(document_id)
-    doc = doc_ref.get()
-    if doc.exists:  # type: ignore[union-attr]
-        return doc.to_dict()  # type: ignore[union-attr]
+    doc: Any = doc_ref.get()
+    if doc.exists:
+        return cast(dict[str, Any], doc.to_dict())
     return None
 
 

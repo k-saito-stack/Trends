@@ -16,8 +16,8 @@ from packages.core.models import (
     AlgorithmConfig,
     SourceDailySnapshot,
     SourceTopItem,
-    SourceWeightSnapshot,
     SourceWeightingConfig,
+    SourceWeightSnapshot,
 )
 
 NEUTRAL_WEIGHT = 1.0
@@ -79,7 +79,7 @@ def load_source_daily(
     return result
 
 
-def compute_C_predictive_f1(
+def compute_c_predictive_f1(
     source_cfgs: dict[str, dict[str, Any]],
     source_ids: list[str],
     algo_cfg: AlgorithmConfig,
@@ -143,7 +143,7 @@ def compute_C_predictive_f1(
     return predictive
 
 
-def compute_I_independence(
+def compute_i_independence(
     source_ids: list[str],
     weighting_cfg: SourceWeightingConfig,
     source_daily_records: list[SourceDailySnapshot],
@@ -198,7 +198,7 @@ def compute_I_independence(
     return independence
 
 
-def compute_S_stability(
+def compute_s_stability(
     source_ids: list[str],
     weighting_cfg: SourceWeightingConfig,
     source_daily_records: list[SourceDailySnapshot],
@@ -317,7 +317,7 @@ def compute_weight_snapshot(
         weighting_cfg=weighting_cfg,
         source_daily_records=source_daily_records,
     )
-    predictive = compute_C_predictive_f1(
+    predictive = compute_c_predictive_f1(
         source_cfgs=source_cfgs,
         source_ids=source_ids,
         algo_cfg=algo_cfg,
@@ -325,7 +325,7 @@ def compute_weight_snapshot(
         source_daily_records=source_daily_records,
         stability_factors=stability,
     )
-    independence = compute_I_independence(
+    independence = compute_i_independence(
         source_ids=source_ids,
         weighting_cfg=weighting_cfg,
         source_daily_records=source_daily_records,
@@ -481,7 +481,7 @@ def _compute_components(
     stability = (
         stability_override
         if stability_override is not None
-        else compute_S_stability(
+        else compute_s_stability(
             source_ids=weighted_source_ids,
             weighting_cfg=weighting_cfg,
             source_daily_records=source_daily_records,

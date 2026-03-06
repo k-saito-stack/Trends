@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+from packages.core import source_weighting
 from packages.core.models import (
     AlgorithmConfig,
     SourceDailySnapshot,
     SourceTopItem,
     SourceWeightingConfig,
 )
-from packages.core import source_weighting
 from packages.core.source_weighting import (
-    compute_C_predictive_f1,
-    compute_I_independence,
-    compute_S_stability,
+    compute_c_predictive_f1,
+    compute_i_independence,
     compute_prior_weights,
+    compute_s_stability,
     load_current_source_weights,
 )
 
@@ -131,7 +131,7 @@ class TestIndependenceAndPredictive:
             ),
         ]
 
-        independence = compute_I_independence(
+        independence = compute_i_independence(
             source_ids=["A", "B", "C"],
             weighting_cfg=weighting_cfg,
             source_daily_records=records,
@@ -193,7 +193,7 @@ class TestIndependenceAndPredictive:
             ),
         ]
 
-        predictive = compute_C_predictive_f1(
+        predictive = compute_c_predictive_f1(
             source_cfgs=source_cfgs,
             source_ids=["A", "B", "C"],
             algo_cfg=AlgorithmConfig(),
@@ -216,7 +216,7 @@ class TestStabilityAndFallback:
             SourceDailySnapshot(date="2026-03-02", source_id="B", ok=True, item_count=1),
         ]
 
-        stability = compute_S_stability(
+        stability = compute_s_stability(
             source_ids=["A", "B"],
             weighting_cfg=weighting_cfg,
             source_daily_records=records,
