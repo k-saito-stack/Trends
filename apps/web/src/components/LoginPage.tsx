@@ -15,6 +15,7 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const btnBgRef = useRef<HTMLDivElement>(null);
   const btnTextRef = useRef<HTMLSpanElement>(null);
   const { scramble, cleanup } = useScrambleText();
@@ -47,30 +48,44 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
     };
   }, [scramble, cleanup]);
 
-  // Button hover handlers
-  const handleBtnEnter = () => {
-    gsap.to(btnBgRef.current, {
-      yPercent: 0,
-      scaleX: 1,
-      duration: 0.5,
-      ease: "power4.out",
-      overwrite: true,
-    });
+  // Direction-aware button hover (same style as TrendCard)
+  const getDirection = (e: React.MouseEvent, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+    const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+    if (Math.abs(nx) > Math.abs(ny)) {
+      return nx > 0
+        ? { from: { scaleX: 0, scaleY: 1 }, origin: "right center" }
+        : { from: { scaleX: 0, scaleY: 1 }, origin: "left center" };
+    }
+    return ny > 0
+      ? { from: { scaleY: 0, scaleX: 1 }, origin: "center bottom" }
+      : { from: { scaleY: 0, scaleX: 1 }, origin: "center top" };
+  };
+
+  const handleBtnEnter = (e: React.MouseEvent) => {
+    if (btnBgRef.current && btnRef.current) {
+      const { from, origin } = getDirection(e, btnRef.current);
+      btnBgRef.current.style.transformOrigin = origin;
+      gsap.fromTo(btnBgRef.current, { ...from }, {
+        scaleX: 1, scaleY: 1, duration: 0.4, ease: "power4.out", overwrite: true,
+      });
+    }
     gsap.to(btnTextRef.current, {
-      color: "#e8e6e0",
+      color: "#ffffff",
       duration: 0.3,
       overwrite: true,
     });
   };
 
-  const handleBtnLeave = () => {
-    gsap.to(btnBgRef.current, {
-      yPercent: 101,
-      scaleX: 0.5,
-      duration: 0.5,
-      ease: "power4.out",
-      overwrite: true,
-    });
+  const handleBtnLeave = (e: React.MouseEvent) => {
+    if (btnBgRef.current && btnRef.current) {
+      const { from, origin } = getDirection(e, btnRef.current);
+      btnBgRef.current.style.transformOrigin = origin;
+      gsap.to(btnBgRef.current, {
+        ...from, duration: 0.4, ease: "power4.out", overwrite: true,
+      });
+    }
     gsap.to(btnTextRef.current, {
       color: "#1925aa",
       duration: 0.3,
@@ -88,12 +103,24 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
           TRENDS
         </h1>
         <button
+          ref={btnRef}
           onClick={onLogin}
           onMouseEnter={handleBtnEnter}
           onMouseLeave={handleBtnLeave}
-          className="oci-btn w-full py-3 px-4"
+          className="oci-btn w-full py-3 px-4 mt-14"
         >
-          <div ref={btnBgRef} className="oci-btn__bg" />
+          <div
+            ref={btnBgRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "#1925aa",
+              transform: "scaleY(0)",
+              transformOrigin: "center bottom",
+              zIndex: 0,
+              pointerEvents: "none",
+            }}
+          />
           <span ref={btnTextRef} className="oci-btn__text oci-label text-xs text-oci-blue">
             Sign in with Google
           </span>
