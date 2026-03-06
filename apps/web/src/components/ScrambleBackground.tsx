@@ -1,26 +1,37 @@
 /**
- * Scramble background canvas — full-screen grid of characters
+ * Scramble background canvas — grid of characters
  * that constantly scramble and react to cursor proximity.
+ *
+ * mode="page"   → fixed full-screen (default, for main bg)
+ * mode="inline"  → absolute, fills parent container (for header etc.)
  */
 import { useRef, useEffect } from "react";
 
 const CHARS = "01234567890!@#$%^&*()+-=[]{}|;:,.<>?/~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const CHAR_SIZE = 14;
-const COLOR = [255, 255, 255]; // white
 const CURSOR_RADIUS = 120;
-const SCRAMBLE_SPEED = 0.08; // lower = slower character change rate
+const SCRAMBLE_SPEED = 0.08;
 
-export default function ScrambleBackground() {
+interface Props {
+  color?: [number, number, number];
+  mode?: "page" | "inline";
+}
+
+export default function ScrambleBackground({
+  color = [255, 255, 255],
+  mode = "page",
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouseRef = useRef({ x: -9999, y: -9999 });
   const gridRef = useRef<{ char: string; nextSwap: number }[]>([]);
+  const colorRef = useRef(color);
+  colorRef.current = color;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Local aliases so TS knows they are non-null inside nested fns
     const cvs = canvas;
     const context = ctx;
     let animId: number;
@@ -34,17 +45,26 @@ export default function ScrambleBackground() {
     function initGrid() {
       const total = cols * rows;
       const grid = gridRef.current;
-      // Reuse existing entries, extend or shrink
       while (grid.length < total) {
         grid.push({ char: randomChar(), nextSwap: Math.random() * 60 });
       }
       grid.length = total;
     }
 
+    function getSize() {
+      if (mode === "inline") {
+        const parent = cvs.parentElement;
+        return {
+          w: parent ? parent.clientWidth : cvs.clientWidth,
+          h: parent ? parent.clientHeight : cvs.clientHeight,
+        };
+      }
+      return { w: window.innerWidth, h: window.innerHeight };
+    }
+
     function resize() {
       const dpr = window.devicePixelRatio || 1;
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      const { w, h } = getSize();
       cvs.width = w * dpr;
       cvs.height = h * dpr;
       cvs.style.width = w + "px";
@@ -56,8 +76,14 @@ export default function ScrambleBackground() {
     }
 
     function handleMouseMove(e: MouseEvent) {
-      mouseRef.current.x = e.clientX;
-      mouseRef.current.y = e.clientY;
+      if (mode === "inline") {
+        const rect = cvs.getBoundingClientRect();
+        mouseRef.current.x = e.clientX - rect.left;
+        mouseRef.current.y = e.clientY - rect.top;
+      } else {
+        mouseRef.current.x = e.clientX;
+        mouseRef.current.y = e.clientY;
+      }
     }
 
     function handleMouseLeave() {
@@ -70,12 +96,16 @@ export default function ScrambleBackground() {
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseleave", handleMouseLeave);
 
-    let frameCount = 0;
-
     function render() {
-      frameCount++;
-      const w = cvs.width / (window.devicePixelRatio || 1);
-      const h = cvs.height / (window.devicePixelRatio || 1);
+      const { w, h } = getSize();
+      // Re-check size for inline mode (parent may resize without window resize)
+      if (mode === "inline") {
+        const dpr = window.devicePixelRatio || 1;
+        if (Math.abs(cvs.width / dpr - w) > 1 || Math.abs(cvs.height / dpr - h) > 1) {
+          resize();
+        }
+      }
+
       context.clearRect(0, 0, w, h);
       context.font = `${CHAR_SIZE}px "JetBrains Mono", ui-monospace, monospace`;
       context.textAlign = "center";
@@ -84,6 +114,7 @@ export default function ScrambleBackground() {
       const mx = mouseRef.current.x;
       const my = mouseRef.current.y;
       const grid = gridRef.current;
+      const c = colorRef.current;
 
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -94,23 +125,18 @@ export default function ScrambleBackground() {
           const cx = col * CHAR_SIZE + CHAR_SIZE / 2;
           const cy = row * CHAR_SIZE + CHAR_SIZE / 2;
 
-          // Distance to cursor
           const dx = cx - mx;
           const dy = cy - my;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const inRange = dist < CURSOR_RADIUS;
 
-          // Base scramble: each cell has its own timer
           cell.nextSwap -= SCRAMBLE_SPEED;
-          if (inRange) {
-            // Near cursor: scramble much faster
-            cell.nextSwap -= 0.3;
-          }
+          if (inRange) cell.nextSwap -= 0.3;
           if (cell.nextSwap <= 0) {
             cell.char = randomChar();
             cell.nextSwap = inRange
-              ? 2 + Math.random() * 4     // fast swap near cursor
-              : 20 + Math.random() * 80;  // slow ambient swap
+              ? 2 + Math.random() * 4
+              : 20 + Math.random() * 80;
           }
 
           // Invisible at rest, fully visible near cursor
@@ -118,16 +144,15 @@ export default function ScrambleBackground() {
           const proximity = 1 - dist / CURSOR_RADIUS;
           const alpha = proximity * 0.9;
 
-          // Draw position: slight displacement near cursor
           let drawX = cx;
           let drawY = cy;
-          if (inRange && dist > 0) {
-            const pushStrength = (1 - dist / CURSOR_RADIUS) * 6;
+          if (dist > 0) {
+            const pushStrength = proximity * 6;
             drawX += (dx / dist) * pushStrength;
             drawY += (dy / dist) * pushStrength;
           }
 
-          context.fillStyle = `rgba(${COLOR[0]}, ${COLOR[1]}, ${COLOR[2]}, ${alpha})`;
+          context.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
           context.fillText(cell.char, drawX, drawY);
         }
       }
@@ -143,13 +168,12 @@ export default function ScrambleBackground() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, []);
+  }, [mode]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="pointer-events-none fixed inset-0 z-0"
-      style={{ display: "block" }}
-    />
-  );
+  const className =
+    mode === "inline"
+      ? "pointer-events-none absolute inset-0 z-0"
+      : "pointer-events-none fixed inset-0 z-0";
+
+  return <canvas ref={canvasRef} className={className} style={{ display: "block" }} />;
 }

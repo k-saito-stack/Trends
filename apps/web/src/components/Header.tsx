@@ -10,6 +10,7 @@ import { useMagnetic } from "../hooks/useMagnetic";
 import { useScrambleText } from "../hooks/useScrambleText";
 import { addDaysToIsoDate, getTodayJstIsoDate } from "../utils/date";
 import DatePicker from "./DatePicker";
+import ScrambleBackground from "./ScrambleBackground";
 
 /** Secondary fonts for TRENDS title alternation */
 const SECONDARY_FONTS = [
@@ -218,8 +219,9 @@ export default function Header({
   };
 
   return (
-    <header className="oci-section-blue sticky top-0 z-30">
-      <div className="max-w-5xl mx-auto px-6 lg:px-10">
+    <header className="oci-section-blue sticky top-0 z-30 relative overflow-hidden">
+      <ScrambleBackground color={[232, 230, 224]} mode="inline" />
+      <div className="max-w-5xl mx-auto px-6 lg:px-10 relative z-10">
         {/* Row 1: TRENDS + SETTINGS / LOGOUT */}
         <div className="flex items-center justify-between py-5 border-b border-white/10">
           <h1
