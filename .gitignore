@@ -42,6 +42,10 @@ Thumbs.db
 # Claude Code (local session data)
 .claude/
 
+# Project docs (local only — contains strategic information)
+CLAUDE.md
+Trends_IMPLEMENTATION_GUIDE*
+
 # Test / Coverage
 htmlcov/
 .coverage
