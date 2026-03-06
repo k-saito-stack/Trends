@@ -48,16 +48,30 @@ jobs:
       - name: Run daily batch
         env:
           PYTHONPATH: .
+          PYTHONUNBUFFERED: "1"
           FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          TIKTOK_PLAYWRIGHT_HEADLESS: "1"
           TARGET_DATE: ${{ github.event.inputs.date || 'today' }}
           BATCH_ALLOW_RERUN_COMPLETED: ${{ github.event_name == 'workflow_dispatch' }}
           BATCH_RESULT_PATH: /tmp/batch_result.json
         run: |
-          xvfb-run -a python -m batch.run --date "${TARGET_DATE}"
+          for attempt in 1 2; do
+            if xvfb-run -a python -m batch.run --date "${TARGET_DATE}"; then
+              exit 0
+            fi
+
+            status=$?
+            if [ "${attempt}" -ge 2 ]; then
+              exit "${status}"
+            fi
+
+            echo "Daily batch failed on attempt ${attempt}; retrying in 20 seconds..."
+            sleep 20
+          done
 
       - name: Notify connector failures
         if: always()
