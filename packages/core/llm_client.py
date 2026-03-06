@@ -19,6 +19,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 XAI_API_URL = "https://api.x.ai/v1/chat/completions"
+XAI_RESPONSES_URL = "https://api.x.ai/v1/responses"
 
 
 class LLMClient:
@@ -123,4 +124,55 @@ class LLMClient:
                 pass
 
         logger.warning("Failed to parse JSON from LLM response")
+        return None
+
+    def responses_text(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0,
+        tools: list[dict[str, Any]] | None = None,
+        max_output_tokens: int = 500,
+    ) -> str | None:
+        """Send a Responses API request and return the first output_text block."""
+        if not self.api_key:
+            logger.warning("XAI_API_KEY not set")
+            return None
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "input": messages,
+            "temperature": temperature,
+            "max_output_tokens": max_output_tokens,
+        }
+        if tools:
+            payload["tools"] = tools
+
+        try:
+            resp = requests.post(
+                XAI_RESPONSES_URL, json=payload, headers=headers, timeout=self.timeout
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as e:
+            body = ""
+            response = getattr(e, "response", None)
+            if response is not None:
+                body = response.text[:500]
+            logger.warning("xAI Responses API call failed: %s %s", e, body)
+            return None
+
+        for output in data.get("output", []):
+            if output.get("type") != "message":
+                continue
+            for content in output.get("content", []):
+                if content.get("type") == "output_text":
+                    text = content.get("text")
+                    if isinstance(text, str):
+                        return text
+
         return None

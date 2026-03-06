@@ -35,8 +35,10 @@ from batch.degrade import DegradeState, compute_degrade_state
 from packages.connectors.apple_music import AppleMusicConnector
 from packages.connectors.base import BaseConnector, ConnectorRunResult, SignalResult
 from packages.connectors.google_trends import GoogleTrendsConnector
+from packages.connectors.netflix import NetflixTop10Connector
 from packages.connectors.rakuten_magazine import RakutenMagazineConnector
 from packages.connectors.rss_feeds import RSSFeedConnector
+from packages.connectors.tver import TVerRankingConnector
 from packages.connectors.x_search import XTrendingConnector
 from packages.connectors.youtube import YouTubeConnector
 from packages.core import candidate_store
@@ -214,7 +216,28 @@ def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[
         RSSFeedConnector(),
         RakutenMagazineConnector(),
         XTrendingConnector(),
+        NetflixTop10Connector(category="tv"),
+        NetflixTop10Connector(category="films"),
+        TVerRankingConnector(),
     ]
+
+
+def _apply_runtime_feature_flags(
+    degrade: DegradeState,
+    source_cfgs: list[dict[str, Any]],
+) -> DegradeState:
+    """Disable optional paid features unless explicitly enabled in config."""
+    cfg_by_id = {
+        str(cfg["sourceId"]): cfg
+        for cfg in source_cfgs
+        if cfg.get("sourceId")
+    }
+    x_search_cfg = cfg_by_id.get("X_SEARCH")
+    degrade.x_search_enabled = (
+        bool(x_search_cfg and x_search_cfg.get("enabled", False))
+        and degrade.x_search_enabled
+    )
+    return degrade
 
 
 def _build_runtime_source_cfg_map(
@@ -332,6 +355,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         from batch.cost_tracker import get_budget_ratio
         budget_ratio = get_budget_ratio(app_config.monthly_budget_jpy)
         degrade = compute_degrade_state(budget_ratio, app_config)
+        degrade = _apply_runtime_feature_flags(degrade, source_cfg_list)
         if degrade.reason:
             logger.info("Degrade: %s", degrade.reason)
     except Exception as e:

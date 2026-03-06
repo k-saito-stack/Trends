@@ -139,7 +139,7 @@ SOURCE_CONFIGS = [
      "granularityN": 0, "topMForStats": 0,
      "killSwitch": {"maxConsecutiveFailures": 3},
      "description": "Wikipedia Pageviews (power score, display only)"},
-    {"sourceId": "X_SEARCH", "enabled": True, "stability": "B",
+    {"sourceId": "X_SEARCH", "enabled": False, "stability": "B",
      "fetchLimit": 30, "regionWeightR": 1.0, "avgLagDaysDelta": 0.5,
      "granularityN": 30, "topMForStats": 20,
      "killSwitch": {"budgetDegradeTarget": True},

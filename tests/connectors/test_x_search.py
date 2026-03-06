@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from packages.connectors.x_search import (
     XSearchConnector,
     XTrendingConnector,
     _extract_json_array,
+    _x_search_tool,
 )
 
 
@@ -42,12 +44,14 @@ class TestXSearchConnector:
     def test_search_candidate_success(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
-            "choices": [{
-                "message": {
-                    "content": '[{"url": "https://x.com/post1", '
-                               '"summary": "YOASOBI new song", '
-                               '"likes": 5000, "retweets": 1200}]'
-                }
+            "output": [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": '[{"url": "https://x.com/post1", '
+                            '"summary": "YOASOBI new song", '
+                            '"likes": 5000, "retweets": 1200}]',
+                }],
             }]
         }
         mock_resp.raise_for_status.return_value = None
@@ -59,14 +63,21 @@ class TestXSearchConnector:
         assert len(results) == 1
         assert results[0].source_id == "X_SEARCH"
         assert "YOASOBI" in results[0].title or "x.com" in results[0].url
-        assert mock_post.call_args.kwargs["json"]["tools"] == [{"type": "live_search"}]
+        tool = mock_post.call_args.kwargs["json"]["tools"][0]
+        assert tool["type"] == "x_search"
+        assert "from_date" in tool
+        assert "to_date" in tool
 
     @patch("packages.core.llm_client.requests.post")
     def test_search_candidate_fallback_on_bad_json(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
-            "choices": [{
-                "message": {"content": "No structured data, just text about the topic."}
+            "output": [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": "No structured data, just text about the topic.",
+                }],
             }]
         }
         mock_resp.raise_for_status.return_value = None
@@ -95,14 +106,16 @@ class TestXSearchConnector:
 
 class TestXTrendingConnector:
     @patch("packages.core.llm_client.requests.post")
-    def test_fetch_success_uses_live_search(self, mock_post: MagicMock) -> None:
+    def test_fetch_success_uses_x_search(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
-            "choices": [{
-                "message": {
-                    "content": '[{"name": "YOASOBI", "type": "MUSIC_ARTIST", '
-                               '"engagement": 5000, "summary": "new release"}]'
-                }
+            "output": [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": '[{"name": "YOASOBI", "type": "MUSIC_ARTIST", '
+                            '"engagement": 5000, "summary": "new release"}]',
+                }],
             }]
         }
         mock_resp.raise_for_status.return_value = None
@@ -114,4 +127,16 @@ class TestXTrendingConnector:
         assert result.error is None
         assert result.item_count == 1
         assert result.items[0]["name"] == "YOASOBI"
-        assert mock_post.call_args.kwargs["json"]["tools"] == [{"type": "live_search"}]
+        tool = mock_post.call_args.kwargs["json"]["tools"][0]
+        assert tool["type"] == "x_search"
+        assert "from_date" in tool
+        assert "to_date" in tool
+
+
+class TestXSearchTool:
+    def test_tool_contains_date_window(self) -> None:
+        tool = _x_search_tool(days_back=3)
+        today = datetime.now(timezone(timedelta(hours=9))).date()
+        assert tool["type"] == "x_search"
+        assert tool["to_date"] == today.isoformat()
+        assert tool["from_date"] == (today - timedelta(days=3)).isoformat()

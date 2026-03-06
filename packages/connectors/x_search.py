@@ -14,6 +14,7 @@ import json
 import logging
 import math
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
@@ -21,14 +22,14 @@ from packages.core.llm_client import LLMClient
 from packages.core.models import CandidateType, Evidence, RawCandidate
 
 logger = logging.getLogger(__name__)
+JST = timezone(timedelta(hours=9))
 
 # Valid CandidateType values for parsing LLM output
 _VALID_TYPES = {t.value for t in CandidateType}
-_LIVE_SEARCH_TOOL = [{"type": "live_search"}]
 
 
 class XTrendingConnector(BaseConnector):
-    """Discover trending topics on X via xAI live_search (regular source)."""
+    """Discover trending topics on X via xAI Responses API x_search."""
 
     def __init__(
         self,
@@ -37,11 +38,14 @@ class XTrendingConnector(BaseConnector):
         **kwargs: Any,
     ) -> None:
         super().__init__(source_id="X_TRENDING", stability="C", **kwargs)
-        self.llm = LLMClient(api_key=api_key)
+        self.llm = LLMClient(
+            api_key=api_key,
+            model="grok-4-1-fast-reasoning",
+        )
         self.max_results = max_results
 
     def fetch(self) -> FetchResult:
-        """Fetch trending topics from X via xAI live_search tool."""
+        """Fetch trending topics from X via xAI Responses API x_search tool."""
         if not self.llm.available:
             return FetchResult(error="XAI_API_KEY not set")
 
@@ -61,11 +65,11 @@ class XTrendingConnector(BaseConnector):
             }
         ]
 
-        result = self.llm.chat(
+        result = self.llm.responses_text(
             messages,
             temperature=0,
-            tools=_LIVE_SEARCH_TOOL,
-            max_tokens=1500,
+            tools=[_x_search_tool(days_back=1)],
+            max_output_tokens=1500,
         )
 
         if result is None:
@@ -142,7 +146,10 @@ class XSearchConnector(BaseConnector):
         **kwargs: Any,
     ) -> None:
         super().__init__(source_id="X_SEARCH", stability="B", **kwargs)
-        self.llm = LLMClient(api_key=api_key)
+        self.llm = LLMClient(
+            api_key=api_key,
+            model="grok-4-1-fast-reasoning",
+        )
         self.max_candidates = max_candidates
 
     def fetch(self) -> FetchResult:
@@ -155,7 +162,7 @@ class XSearchConnector(BaseConnector):
     def search_candidate(self, candidate_name: str) -> list[Evidence]:
         """Search X posts related to a candidate name.
 
-        Uses xAI's chat completions with live_search tool to find
+        Uses xAI's Responses API x_search tool to find
         related posts. Returns a list of Evidence items.
         """
         if not self.llm.available:
@@ -175,11 +182,11 @@ class XSearchConnector(BaseConnector):
             }
         ]
 
-        result = self.llm.chat(
+        result = self.llm.responses_text(
             messages,
             temperature=0,
-            tools=_LIVE_SEARCH_TOOL,
-            max_tokens=800,
+            tools=[_x_search_tool(days_back=7)],
+            max_output_tokens=800,
         )
 
         if result is None:
@@ -260,3 +267,13 @@ def _extract_json_array(text: str) -> list[dict[str, Any]]:
             pass
 
     return []
+
+
+def _x_search_tool(days_back: int) -> dict[str, str]:
+    """Build the current xAI Responses API x_search tool payload."""
+    today = datetime.now(JST).date()
+    return {
+        "type": "x_search",
+        "from_date": (today - timedelta(days=max(days_back, 1))).isoformat(),
+        "to_date": today.isoformat(),
+    }

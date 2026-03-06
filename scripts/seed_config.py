@@ -119,7 +119,7 @@ SOURCE_CONFIGS = [
     },
     {
         "sourceId": "X_SEARCH",
-        "enabled": True,
+        "enabled": False,
         "stability": "B",
         "fetchLimit": 30,
         "regionWeightR": 1.0,
