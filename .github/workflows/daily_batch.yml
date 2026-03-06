@@ -31,10 +31,19 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
       - name: Install dependencies
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
+
+      - name: Install Chromium for TikTok regional fetch
+        run: |
+          python -m playwright install --with-deps chromium
 
       - name: Run daily batch
         env:
@@ -48,7 +57,7 @@ jobs:
           BATCH_ALLOW_RERUN_COMPLETED: ${{ github.event_name == 'workflow_dispatch' }}
           BATCH_RESULT_PATH: /tmp/batch_result.json
         run: |
-          python -m batch.run --date "${TARGET_DATE}"
+          xvfb-run -a python -m batch.run --date "${TARGET_DATE}"
 
       - name: Notify connector failures
         if: always()

@@ -4,6 +4,7 @@ firebase-admin>=6.4.0
 # HTTP / Data fetching
 requests>=2.31.0
 feedparser>=6.0.0
+playwright>=1.52.0
 
 # NLP / NER
 spacy>=3.7.0

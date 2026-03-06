@@ -171,7 +171,7 @@ def compute_candidate_feature(
 
     primary_score = coming_score + algo_config.mass_heat_weight * mass_heat
     if not ranking_gate_passed:
-        primary_score *= 0.35
+        primary_score *= _ungated_primary_multiplier(candidate, aggregate)
 
     evidence = []
     seen_titles: set[tuple[str, str]] = set()
@@ -229,15 +229,19 @@ def passes_ranking_gate(
     has_discovery = bool(aggregate["has_discovery"])
     support_families = len(aggregate["source_families"])
 
-    if has_discovery and coming_score >= algo_config.ranking_gate_discovery_threshold:
+    candidate_kind = candidate.kind or candidate.type.default_kind
+
+    if candidate_kind == CandidateKind.TOPIC and has_discovery and support_families >= 2:
         return True
 
-    if (
-        (candidate.kind or candidate.type.default_kind) == CandidateKind.TOPIC
-        and has_discovery
-        and support_families >= 2
-    ):
-        return True
+    if has_discovery:
+        if candidate_kind == CandidateKind.TOPIC and support_families == 1:
+            return float(aggregate["discovery_rise"]) >= max(
+                algo_config.ranking_gate_discovery_threshold,
+                0.9,
+            )
+        if coming_score >= algo_config.ranking_gate_discovery_threshold:
+            return True
 
     return candidate.type in {
         CandidateType.MUSIC_ARTIST,
@@ -252,6 +256,24 @@ def passes_ranking_gate(
             or aggregate["show_confirmation"] > 0.35
         )
     )
+
+
+def _ungated_primary_multiplier(
+    candidate: Candidate,
+    aggregate: FamilyAggregateMetrics,
+) -> float:
+    support_families = len(aggregate["source_families"])
+    candidate_kind = candidate.kind or candidate.type.default_kind
+
+    if (
+        candidate_kind == CandidateKind.TOPIC
+        and bool(aggregate["has_discovery"])
+        and support_families == 1
+    ):
+        return 0.25
+    if support_families >= 2:
+        return 0.45
+    return 0.35
 
 
 def _compute_novelty(candidate: Candidate) -> float:

@@ -55,7 +55,9 @@ FACTORIES: dict[str, Callable[[dict[str, Any]], BaseConnector]] = {
         max_results=cfg.get("fetchLimit", 20), enabled=cfg.get("enabled", True)
     ),
     "TIKTOK_CREATIVE_CENTER": lambda cfg: TikTokCreativeCenterConnector(
-        enabled=cfg.get("enabled", True)
+        max_results=cfg.get("fetchLimit", 20),
+        country_codes=cfg.get("countryCodes"),
+        enabled=cfg.get("enabled", True),
     ),
     "EDITORIAL_MODELPRESS": lambda cfg: EditorialModelpressConnector(
         enabled=cfg.get("enabled", True)

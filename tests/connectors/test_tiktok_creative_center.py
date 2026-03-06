@@ -63,3 +63,62 @@ def test_parse_tiktok_creative_center_ignores_table_headers() -> None:
     items = connector.parse_items(html)
 
     assert [item["keyword"] for item in items] == ["#livestory", "#championsleague"]
+
+
+def test_parse_tiktok_creative_center_api_payload() -> None:
+    connector = TikTokCreativeCenterConnector(country_codes=["JP"])
+
+    items = connector.parse_api_items(
+        {
+            "data": {
+                "list": [
+                    {"hashtag_name": "にほん", "rank": 1, "publish_cnt": 23420},
+                    {"hashtag_name": "メガ割", "rank": 2, "publish_cnt": 19800},
+                ]
+            }
+        },
+        "JP",
+    )
+
+    assert items == [
+        {
+            "keyword": "#にほん",
+            "rank": 1,
+            "countryCode": "JP",
+            "publishCount": 23420,
+            "videoViews": 0,
+        },
+        {
+            "keyword": "#メガ割",
+            "rank": 2,
+            "countryCode": "JP",
+            "publishCount": 19800,
+            "videoViews": 0,
+        },
+    ]
+
+
+def test_merge_tiktok_regional_items_prefers_japan_and_multi_market_overlap() -> None:
+    connector = TikTokCreativeCenterConnector(country_codes=["JP", "KR", "TH"], max_results=10)
+
+    items = connector.merge_regional_items(
+        {
+            "JP": [
+                {"keyword": "#にほん", "rank": 1, "countryCode": "JP"},
+                {"keyword": "#メガ割", "rank": 2, "countryCode": "JP"},
+            ],
+            "KR": [
+                {"keyword": "#にほん", "rank": 3, "countryCode": "KR"},
+                {"keyword": "#새학기", "rank": 1, "countryCode": "KR"},
+            ],
+            "TH": [
+                {"keyword": "#にほん", "rank": 4, "countryCode": "TH"},
+                {"keyword": "#ยังเจ", "rank": 1, "countryCode": "TH"},
+            ],
+        }
+    )
+
+    assert [item["keyword"] for item in items] == ["#にほん", "#メガ割"]
+    assert items[0]["countries"] == ["JP", "KR", "TH"]
+    assert items[0]["countryRanks"] == {"JP": 1, "KR": 3, "TH": 4}
+    assert items[1]["countries"] == ["JP"]
