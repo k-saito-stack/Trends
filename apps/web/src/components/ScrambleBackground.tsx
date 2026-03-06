@@ -18,7 +18,11 @@ export default function ScrambleBackground() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    // Local aliases so TS knows they are non-null inside nested fns
+    const cvs = canvas;
+    const context = ctx;
     let animId: number;
     let cols = 0;
     let rows = 0;
@@ -41,11 +45,11 @@ export default function ScrambleBackground() {
       const dpr = window.devicePixelRatio || 1;
       const w = window.innerWidth;
       const h = window.innerHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      canvas.style.width = w + "px";
-      canvas.style.height = h + "px";
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cvs.width = w * dpr;
+      cvs.height = h * dpr;
+      cvs.style.width = w + "px";
+      cvs.style.height = h + "px";
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
       cols = Math.ceil(w / CHAR_SIZE);
       rows = Math.ceil(h / CHAR_SIZE);
       initGrid();
@@ -70,12 +74,12 @@ export default function ScrambleBackground() {
 
     function render() {
       frameCount++;
-      const w = canvas.width / (window.devicePixelRatio || 1);
-      const h = canvas.height / (window.devicePixelRatio || 1);
-      ctx.clearRect(0, 0, w, h);
-      ctx.font = `${CHAR_SIZE}px "JetBrains Mono", ui-monospace, monospace`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      const w = cvs.width / (window.devicePixelRatio || 1);
+      const h = cvs.height / (window.devicePixelRatio || 1);
+      context.clearRect(0, 0, w, h);
+      context.font = `${CHAR_SIZE}px "JetBrains Mono", ui-monospace, monospace`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
 
       const mx = mouseRef.current.x;
       const my = mouseRef.current.y;
@@ -125,8 +129,8 @@ export default function ScrambleBackground() {
             drawY += (dy / dist) * pushStrength;
           }
 
-          ctx.fillStyle = `rgba(${COLOR[0]}, ${COLOR[1]}, ${COLOR[2]}, ${alpha})`;
-          ctx.fillText(cell.char, drawX, drawY);
+          context.fillStyle = `rgba(${COLOR[0]}, ${COLOR[1]}, ${COLOR[2]}, ${alpha})`;
+          context.fillText(cell.char, drawX, drawY);
         }
       }
 
