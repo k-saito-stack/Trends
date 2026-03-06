@@ -28,6 +28,14 @@ service cloud.firestore {
         allow read: if isAllowedDomain();
         allow write: if false;
       }
+      match /runs/{runId} {
+        allow read: if isAllowedDomain();
+        allow write: if false;
+        match /items/{candidateId} {
+          allow read: if isAllowedDomain();
+          allow write: if false;
+        }
+      }
     }
 
     // Config (read for authorized users, write for admin only)

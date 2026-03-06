@@ -694,6 +694,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
     # ── Step 11: Write to Firestore (status flag pattern) ──
     logger.info("Step 11: Writing results to Firestore...")
+    run_meta_collection = f"daily_rankings/{target_date}/runs"
 
     try:
         # Build DailyRankingItems
@@ -738,6 +739,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
                 next_source_weight_snapshot.to_dict(),
             )
 
+        root_items_collection = f"daily_rankings/{target_date}/items"
+        run_items_collection = f"daily_rankings/{target_date}/runs/{run_id}/items"
+
         # Phase 1: Write metadata with status=BUILDING
         meta = DailyRankingMeta(
             date=target_date,
@@ -751,10 +755,13 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         firestore_client.set_document(
             "daily_rankings", target_date, meta.to_dict()
         )
+        firestore_client.set_document(
+            run_meta_collection, run_id, meta.to_dict()
+        )
 
         # Clear stale items from a previous rerun before writing the new set.
         deleted_items = firestore_client.delete_collection_documents(
-            f"daily_rankings/{target_date}/items"
+            root_items_collection
         )
         if deleted_items:
             logger.info("Deleted %d stale ranking items for %s", deleted_items, target_date)
@@ -762,10 +769,16 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         # Phase 2: Write items as subcollection (batch write)
         item_ops: list[tuple[str, str, dict[str, Any]]] = []
         for item in ranking_items:
+            item_dict = item.to_dict()
             item_ops.append((
-                f"daily_rankings/{target_date}/items",
+                root_items_collection,
                 item.candidate_id,
-                item.to_dict(),
+                item_dict,
+            ))
+            item_ops.append((
+                run_items_collection,
+                item.candidate_id,
+                item_dict,
             ))
         if item_ops:
             firestore_client.batch_write(item_ops)
@@ -774,8 +787,23 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         candidate_store.save_candidates_batch(existing_candidates)
 
         # Phase 4: Mark as PUBLISHED (atomic switch)
+        published_at = datetime.now(JST).isoformat()
+        publish_fields = {
+            "status": "PUBLISHED",
+            "publishedAt": published_at,
+            "latestPublishedRunId": run_id,
+        }
         firestore_client.update_document(
-            "daily_rankings", target_date, {"status": "PUBLISHED"}
+            "daily_rankings", target_date, publish_fields
+        )
+        firestore_client.update_document(
+            run_meta_collection,
+            run_id,
+            {
+                "status": "PUBLISHED",
+                "publishedAt": published_at,
+                "latestPublishedRunId": run_id,
+            },
         )
         published_successfully = True
 
@@ -789,6 +817,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         try:
             from packages.core import firestore_client as fc
             fc.update_document("daily_rankings", target_date, {"status": "FAILED"})
+            fc.update_document(run_meta_collection, run_id, {"status": "FAILED"})
         except Exception:
             pass
 

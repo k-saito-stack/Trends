@@ -203,6 +203,8 @@ class DailyRankingMeta:
     algorithm_version: str = "v1"
     music_weights: dict[str, float] = field(default_factory=lambda: {"JP": 1.0, "GLOBAL": 0.25})
     status: str = "PUBLISHED"
+    published_at: str = ""
+    latest_published_run_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -214,7 +216,24 @@ class DailyRankingMeta:
             "algorithmVersion": self.algorithm_version,
             "musicWeights": self.music_weights,
             "status": self.status,
+            "publishedAt": self.published_at,
+            "latestPublishedRunId": self.latest_published_run_id,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DailyRankingMeta:
+        return cls(
+            date=data.get("date", ""),
+            generated_at=data.get("generatedAt", ""),
+            run_id=data.get("runId", ""),
+            top_k=int(data.get("topK", 20)),
+            degrade_state=dict(data.get("degradeState", {})),
+            algorithm_version=data.get("algorithmVersion", "v1"),
+            music_weights=dict(data.get("musicWeights", {"JP": 1.0, "GLOBAL": 0.25})),
+            status=data.get("status", "PUBLISHED"),
+            published_at=data.get("publishedAt", ""),
+            latest_published_run_id=data.get("latestPublishedRunId", ""),
+        )
 
 
 # --- Source weighting snapshots ---

@@ -1,7 +1,7 @@
 /**
  * Hook to fetch daily ranking data from Firestore.
  */
-import { collection, doc, getDoc, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { useCallback, useEffect, useState } from "react";
 import { db } from "../firebase";
 
@@ -39,6 +39,8 @@ export interface RankingMeta {
   topK: number;
   degradeState: Record<string, unknown>;
   status?: string;
+  publishedAt?: string;
+  latestPublishedRunId?: string;
 }
 
 export function useDailyRanking(date: string) {
@@ -51,27 +53,53 @@ export function useDailyRanking(date: string) {
     setLoading(true);
     setError(null);
     try {
-      // Fetch metadata
+      let activeMeta: RankingMeta | null = null;
+      let itemsRef = collection(db, "daily_rankings", date, "items");
+      let hasPublishedRun = false;
+
+      // Read the day document first for legacy fallback and status messaging.
       const metaSnap = await getDoc(doc(db, "daily_rankings", date));
       if (metaSnap.exists()) {
-        const metaData = metaSnap.data() as RankingMeta;
-        setMeta(metaData);
-
-        // If ranking is still being built, show "updating" state
-        if (metaData.status === "BUILDING") {
-          setError("ランキングを更新中です。しばらくお待ちください。");
-          setItems([]);
-          return;
-        }
-        if (metaData.status === "FAILED") {
-          setError("ランキングの生成に失敗しました。");
-          setItems([]);
-          return;
-        }
+        activeMeta = metaSnap.data() as RankingMeta;
       }
 
-      // Fetch items subcollection (only when PUBLISHED or no status field)
-      const itemsRef = collection(db, "daily_rankings", date, "items");
+      // Prefer the latest published run snapshot for the selected day.
+      try {
+        const runsRef = collection(db, "daily_rankings", date, "runs");
+        const latestPublishedRunQuery = query(runsRef, orderBy("publishedAt", "desc"), limit(1));
+        const latestPublishedRunSnap = await getDocs(latestPublishedRunQuery);
+        if (!latestPublishedRunSnap.empty) {
+          const latestRunDoc = latestPublishedRunSnap.docs[0];
+          activeMeta = {
+            ...(latestRunDoc.data() as RankingMeta),
+            runId: latestRunDoc.data().runId || latestRunDoc.id,
+          };
+          itemsRef = collection(db, "daily_rankings", date, "runs", latestRunDoc.id, "items");
+          hasPublishedRun = true;
+        }
+      } catch (runQueryError) {
+        console.warn("Failed to query versioned daily ranking runs, falling back to legacy path.", runQueryError);
+      }
+
+      if (activeMeta) {
+        setMeta(activeMeta);
+      } else {
+        setMeta(null);
+      }
+
+      // If no published snapshot exists yet, surface the current batch state.
+      if (!hasPublishedRun && activeMeta?.status === "BUILDING") {
+        setError("ランキングを更新中です。しばらくお待ちください。");
+        setItems([]);
+        return;
+      }
+      if (!hasPublishedRun && activeMeta?.status === "FAILED") {
+        setError("ランキングの生成に失敗しました。");
+        setItems([]);
+        return;
+      }
+
+      // Fetch items for the latest published run, or fall back to the legacy path.
       const q = query(itemsRef, orderBy("rank"));
       const snapshot = await getDocs(q);
       const rankingItems: RankingItem[] = snapshot.docs.map((d) => {

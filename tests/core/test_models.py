@@ -9,6 +9,7 @@ from packages.core.models import (
     CandidateType,
     ChangeLog,
     DailyRankingItem,
+    DailyRankingMeta,
     Evidence,
     MusicConfig,
     RawCandidate,
@@ -94,6 +95,26 @@ class TestDailyRankingItem:
         assert len(d["breakdownBuckets"]) == 2
         assert len(d["evidenceTop3"]) == 1
         assert d["evidenceTop3"][0]["sourceId"] == "YOUTUBE_TREND_JP"
+
+
+class TestDailyRankingMeta:
+    def test_roundtrip_with_publish_fields(self) -> None:
+        meta = DailyRankingMeta(
+            date="2026-03-06",
+            generated_at="2026-03-06T11:15:00+09:00",
+            run_id="01KK1234567890",
+            top_k=20,
+            degrade_state={"xSearchEnabled": True},
+            status="PUBLISHED",
+            published_at="2026-03-06T11:16:00+09:00",
+            latest_published_run_id="01KK1234567890",
+        )
+
+        restored = DailyRankingMeta.from_dict(meta.to_dict())
+        assert restored.date == "2026-03-06"
+        assert restored.run_id == "01KK1234567890"
+        assert restored.published_at == "2026-03-06T11:16:00+09:00"
+        assert restored.latest_published_run_id == "01KK1234567890"
 
 
 class TestAppConfig:
