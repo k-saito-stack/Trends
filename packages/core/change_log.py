@@ -45,6 +45,4 @@ def record_change(
 
 def get_recent_changes(limit: int = 20) -> list[dict[str, Any]]:
     """Get recent change logs, newest first."""
-    return firestore_client.get_collection(
-        "change_logs", order_by="changedAt", limit=limit
-    )
+    return firestore_client.get_collection("change_logs", order_by="changedAt", limit=limit)

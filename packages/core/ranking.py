@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from packages.core.diversification import interleave_ranked_items
 from packages.core.models import (
     AlgorithmConfig,
     BucketScore,
-    DisplayBucket,
     DailyCandidateFeature,
+    DisplayBucket,
     DomainClass,
     MusicConfig,
     RankedCandidateV2,
     RankingLane,
 )
-from packages.core.diversification import interleave_ranked_items
 from packages.core.scoring import momentum, multi_source_bonus
 
 # Maps source_id -> display bucket
@@ -68,12 +68,14 @@ def compute_candidate_score(
         # Aggregate into display bucket
         bucket = SOURCE_TO_BUCKET.get(source_id, DisplayBucket.TRENDS)
         bucket_scores[bucket] = bucket_scores.get(bucket, 0.0) + weighted_momentum
-        bucket_details.setdefault(bucket, []).append({
-            "sourceId": source_id,
-            "weight": source_multiplier,
-            "momentum": mom,
-            "weightedMomentum": weighted_momentum,
-        })
+        bucket_details.setdefault(bucket, []).append(
+            {
+                "sourceId": source_id,
+                "weight": source_multiplier,
+                "momentum": mom,
+                "weightedMomentum": weighted_momentum,
+            }
+        )
 
         # Count active sources (sig_t >= minSig)
         if len(sig_hist) > 0 and sig_hist[0] >= algo_config.min_sig:
@@ -167,7 +169,8 @@ def build_ranked_candidates_v2(
         }
         for feature in candidate_features
         if feature.ranking_gate_passed
-        and feature.domain_class in {
+        and feature.domain_class
+        in {
             DomainClass.ENTERTAINMENT,
             DomainClass.FASHION_BEAUTY,
             DomainClass.CONSUMER_CULTURE,

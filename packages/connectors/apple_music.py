@@ -75,27 +75,31 @@ class AppleMusicConnector(BaseConnector):
 
             # Track as MUSIC_TRACK candidate
             if track_name:
-                candidates.append(RawCandidate(
-                    name=track_name,
-                    type=CandidateType.MUSIC_TRACK,
-                    source_id=self.source_id,
-                    rank=rank,
-                    metric_value=_rank_exposure(rank),
-                    evidence=evidence,
-                    extra={"artist": artist_name, "region": self.region},
-                ))
+                candidates.append(
+                    RawCandidate(
+                        name=track_name,
+                        type=CandidateType.MUSIC_TRACK,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                        extra={"artist": artist_name, "region": self.region},
+                    )
+                )
 
             # Artist as MUSIC_ARTIST candidate
             if artist_name:
-                candidates.append(RawCandidate(
-                    name=artist_name,
-                    type=CandidateType.MUSIC_ARTIST,
-                    source_id=self.source_id,
-                    rank=rank,
-                    metric_value=_rank_exposure(rank),
-                    evidence=evidence,
-                    extra={"track": track_name, "region": self.region},
-                ))
+                candidates.append(
+                    RawCandidate(
+                        name=artist_name,
+                        type=CandidateType.MUSIC_ARTIST,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                        extra={"track": track_name, "region": self.region},
+                    )
+                )
 
         return candidates
 

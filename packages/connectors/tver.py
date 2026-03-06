@@ -20,10 +20,7 @@ from packages.core.models import CandidateType, Evidence, RawCandidate
 
 logger = logging.getLogger(__name__)
 
-TVER_RANKING_URL = (
-    "https://achikochi-data.com"
-    "/tver_daily_ranking_view_count_point_ranking_all/"
-)
+TVER_RANKING_URL = "https://achikochi-data.com/tver_daily_ranking_view_count_point_ranking_all/"
 
 
 def parse_tver_ranking_html(html: str) -> list[dict[str, Any]]:
@@ -56,12 +53,14 @@ def parse_tver_ranking_html(html: str) -> list[dict[str, Any]]:
         points_matches = re.findall(r"<div>(\d+)</div>", row)
         points = int(points_matches[-1]) if points_matches else 0
 
-        items.append({
-            "rank": rank,
-            "title": title,
-            "cast": cast,
-            "points": points,
-        })
+        items.append(
+            {
+                "rank": rank,
+                "title": title,
+                "cast": cast,
+                "points": points,
+            }
+        )
 
     return items
 
@@ -93,9 +92,7 @@ class TVerRankingConnector(BaseConnector):
         items = items[: self.max_results]
         return FetchResult(items=items, item_count=len(items))
 
-    def extract_candidates(
-        self, items: list[dict[str, Any]]
-    ) -> list[RawCandidate]:
+    def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
         """Extract candidates from TVer ranking items.
 
         - Each show title -> WORK candidate
@@ -120,27 +117,31 @@ class TVerRankingConnector(BaseConnector):
             )
 
             # Show title as WORK
-            candidates.append(RawCandidate(
-                name=title,
-                type=CandidateType.WORK,
-                source_id=self.source_id,
-                rank=rank,
-                metric_value=_rank_exposure(rank),
-                evidence=evidence,
-                extra={"cast": cast, "points": points},
-            ))
-
-            # Each cast member as PERSON
-            for person in cast:
-                candidates.append(RawCandidate(
-                    name=person,
-                    type=CandidateType.PERSON,
+            candidates.append(
+                RawCandidate(
+                    name=title,
+                    type=CandidateType.WORK,
                     source_id=self.source_id,
                     rank=rank,
                     metric_value=_rank_exposure(rank),
                     evidence=evidence,
-                    extra={"show": title, "points": points},
-                ))
+                    extra={"cast": cast, "points": points},
+                )
+            )
+
+            # Each cast member as PERSON
+            for person in cast:
+                candidates.append(
+                    RawCandidate(
+                        name=person,
+                        type=CandidateType.PERSON,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                        extra={"show": title, "points": points},
+                    )
+                )
 
         return candidates
 

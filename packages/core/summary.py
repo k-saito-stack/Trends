@@ -48,14 +48,10 @@ def generate_summary(
         return ""
 
     if mode == MODE_LLM:
-        return _generate_llm_summary(
-            candidate_name, trend_score, breakdown, evidence, llm_client
-        )
+        return _generate_llm_summary(candidate_name, trend_score, breakdown, evidence, llm_client)
 
     # Default: TEMPLATE mode
-    return _generate_template_summary(
-        candidate_name, trend_score, breakdown, evidence
-    )
+    return _generate_template_summary(candidate_name, trend_score, breakdown, evidence)
 
 
 def _generate_template_summary(
@@ -93,17 +89,11 @@ def _generate_llm_summary(
     """
     if llm_client is None or not getattr(llm_client, "available", False):
         logger.info("LLM client not available, falling back to TEMPLATE mode")
-        return _generate_template_summary(
-            candidate_name, trend_score, breakdown, evidence
-        )
+        return _generate_template_summary(candidate_name, trend_score, breakdown, evidence)
 
     # Build context for the LLM
-    bucket_info = ", ".join(
-        f"{b.bucket}({b.score:.1f})" for b in breakdown[:5] if b.score > 0
-    )
-    evidence_info = "\n".join(
-        f"- [{e.source_id}] {e.title}" for e in evidence[:3]
-    )
+    bucket_info = ", ".join(f"{b.bucket}({b.score:.1f})" for b in breakdown[:5] if b.score > 0)
+    evidence_info = "\n".join(f"- [{e.source_id}] {e.title}" for e in evidence[:3])
 
     prompt = (
         f"以下のトレンド候補について、なぜ今注目されているか1〜2文で簡潔に要約してください。\n\n"
@@ -134,6 +124,4 @@ def _generate_llm_summary(
         logger.warning("LLM summary failed for %s: %s", candidate_name, e)
 
     # Fallback to template
-    return _generate_template_summary(
-        candidate_name, trend_score, breakdown, evidence
-    )
+    return _generate_template_summary(candidate_name, trend_score, breakdown, evidence)

@@ -39,13 +39,50 @@ class RakutenIchibaRankingConnector(BaseConnector):
             item_name = str(item.get("itemName", "")).strip()
             shop_name = str(item.get("shopName", "")).strip()
             if item_name:
-                candidates.append(RawCandidate(name=item_name, type=CandidateType.PRODUCT, source_id=self.source_id, rank=rank, metric_value=_rank_exposure(rank), evidence=Evidence(source_id=self.source_id, title=item_name, url=str(item.get("itemUrl", "")), metric=f"rank:{rank}")))
+                candidates.append(
+                    RawCandidate(
+                        name=item_name,
+                        type=CandidateType.PRODUCT,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=Evidence(
+                            source_id=self.source_id,
+                            title=item_name,
+                            url=str(item.get("itemUrl", "")),
+                            metric=f"rank:{rank}",
+                        ),
+                    )
+                )
             if shop_name:
-                candidates.append(RawCandidate(name=shop_name, type=CandidateType.BRAND, source_id=self.source_id, rank=rank, metric_value=_rank_exposure(rank) * 0.7, evidence=Evidence(source_id=self.source_id, title=f"{shop_name} / {item_name}", url=str(item.get("itemUrl", "")), metric=f"rank:{rank}")))
+                candidates.append(
+                    RawCandidate(
+                        name=shop_name,
+                        type=CandidateType.BRAND,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank) * 0.7,
+                        evidence=Evidence(
+                            source_id=self.source_id,
+                            title=f"{shop_name} / {item_name}",
+                            url=str(item.get("itemUrl", "")),
+                            metric=f"rank:{rank}",
+                        ),
+                    )
+                )
         return candidates
 
-    def compute_signals(self, items: list[dict[str, Any]], candidates: list[RawCandidate]) -> list[SignalResult]:
-        return [SignalResult(candidate_name=candidate.name, signal_value=candidate.metric_value, evidence=candidate.evidence) for candidate in candidates]
+    def compute_signals(
+        self, items: list[dict[str, Any]], candidates: list[RawCandidate]
+    ) -> list[SignalResult]:
+        return [
+            SignalResult(
+                candidate_name=candidate.name,
+                signal_value=candidate.metric_value,
+                evidence=candidate.evidence,
+            )
+            for candidate in candidates
+        ]
 
 
 def _rank_exposure(rank: int) -> float:

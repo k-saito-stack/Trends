@@ -64,7 +64,10 @@ class RakutenMagazineConnector(BaseConnector):
 
         try:
             resp = requests.get(
-                RAKUTEN_API_URL, params=params, headers=headers, timeout=30,
+                RAKUTEN_API_URL,
+                params=params,
+                headers=headers,
+                timeout=30,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -112,24 +115,28 @@ class RakutenMagazineConnector(BaseConnector):
                         cand_type = CandidateType(ent_type)
                     except ValueError:
                         cand_type = CandidateType.KEYWORD
-                    candidates.append(RawCandidate(
-                        name=ent_text,
-                        type=cand_type,
+                    candidates.append(
+                        RawCandidate(
+                            name=ent_text,
+                            type=cand_type,
+                            source_id=self.source_id,
+                            metric_value=1.0,
+                            evidence=evidence,
+                            extra={"caption": caption[:200] if caption else ""},
+                        )
+                    )
+            else:
+                # Fallback: full title as KEYWORD
+                candidates.append(
+                    RawCandidate(
+                        name=title,
+                        type=CandidateType.KEYWORD,
                         source_id=self.source_id,
                         metric_value=1.0,
                         evidence=evidence,
                         extra={"caption": caption[:200] if caption else ""},
-                    ))
-            else:
-                # Fallback: full title as KEYWORD
-                candidates.append(RawCandidate(
-                    name=title,
-                    type=CandidateType.KEYWORD,
-                    source_id=self.source_id,
-                    metric_value=1.0,
-                    evidence=evidence,
-                    extra={"caption": caption[:200] if caption else ""},
-                ))
+                    )
+                )
 
         return candidates
 

@@ -167,11 +167,7 @@ def get_subcollection(
 ) -> list[dict[str, Any]]:
     """Read documents from a subcollection."""
     db = get_db()
-    query: Any = (
-        db.collection(parent_collection)
-        .document(parent_id)
-        .collection(sub_collection)
-    )
+    query: Any = db.collection(parent_collection).document(parent_id).collection(sub_collection)
     if order_by:
         query = query.order_by(order_by)
     if limit:
@@ -189,7 +185,7 @@ def batch_write(operations: list[tuple[str, str, dict[str, Any]]]) -> None:
     """
     db = get_db()
     for i in range(0, len(operations), MAX_BATCH_WRITE_OPERATIONS):
-        chunk = operations[i:i + MAX_BATCH_WRITE_OPERATIONS]
+        chunk = operations[i : i + MAX_BATCH_WRITE_OPERATIONS]
         batch = db.batch()
         for collection_path, doc_id, data in chunk:
             doc_ref = db.collection(collection_path).document(doc_id)
@@ -204,7 +200,7 @@ def batch_upsert(
     """Execute idempotent set(..., merge=merge) batch writes."""
     db = get_db()
     for i in range(0, len(operations), MAX_BATCH_WRITE_OPERATIONS):
-        chunk = operations[i:i + MAX_BATCH_WRITE_OPERATIONS]
+        chunk = operations[i : i + MAX_BATCH_WRITE_OPERATIONS]
         batch = db.batch()
         for collection_path, doc_id, data in chunk:
             doc_ref = db.collection(collection_path).document(doc_id)
@@ -222,7 +218,7 @@ def delete_collection_documents(collection_path: str) -> int:
     deleted = 0
 
     for i in range(0, len(docs), MAX_BATCH_WRITE_OPERATIONS):
-        chunk = docs[i:i + MAX_BATCH_WRITE_OPERATIONS]
+        chunk = docs[i : i + MAX_BATCH_WRITE_OPERATIONS]
         batch = db.batch()
         for doc in chunk:
             batch.delete(doc.reference)

@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FetchResult:
     """Result from a connector's fetch operation."""
+
     items: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
     item_count: int = 0
@@ -31,6 +32,7 @@ class FetchResult:
 @dataclass
 class SignalResult:
     """Daily signal for a single candidate from a source."""
+
     candidate_name: str
     signal_value: float
     evidence: Evidence | None = None
@@ -39,6 +41,7 @@ class SignalResult:
 @dataclass
 class ConnectorRunResult:
     """Result from a connector's full run() pipeline."""
+
     source_id: str
     ok: bool
     item_count: int
@@ -99,7 +102,9 @@ class BaseConnector(ABC):
         if not self.enabled:
             logger.info("[%s] Skipped (disabled)", self.source_id)
             return ConnectorRunResult(
-                source_id=self.source_id, ok=False, item_count=0,
+                source_id=self.source_id,
+                ok=False,
+                item_count=0,
                 error="disabled",
             )
 
@@ -111,7 +116,9 @@ class BaseConnector(ABC):
                 self.consecutive_failures,
             )
             return ConnectorRunResult(
-                source_id=self.source_id, ok=False, item_count=0,
+                source_id=self.source_id,
+                ok=False,
+                item_count=0,
                 error="kill_switch",
             )
 
@@ -122,7 +129,9 @@ class BaseConnector(ABC):
             self.consecutive_failures += 1
             logger.error("[%s] Fetch error: %s", self.source_id, e)
             return ConnectorRunResult(
-                source_id=self.source_id, ok=False, item_count=0,
+                source_id=self.source_id,
+                ok=False,
+                item_count=0,
                 error=str(e),
             )
 
@@ -130,7 +139,9 @@ class BaseConnector(ABC):
             self.consecutive_failures += 1
             logger.error("[%s] Fetch error: %s", self.source_id, result.error)
             return ConnectorRunResult(
-                source_id=self.source_id, ok=False, item_count=0,
+                source_id=self.source_id,
+                ok=False,
+                item_count=0,
                 error=result.error,
             )
 
@@ -138,7 +149,9 @@ class BaseConnector(ABC):
             logger.info("[%s] No items returned", self.source_id)
             # ok=True: fetch succeeded but 0 items (valid 0-observation)
             return ConnectorRunResult(
-                source_id=self.source_id, ok=True, item_count=0,
+                source_id=self.source_id,
+                ok=True,
+                item_count=0,
             )
 
         # Reset failure counter on success
@@ -150,7 +163,9 @@ class BaseConnector(ABC):
         except Exception as e:
             logger.error("[%s] Extract error: %s", self.source_id, e)
             return ConnectorRunResult(
-                source_id=self.source_id, ok=False, item_count=len(result.items),
+                source_id=self.source_id,
+                ok=False,
+                item_count=len(result.items),
                 error=f"extract: {e}",
             )
 
@@ -160,7 +175,9 @@ class BaseConnector(ABC):
         except Exception as e:
             logger.error("[%s] Signal error: %s", self.source_id, e)
             return ConnectorRunResult(
-                source_id=self.source_id, ok=True, item_count=len(result.items),
+                source_id=self.source_id,
+                ok=True,
+                item_count=len(result.items),
                 candidates=candidates,
                 error=f"signal: {e}",
             )
@@ -173,6 +190,9 @@ class BaseConnector(ABC):
             len(signals),
         )
         return ConnectorRunResult(
-            source_id=self.source_id, ok=True, item_count=len(result.items),
-            candidates=candidates, signals=signals,
+            source_id=self.source_id,
+            ok=True,
+            item_count=len(result.items),
+            candidates=candidates,
+            signals=signals,
         )

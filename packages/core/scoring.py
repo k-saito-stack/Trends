@@ -63,7 +63,7 @@ def momentum(sig_history: list[float], lam: float = 0.7) -> float:
     s0 = max(0.0, sig_history[0]) if len(sig_history) > 0 else 0.0
     s1 = max(0.0, sig_history[1]) if len(sig_history) > 1 else 0.0
     s2 = max(0.0, sig_history[2]) if len(sig_history) > 2 else 0.0
-    return s0 + lam * s1 + (lam ** 2) * s2
+    return s0 + lam * s1 + (lam**2) * s2
 
 
 def multi_source_bonus(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from packages.core.models import CandidateType, RankingLane
 
@@ -13,7 +13,7 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "type_diversific
 
 
 def _load_config() -> dict[str, Any]:
-    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
 
 
 def infer_lane(candidate_type: CandidateType) -> RankingLane:
@@ -27,7 +27,9 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
 
     config = _load_config()["soft_quota"]
     grouped: dict[RankingLane, list[dict[str, Any]]] = defaultdict(list)
-    for item in sorted(items, key=lambda entry: -entry.get("primary_score", entry.get("trend_score", 0.0))):
+    for item in sorted(
+        items, key=lambda entry: -entry.get("primary_score", entry.get("trend_score", 0.0))
+    ):
         grouped[RankingLane(item["lane"])].append(item)
 
     counts = {lane: 0 for lane in RankingLane}
@@ -61,9 +63,13 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
                 if other_available:
                     continue
             candidate = queue[0]
-            candidate_score = float(candidate.get("primary_score", candidate.get("trend_score", 0.0)))
+            candidate_score = float(
+                candidate.get("primary_score", candidate.get("trend_score", 0.0))
+            )
             candidate_score += _lane_boost(lane, counts, config)
-            if best_item is None or candidate_score > float(best_item.get("_selectionScore", float("-inf"))):
+            if best_item is None or candidate_score > float(
+                best_item.get("_selectionScore", float("-inf"))
+            ):
                 candidate["_selectionScore"] = candidate_score
                 best_item = candidate
                 best_lane = lane
@@ -79,11 +85,15 @@ def interleave_ranked_items(items: list[dict[str, Any]], top_k: int = 20) -> lis
     return selected
 
 
-def _lane_boost(lane: RankingLane, counts: dict[RankingLane, int], config: dict[str, float]) -> float:
+def _lane_boost(
+    lane: RankingLane, counts: dict[RankingLane, int], config: dict[str, float]
+) -> float:
     if lane == RankingLane.WORDS_BEHAVIORS and counts[lane] == 0:
         return 0.08
     if lane == RankingLane.STYLE_PRODUCTS and counts[lane] == 0:
         return 0.06
-    if lane == RankingLane.SHOWS_FORMATS and counts[lane] < max(1, int(20 * config["shows_formats_target_ratio"])):
+    if lane == RankingLane.SHOWS_FORMATS and counts[lane] < max(
+        1, int(20 * config["shows_formats_target_ratio"])
+    ):
         return 0.03
     return 0.0

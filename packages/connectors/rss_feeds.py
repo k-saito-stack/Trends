@@ -51,12 +51,14 @@ class RSSFeedConnector(BaseConnector):
                     continue
 
                 for entry in feed.entries[: self.max_items_per_feed]:
-                    all_items.append({
-                        "title": entry.get("title", ""),
-                        "url": entry.get("link", ""),
-                        "published": entry.get("published", ""),
-                        "feed_url": url,
-                    })
+                    all_items.append(
+                        {
+                            "title": entry.get("title", ""),
+                            "url": entry.get("link", ""),
+                            "published": entry.get("published", ""),
+                            "feed_url": url,
+                        }
+                    )
             except Exception as e:
                 logger.warning("[%s] Failed to fetch %s: %s", self.source_id, url, e)
                 continue
@@ -95,22 +97,26 @@ class RSSFeedConnector(BaseConnector):
                         cand_type = CandidateType(ent_type)
                     except ValueError:
                         cand_type = CandidateType.KEYWORD
-                    candidates.append(RawCandidate(
-                        name=ent_text,
-                        type=cand_type,
+                    candidates.append(
+                        RawCandidate(
+                            name=ent_text,
+                            type=cand_type,
+                            source_id=self.source_id,
+                            metric_value=1.0,
+                            evidence=evidence,
+                        )
+                    )
+            else:
+                # Fallback: full title as KEYWORD
+                candidates.append(
+                    RawCandidate(
+                        name=title,
+                        type=CandidateType.KEYWORD,
                         source_id=self.source_id,
                         metric_value=1.0,
                         evidence=evidence,
-                    ))
-            else:
-                # Fallback: full title as KEYWORD
-                candidates.append(RawCandidate(
-                    name=title,
-                    type=CandidateType.KEYWORD,
-                    source_id=self.source_id,
-                    metric_value=1.0,
-                    evidence=evidence,
-                ))
+                    )
+                )
 
         return candidates
 
@@ -132,10 +138,12 @@ class RSSFeedConnector(BaseConnector):
 
         signals: list[SignalResult] = []
         for name, count in mention_counts.items():
-            signals.append(SignalResult(
-                candidate_name=name,
-                signal_value=math.log1p(count),
-                evidence=evidence_map.get(name),
-            ))
+            signals.append(
+                SignalResult(
+                    candidate_name=name,
+                    signal_value=math.log1p(count),
+                    evidence=evidence_map.get(name),
+                )
+            )
 
         return signals

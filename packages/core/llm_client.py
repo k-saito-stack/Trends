@@ -77,9 +77,7 @@ class LLMClient:
             payload["tools"] = tools
 
         try:
-            resp = requests.post(
-                XAI_API_URL, json=payload, headers=headers, timeout=self.timeout
-            )
+            resp = requests.post(XAI_API_URL, json=payload, headers=headers, timeout=self.timeout)
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as e:
@@ -116,6 +114,7 @@ class LLMClient:
 
         # Try to find JSON in markdown code blocks
         import re
+
         json_match = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", content)
         if json_match:
             try:

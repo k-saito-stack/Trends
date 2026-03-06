@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from typing import Iterable
+from collections.abc import Iterable
 
-from packages.core.family_features import aggregate_family_metrics
+from packages.core.family_features import FamilyAggregateMetrics, aggregate_family_metrics
 from packages.core.models import (
     AlgorithmConfig,
     Candidate,
@@ -57,7 +57,12 @@ for candidate_type in (CandidateType.SHOW, CandidateType.REALITY_SHOW, Candidate
     DOMAIN_FIT_MATRIX[(candidate_type, SourceFamily.EDITORIAL)] = 0.8
     DOMAIN_FIT_MATRIX[(candidate_type, SourceFamily.FASHION_STYLE)] = 0.2
 
-for candidate_type in (CandidateType.PHRASE, CandidateType.HASHTAG, CandidateType.BEHAVIOR, CandidateType.KEYWORD):
+for candidate_type in (
+    CandidateType.PHRASE,
+    CandidateType.HASHTAG,
+    CandidateType.BEHAVIOR,
+    CandidateType.KEYWORD,
+):
     DOMAIN_FIT_MATRIX[(candidate_type, SourceFamily.SEARCH)] = 1.0
     DOMAIN_FIT_MATRIX[(candidate_type, SourceFamily.SOCIAL_DISCOVERY)] = 1.0
     DOMAIN_FIT_MATRIX[(candidate_type, SourceFamily.FASHION_STYLE)] = 0.8
@@ -197,49 +202,56 @@ def compute_candidate_feature(
         redundancy_penalty=float(aggregate["redundancy_penalty"]),
         broad_confirmation=float(aggregate["broad_confirmation"]),
         sustained_presence=_sustained_presence(candidate),
-        mainstream_reach=float(aggregate["music_confirmation"]) + float(aggregate["show_confirmation"]),
+        mainstream_reach=float(aggregate["music_confirmation"])
+        + float(aggregate["show_confirmation"]),
         coming_score=coming_score,
         mass_heat=mass_heat,
         primary_score=primary_score,
         ranking_gate_passed=ranking_gate_passed,
         related_entity_ids=list(candidate.related_entity_ids),
         evidence=evidence[:5],
-        metadata={"familyScores": aggregate["family_scores"], "roleScores": aggregate["role_scores"]},
+        metadata={
+            "familyScores": aggregate["family_scores"],
+            "roleScores": aggregate["role_scores"],
+        },
     )
 
 
 def passes_ranking_gate(
     candidate: Candidate,
     feature_list: list[DailySourceFeature],
-    aggregate: dict[str, float | list[str] | dict[str, float]],
+    aggregate: FamilyAggregateMetrics,
     coming_score: float,
     novelty: float,
     algo_config: AlgorithmConfig,
 ) -> bool:
+    del feature_list
     has_discovery = bool(aggregate["has_discovery"])
-    support_families = len(list(aggregate["source_families"]))
+    support_families = len(aggregate["source_families"])
 
     if has_discovery and coming_score >= algo_config.ranking_gate_discovery_threshold:
         return True
 
-    if (candidate.kind or candidate.type.default_kind) == CandidateKind.TOPIC:
-        if has_discovery and support_families >= 2:
-            return True
+    if (
+        (candidate.kind or candidate.type.default_kind) == CandidateKind.TOPIC
+        and has_discovery
+        and support_families >= 2
+    ):
+        return True
 
-    if candidate.type in {
+    return candidate.type in {
         CandidateType.MUSIC_ARTIST,
         CandidateType.MUSIC_TRACK,
         CandidateType.SHOW,
         CandidateType.REALITY_SHOW,
         CandidateType.WORK,
-    }:
-        if novelty >= 0.4 and (
-            float(aggregate["music_confirmation"]) > 0.35
-            or float(aggregate["show_confirmation"]) > 0.35
-        ):
-            return True
-
-    return False
+    } and (
+        novelty >= 0.4
+        and (
+            aggregate["music_confirmation"] > 0.35
+            or aggregate["show_confirmation"] > 0.35
+        )
+    )
 
 
 def _compute_novelty(candidate: Candidate) -> float:
@@ -252,8 +264,7 @@ def _compute_domain_fit(candidate_type: CandidateType, features: list[DailySourc
     if not features:
         return 0.0
     values = [
-        DOMAIN_FIT_MATRIX.get((candidate_type, feature.family_primary), 0.0)
-        for feature in features
+        DOMAIN_FIT_MATRIX.get((candidate_type, feature.family_primary), 0.0) for feature in features
     ]
     return sum(values) / len(values)
 
@@ -273,7 +284,9 @@ def _sustained_presence(candidate: Candidate) -> float:
     return min(1.0, sum(positives) / max(1.0, len(positives) * 4.0))
 
 
-def group_features_by_candidate(features: Iterable[DailySourceFeature]) -> dict[str, list[DailySourceFeature]]:
+def group_features_by_candidate(
+    features: Iterable[DailySourceFeature],
+) -> dict[str, list[DailySourceFeature]]:
     grouped: dict[str, list[DailySourceFeature]] = defaultdict(list)
     for feature in features:
         grouped[feature.candidate_id].append(feature)

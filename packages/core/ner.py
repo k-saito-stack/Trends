@@ -45,6 +45,7 @@ def _load_model() -> Any:
 
     try:
         import spacy
+
         _nlp = spacy.load("ja_ginza")
         logger.info("GiNZA model loaded successfully")
     except (ImportError, OSError) as e:

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
 
 from ulid import ULID
 
-from packages.core.models import Candidate, CandidateKind, CandidateStatus, CandidateType, DomainClass
+from packages.core.models import (
+    Candidate,
+    CandidateKind,
+    CandidateStatus,
+    CandidateType,
+    DomainClass,
+)
 from packages.core.topic_normalize import normalize_topic_text, topic_match_key
 
 JST = timezone(timedelta(hours=9))

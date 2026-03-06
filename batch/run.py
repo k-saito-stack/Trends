@@ -25,14 +25,15 @@ from packages.core.config import (
     load_source_weighting_config,
 )
 from packages.core.diversification import infer_lane
-from packages.core.domain_classifier import is_main_ranking_domain
 from packages.core.models import (
     BucketScore,
     Candidate,
     CandidateKind,
+    DailyCandidateFeature,
     DailyRankingItem,
     DailyRankingMeta,
     DailySourceFeature,
+    DomainClass,
     Evidence,
     ExtractionConfidence,
     Observation,
@@ -40,9 +41,18 @@ from packages.core.models import (
     SourceWeightSnapshot,
 )
 from packages.core.ranking import build_ranked_candidates_v2
-from packages.core.resolve import build_alias_index, build_key_index, create_new_candidate, resolve_candidate
+from packages.core.resolve import (
+    build_alias_index,
+    build_key_index,
+    create_new_candidate,
+    resolve_candidate,
+)
 from packages.core.run_logger import end_run, start_run, update_run_source
-from packages.core.scoring_v2 import compute_candidate_feature, compute_source_feature_score, group_features_by_candidate
+from packages.core.scoring_v2 import (
+    compute_candidate_feature,
+    compute_source_feature_score,
+    group_features_by_candidate,
+)
 from packages.core.source_catalog import get_source_entry
 from packages.core.source_health import build_source_health_records
 from packages.core.source_weighting import (
@@ -97,7 +107,11 @@ def acquire_lock(
     status = lock_doc.get("status", "")
     if status == "COMPLETED":
         if not allow_completed_rerun:
-            logger.info("Date %s already completed (run=%s). Skipping.", target_date, lock_doc.get("runId", "?"))
+            logger.info(
+                "Date %s already completed (run=%s). Skipping.",
+                target_date,
+                lock_doc.get("runId", "?"),
+            )
             return False
         firestore_client.set_document(
             "runs",
@@ -163,10 +177,14 @@ def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[
     return build_connectors(source_cfgs or [])
 
 
-def _apply_runtime_feature_flags(degrade: DegradeState, source_cfgs: list[dict[str, Any]]) -> DegradeState:
+def _apply_runtime_feature_flags(
+    degrade: DegradeState, source_cfgs: list[dict[str, Any]]
+) -> DegradeState:
     cfg_by_id = {str(cfg["sourceId"]): cfg for cfg in source_cfgs if cfg.get("sourceId")}
     x_search_cfg = cfg_by_id.get("X_SEARCH")
-    degrade.x_search_enabled = bool(x_search_cfg and x_search_cfg.get("enabled", False) and degrade.x_search_enabled)
+    degrade.x_search_enabled = bool(
+        x_search_cfg and x_search_cfg.get("enabled", False) and degrade.x_search_enabled
+    )
     return degrade
 
 
@@ -179,7 +197,9 @@ def _build_runtime_source_cfg_map(
         cfg = dict(cfg_map.get(connector.source_id, {}))
         cfg.setdefault("sourceId", connector.source_id)
         if not cfg.get("fetchLimit"):
-            fetch_limit = getattr(connector, "max_results", None) or getattr(connector, "max_items_per_feed", None)
+            fetch_limit = getattr(connector, "max_results", None) or getattr(
+                connector, "max_items_per_feed", None
+            )
             if isinstance(fetch_limit, int) and fetch_limit > 0:
                 cfg["fetchLimit"] = fetch_limit
         cfg_map[connector.source_id] = cfg
@@ -190,7 +210,12 @@ def main(date_arg: str = "today") -> None:
     target_date = get_target_date(date_arg)
     run_id = str(ULID())
     errors: list[str] = []
-    allow_completed_rerun = os.environ.get("BATCH_ALLOW_RERUN_COMPLETED", "").strip().lower() in {"1", "true", "yes", "on"}
+    allow_completed_rerun = os.environ.get("BATCH_ALLOW_RERUN_COMPLETED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     logger.info("=== Trends Daily Batch v2 ===")
     logger.info("Run ID: %s", run_id)
@@ -235,7 +260,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     connectors = _create_connectors(source_cfg_list)
     source_cfg_map = _build_runtime_source_cfg_map(source_cfg_list, connectors)
 
-    weighted_source_ids = filter_weighted_source_ids([connector.source_id for connector in connectors])
+    weighted_source_ids = filter_weighted_source_ids(
+        [connector.source_id for connector in connectors]
+    )
     try:
         source_weights = load_current_source_weights(
             target_date=target_date,
@@ -269,7 +296,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         try:
             run_result: ConnectorRunResult = connector.run()
         except Exception as exc:
-            run_result = ConnectorRunResult(source_id=source_id, ok=False, item_count=0, error=str(exc))
+            run_result = ConnectorRunResult(
+                source_id=source_id, ok=False, item_count=0, error=str(exc)
+            )
 
         source_ok[source_id] = run_result.ok
         source_item_count[source_id] = run_result.item_count
@@ -285,10 +314,15 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
         sources_used.append(source_id)
         for raw_candidate in run_result.candidates:
-            resolved = _resolve_raw_candidate(raw_candidate, existing_candidates, alias_index, key_index)
+            resolved = _resolve_raw_candidate(
+                raw_candidate, existing_candidates, alias_index, key_index
+            )
             candidate = resolved
             candidate.last_seen_at = target_date
-            if raw_candidate.domain_class != candidate.domain_class and raw_candidate.domain_class.value != "OTHER":
+            if (
+                raw_candidate.domain_class != candidate.domain_class
+                and raw_candidate.domain_class.value != "OTHER"
+            ):
                 candidate.domain_class = raw_candidate.domain_class
             candidate_id = candidate.candidate_id
             touched_candidates[candidate_id] = candidate
@@ -298,7 +332,11 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             observations.append(observation)
             raw_by_candidate_source[(candidate_id, source_id)].append(raw_candidate)
 
-    logger.info("Resolved %d touched candidates across %d observations", len(touched_candidates), len(observations))
+    logger.info(
+        "Resolved %d touched candidates across %d observations",
+        len(touched_candidates),
+        len(observations),
+    )
 
     logger.info("Step 5-8: Build local features, score, rank...")
     source_features: list[DailySourceFeature] = []
@@ -318,7 +356,10 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             entry.family_primary,
         )
         source_weight = source_weights.get(source_id, 1.0)
-        weighted_surprise = min(entry.max_weight_cap, max(algo_config.source_weight_floor, source_weight)) * surprise01
+        weighted_surprise = (
+            min(entry.max_weight_cap, max(algo_config.source_weight_floor, source_weight))
+            * surprise01
+        )
         evidence = _dedupe_evidence(item.evidence for item in raw_items)
         feature = DailySourceFeature(
             date=target_date,
@@ -335,7 +376,11 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             momentum=min(1.0, weighted_surprise),
             extraction_confidence=_max_confidence(raw_items),
             domain_class=_pick_domain(candidate, raw_items),
-            observation_ids=[obs.observation_id for obs in observations if obs.candidate_id == candidate_id and obs.source_id == source_id],
+            observation_ids=[
+                obs.observation_id
+                for obs in observations
+                if obs.candidate_id == candidate_id and obs.source_id == source_id
+            ],
             evidence=evidence[:5],
             metadata={"sourceWeight": source_weight},
         )
@@ -359,12 +404,16 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         candidate.trend_history_7d.append(candidate_feature.primary_score)
         candidate.trend_history_7d = candidate.trend_history_7d[-7:]
         candidate.source_families = candidate_feature.source_families
-        candidate.maturity = round(min(1.5, candidate.maturity * 0.6 + candidate_feature.mass_heat * 0.4), 4)
+        candidate.maturity = round(
+            min(1.5, candidate.maturity * 0.6 + candidate_feature.mass_heat * 0.4), 4
+        )
         touched_candidates[candidate_id] = candidate
         candidate_feature_list.append(candidate_feature)
 
     sorted_features = sorted(candidate_feature_list, key=lambda feature: -feature.primary_score)
-    ranked_candidates = build_ranked_candidates_v2(sorted_features, touched_candidates, top_k=app_config.top_k)
+    ranked_candidates = build_ranked_candidates_v2(
+        sorted_features, touched_candidates, top_k=app_config.top_k
+    )
     top_candidates = ranked_candidates
     logger.info("Selected %d ranked candidates", len(ranked_candidates))
 
@@ -377,8 +426,15 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             llm_client = LLMClient()
 
     for ranked_item in ranked_candidates:
-        feature = next((item for item in candidate_feature_list if item.candidate_id == ranked_item.candidate_id), None)
-        breakdown = _build_legacy_breakdown(feature)
+        matched_feature = next(
+            (
+                item
+                for item in candidate_feature_list
+                if item.candidate_id == ranked_item.candidate_id
+            ),
+            None,
+        )
+        breakdown = _build_legacy_breakdown(matched_feature)
         ranked_item.summary = generate_summary(
             candidate_name=ranked_item.display_name,
             trend_score=ranked_item.primary_score,
@@ -387,7 +443,11 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             mode=degrade.summary_mode,
             llm_client=llm_client,
         )
-        if degrade.summary_mode == MODE_LLM and llm_client and getattr(llm_client, "available", False):
+        if (
+            degrade.summary_mode == MODE_LLM
+            and llm_client
+            and getattr(llm_client, "available", False)
+        ):
             llm_summary_calls += 1
 
     logger.info("Step 9: Writing observations and rankings...")
@@ -429,8 +489,19 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             candidate_type=item.candidate_type.value,
             display_name=item.display_name,
             trend_score=item.primary_score,
-            breakdown_buckets=_build_legacy_breakdown(next((feature for feature in candidate_feature_list if feature.candidate_id == item.candidate_id), None)),
-            sparkline_7d=touched_candidates[item.candidate_id].trend_history_7d[-7:],
+            breakdown_buckets=_build_legacy_breakdown(
+                next(
+                    (
+                        feature
+                        for feature in candidate_feature_list
+                        if feature.candidate_id == item.candidate_id
+                    ),
+                    None,
+                )
+            ),
+            sparkline_7d=_to_sparkline(
+                touched_candidates[item.candidate_id].trend_history_7d[-7:]
+            ),
             evidence_top3=item.evidence[:3],
             summary=item.summary,
             coming_score=item.coming_score,
@@ -472,9 +543,15 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         for item in ranking_items:
             item_dict = item.to_dict()
             item_ops.append((f"daily_rankings/{target_date}/items", item.candidate_id, item_dict))
-            item_ops.append((f"daily_rankings_v2/{target_date}/items", item.candidate_id, item_dict))
-            item_ops.append((f"daily_rankings_v2_shadow/{target_date}/items", item.candidate_id, item_dict))
-            item_ops.append((f"daily_rankings/{target_date}/runs/{run_id}/items", item.candidate_id, item_dict))
+            item_ops.append(
+                (f"daily_rankings_v2/{target_date}/items", item.candidate_id, item_dict)
+            )
+            item_ops.append(
+                (f"daily_rankings_v2_shadow/{target_date}/items", item.candidate_id, item_dict)
+            )
+            item_ops.append(
+                (f"daily_rankings/{target_date}/runs/{run_id}/items", item.candidate_id, item_dict)
+            )
         if item_ops:
             firestore_client.batch_write(item_ops)
 
@@ -486,18 +563,27 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
         source_health_ops = [
             ("source_health", record.document_id, record.to_dict())
-            for record in build_source_health_records(target_date, source_ok, source_item_count, errors=source_errors)
+            for record in build_source_health_records(
+                target_date, source_ok, source_item_count, errors=source_errors
+            )
         ]
         if source_health_ops:
             firestore_client.batch_write(source_health_ops)
 
-        source_daily_ops = [("source_daily", snapshot.document_id, snapshot.to_dict()) for snapshot in source_daily_snapshots]
+        source_daily_ops = [
+            ("source_daily", snapshot.document_id, snapshot.to_dict())
+            for snapshot in source_daily_snapshots
+        ]
         if source_daily_ops:
             firestore_client.batch_write(source_daily_ops)
 
         if next_weight_snapshot is not None:
-            firestore_client.set_document("source_weights", next_weight_snapshot.date, next_weight_snapshot.to_dict())
-            firestore_client.set_document("config", "source_weights_current", next_weight_snapshot.to_dict())
+            firestore_client.set_document(
+                "source_weights", next_weight_snapshot.date, next_weight_snapshot.to_dict()
+            )
+            firestore_client.set_document(
+                "config", "source_weights_current", next_weight_snapshot.to_dict()
+            )
 
         publish_fields = {
             "status": "PUBLISHED",
@@ -506,7 +592,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         }
         for collection in ("daily_rankings", "daily_rankings_v2", "daily_rankings_v2_shadow"):
             firestore_client.update_document(collection, target_date, publish_fields)
-        firestore_client.update_document(f"daily_rankings/{target_date}/runs", run_id, publish_fields)
+        firestore_client.update_document(
+            f"daily_rankings/{target_date}/runs", run_id, publish_fields
+        )
         published_successfully = True
     except Exception as exc:
         errors.append(f"publish: {exc}")
@@ -515,9 +603,20 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     logger.info("Step 10: Finalize run...")
     cost_jpy = estimate_run_cost(sources_used, 0, llm_summary_calls)
     with contextlib.suppress(Exception):
-        record_run_cost(run_id, target_date, cost_jpy, {"sources": sources_used, "xSearchCalls": 0, "llmSummaryCalls": llm_summary_calls})
+        record_run_cost(
+            run_id,
+            target_date,
+            cost_jpy,
+            {"sources": sources_used, "xSearchCalls": 0, "llmSummaryCalls": llm_summary_calls},
+        )
 
-    run_status = "SUCCESS" if published_successfully and not errors else "PARTIAL" if published_successfully else "FAILED"
+    run_status = (
+        "SUCCESS"
+        if published_successfully and not errors
+        else "PARTIAL"
+        if published_successfully
+        else "FAILED"
+    )
     with contextlib.suppress(Exception):
         end_run(
             run_id,
@@ -529,7 +628,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         )
 
     with contextlib.suppress(Exception):
-        release_lock(target_date, run_id, status="COMPLETED" if published_successfully else "FAILED")
+        release_lock(
+            target_date, run_id, status="COMPLETED" if published_successfully else "FAILED"
+        )
 
     _write_connector_summary(source_ok, errors)
 
@@ -617,7 +718,8 @@ def _build_observation(
         observation_id=raw_candidate.observation_id or str(ULID()),
         date=target_date,
         source_id=raw_candidate.source_id,
-        source_item_id=raw_candidate.source_item_id or f"{raw_candidate.source_id}:{raw_candidate.rank or 0}:{candidate.candidate_id}",
+        source_item_id=raw_candidate.source_item_id
+        or f"{raw_candidate.source_id}:{raw_candidate.rank or 0}:{candidate.candidate_id}",
         candidate_id=candidate.candidate_id,
         candidate_type=raw_candidate.type,
         candidate_kind=raw_candidate.kind or raw_candidate.type.default_kind,
@@ -657,21 +759,24 @@ def _max_confidence(raw_items: list[RawCandidate]) -> ExtractionConfidence:
     return best.extraction_confidence
 
 
-def _pick_domain(candidate: Candidate, raw_items: list[RawCandidate]):
+def _pick_domain(candidate: Candidate, raw_items: list[RawCandidate]) -> DomainClass:
     for item in raw_items:
         if item.domain_class.value != "OTHER":
             return item.domain_class
     return candidate.domain_class
 
 
-def _pick_feature_domain(candidate: Candidate, features: list[DailySourceFeature]):
+def _pick_feature_domain(
+    candidate: Candidate,
+    features: list[DailySourceFeature],
+) -> DomainClass:
     for feature in features:
         if feature.domain_class.value != "OTHER":
             return feature.domain_class
     return candidate.domain_class
 
 
-def _build_legacy_breakdown(feature: Any) -> list[BucketScore]:
+def _build_legacy_breakdown(feature: DailyCandidateFeature | None) -> list[BucketScore]:
     if feature is None:
         return []
     family_scores = dict(feature.metadata.get("familyScores", {}))
@@ -680,6 +785,10 @@ def _build_legacy_breakdown(feature: Any) -> list[BucketScore]:
         for bucket, score in sorted(family_scores.items(), key=lambda item: -float(item[1]))
         if float(score) > 0
     ]
+
+
+def _to_sparkline(history: list[float]) -> list[float | None]:
+    return [float(score) for score in history]
 
 
 def _write_connector_summary(source_ok: dict[str, bool], errors: list[str]) -> None:
@@ -692,12 +801,13 @@ def _write_connector_summary(source_ok: dict[str, bool], errors: list[str]) -> N
             if sid.strip() in failed:
                 error_map[sid.strip()] = msg.strip()
     summary = {
-        "sources": {sid: {"ok": ok, "error": error_map.get(sid, "")} for sid, ok in source_ok.items()},
+        "sources": {
+            sid: {"ok": ok, "error": error_map.get(sid, "")} for sid, ok in source_ok.items()
+        },
         "failed_sources": list(failed.keys()),
     }
-    with contextlib.suppress(Exception):
-        with open(result_path, "w", encoding="utf-8") as handle:
-            json.dump(summary, handle, ensure_ascii=False, indent=2)
+    with contextlib.suppress(Exception), open(result_path, "w", encoding="utf-8") as handle:
+        json.dump(summary, handle, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":

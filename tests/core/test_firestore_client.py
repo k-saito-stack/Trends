@@ -48,8 +48,7 @@ class TestBatchWrite:
         monkeypatch.setattr(firestore_client, "get_db", lambda: fake_db)
 
         operations = [
-            ("daily_rankings/2026-03-06/items", f"cand_{i}", {"rank": i})
-            for i in range(501)
+            ("daily_rankings/2026-03-06/items", f"cand_{i}", {"rank": i}) for i in range(501)
         ]
 
         firestore_client.batch_write(operations)

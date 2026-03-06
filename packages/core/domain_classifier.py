@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from packages.core.models import CandidateType, DomainClass, SourceFamily
 from packages.core.source_catalog import get_source_entry
@@ -15,7 +15,7 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "domain_filters.
 
 @lru_cache(maxsize=1)
 def _load_filters() -> dict[str, list[str]]:
-    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    return cast(dict[str, list[str]], json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
 
 
 def classify_domain(
@@ -73,7 +73,12 @@ def classify_domain(
     if candidate_type in {CandidateType.STYLE, CandidateType.PRODUCT, CandidateType.BRAND}:
         return DomainClass.FASHION_BEAUTY
 
-    if candidate_type in {CandidateType.PHRASE, CandidateType.HASHTAG, CandidateType.BEHAVIOR, CandidateType.KEYWORD}:
+    if candidate_type in {
+        CandidateType.PHRASE,
+        CandidateType.HASHTAG,
+        CandidateType.BEHAVIOR,
+        CandidateType.KEYWORD,
+    }:
         return DomainClass.CONSUMER_CULTURE
 
     return DomainClass.OTHER

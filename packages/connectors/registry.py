@@ -34,19 +34,39 @@ FACTORIES: dict[str, Callable[[dict[str, Any]], BaseConnector]] = {
     "WEAR_WORDS": lambda cfg: WearConnector(enabled=cfg.get("enabled", True)),
     "ZOZO_RANKING": lambda cfg: ZozoConnector(enabled=cfg.get("enabled", True)),
     "RAKUTEN_FASHION": lambda cfg: RakutenFashionConnector(enabled=cfg.get("enabled", True)),
-    "RAKUTEN_ICHIBA_RANKING": lambda cfg: RakutenIchibaRankingConnector(enabled=cfg.get("enabled", True)),
+    "RAKUTEN_ICHIBA_RANKING": lambda cfg: RakutenIchibaRankingConnector(
+        enabled=cfg.get("enabled", True)
+    ),
     "BILLBOARD_JAPAN": lambda cfg: BillboardJapanConnector(enabled=cfg.get("enabled", True)),
-    "APPLE_MUSIC_JP": lambda cfg: AppleMusicConnector(region="JP", max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)),
-    "APPLE_MUSIC_GLOBAL": lambda cfg: AppleMusicConnector(region="GLOBAL", max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)),
+    "APPLE_MUSIC_JP": lambda cfg: AppleMusicConnector(
+        region="JP", max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)
+    ),
+    "APPLE_MUSIC_GLOBAL": lambda cfg: AppleMusicConnector(
+        region="GLOBAL", max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)
+    ),
     "SPOTIFY_EMBED": lambda cfg: SpotifyEmbedConnector(enabled=cfg.get("enabled", True)),
-    "NETFLIX_TV_JP": lambda cfg: NetflixTop10Connector(category="tv", max_results=cfg.get("fetchLimit", 10), enabled=cfg.get("enabled", True)),
-    "NETFLIX_FILMS_JP": lambda cfg: NetflixTop10Connector(category="films", max_results=cfg.get("fetchLimit", 10), enabled=cfg.get("enabled", True)),
-    "TVER_RANKING_JP": lambda cfg: TVerRankingConnector(max_results=cfg.get("fetchLimit", 20), enabled=cfg.get("enabled", True)),
-    "TIKTOK_CREATIVE_CENTER": lambda cfg: TikTokCreativeCenterConnector(enabled=cfg.get("enabled", True)),
-    "EDITORIAL_MODELPRESS": lambda cfg: EditorialModelpressConnector(enabled=cfg.get("enabled", True)),
-    "EDITORIAL_FASHIONSNAP": lambda cfg: EditorialFashionsnapConnector(enabled=cfg.get("enabled", True)),
+    "NETFLIX_TV_JP": lambda cfg: NetflixTop10Connector(
+        category="tv", max_results=cfg.get("fetchLimit", 10), enabled=cfg.get("enabled", True)
+    ),
+    "NETFLIX_FILMS_JP": lambda cfg: NetflixTop10Connector(
+        category="films", max_results=cfg.get("fetchLimit", 10), enabled=cfg.get("enabled", True)
+    ),
+    "TVER_RANKING_JP": lambda cfg: TVerRankingConnector(
+        max_results=cfg.get("fetchLimit", 20), enabled=cfg.get("enabled", True)
+    ),
+    "TIKTOK_CREATIVE_CENTER": lambda cfg: TikTokCreativeCenterConnector(
+        enabled=cfg.get("enabled", True)
+    ),
+    "EDITORIAL_MODELPRESS": lambda cfg: EditorialModelpressConnector(
+        enabled=cfg.get("enabled", True)
+    ),
+    "EDITORIAL_FASHIONSNAP": lambda cfg: EditorialFashionsnapConnector(
+        enabled=cfg.get("enabled", True)
+    ),
     "EDITORIAL_MAGAZINE": lambda cfg: EditorialMagazineConnector(enabled=cfg.get("enabled", True)),
-    "YOUTUBE_TREND_JP": lambda cfg: YouTubeConnector(max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)),
+    "YOUTUBE_TREND_JP": lambda cfg: YouTubeConnector(
+        max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)
+    ),
 }
 
 
@@ -75,6 +95,10 @@ def build_connectors(source_cfgs: list[dict[str, Any]]) -> list[BaseConnector]:
 
 def get_connector_factory(source_id: str) -> Callable[[dict[str, Any]], BaseConnector] | None:
     entry = get_source_entry(source_id)
-    if entry is None or entry.status == SourceStatus.DISABLED or entry.role == SourceRole.EVIDENCE_ONLY:
+    if (
+        entry is None
+        or entry.status == SourceStatus.DISABLED
+        or entry.role == SourceRole.EVIDENCE_ONLY
+    ):
         return None
     return FACTORIES.get(source_id)

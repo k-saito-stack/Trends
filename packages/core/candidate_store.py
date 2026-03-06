@@ -7,7 +7,13 @@ from typing import Any
 
 from packages.core import firestore_client
 from packages.core.alias_registry import build_alias_records, save_alias_records
-from packages.core.models import Candidate, DailyCandidateFeature, DailySourceFeature, Observation, RankedCandidateV2
+from packages.core.models import (
+    Candidate,
+    DailyCandidateFeature,
+    DailySourceFeature,
+    Observation,
+    RankedCandidateV2,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +34,13 @@ def load_all_candidates() -> dict[str, Candidate]:
 
 def save_candidate(candidate: Candidate) -> None:
     """Save or update a candidate in Firestore."""
-    firestore_client.set_document(
-        "candidates", candidate.candidate_id, candidate.to_dict()
-    )
+    firestore_client.set_document("candidates", candidate.candidate_id, candidate.to_dict())
 
 
 def save_candidates_batch(candidates: dict[str, Candidate]) -> None:
     """Save multiple candidates in a batch write."""
     operations: list[tuple[str, str, dict[str, Any]]] = [
-        ("candidates", cand_id, cand.to_dict())
-        for cand_id, cand in candidates.items()
+        ("candidates", cand_id, cand.to_dict()) for cand_id, cand in candidates.items()
     ]
     if operations:
         firestore_client.batch_write(operations)
@@ -72,8 +75,7 @@ def save_observations(observations: list[Observation]) -> None:
 
 def save_daily_source_features(features: list[DailySourceFeature]) -> None:
     operations = [
-        ("daily_source_features", feature.document_id, feature.to_dict())
-        for feature in features
+        ("daily_source_features", feature.document_id, feature.to_dict()) for feature in features
     ]
     if operations:
         firestore_client.batch_write(operations)
@@ -81,8 +83,7 @@ def save_daily_source_features(features: list[DailySourceFeature]) -> None:
 
 def save_daily_candidate_features(features: list[DailyCandidateFeature]) -> None:
     operations = [
-        ("daily_candidate_features", feature.document_id, feature.to_dict())
-        for feature in features
+        ("daily_candidate_features", feature.document_id, feature.to_dict()) for feature in features
     ]
     if operations:
         firestore_client.batch_write(operations)
@@ -90,8 +91,7 @@ def save_daily_candidate_features(features: list[DailyCandidateFeature]) -> None
 
 def save_daily_rankings_v2(date: str, items: list[RankedCandidateV2]) -> None:
     operations = [
-        (f"daily_rankings_v2/{date}/items", item.candidate_id, item.to_dict())
-        for item in items
+        (f"daily_rankings_v2/{date}/items", item.candidate_id, item.to_dict()) for item in items
     ]
     if operations:
         firestore_client.batch_write(operations)

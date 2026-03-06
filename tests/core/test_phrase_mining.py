@@ -5,7 +5,10 @@ from packages.core.phrase_mining import extract_hashtags, extract_topic_phrases
 
 
 def test_extract_hashtags() -> None:
-    assert extract_hashtags("今日は #平成レトロ と #シール交換 が来てる") == ["#平成レトロ", "#シール交換"]
+    assert extract_hashtags("今日は #平成レトロ と #シール交換 が来てる") == [
+        "#平成レトロ",
+        "#シール交換",
+    ]
 
 
 def test_extract_behavior_patterns() -> None:

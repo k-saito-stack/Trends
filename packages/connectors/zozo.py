@@ -59,7 +59,9 @@ class ZozoConnector(BaseConnector):
                             metric=f"rank:{rank}",
                         ),
                         extraction_confidence=ExtractionConfidence.MEDIUM,
-                        domain_class=classify_domain(CandidateType.PRODUCT, self.source_id, text=item_name),
+                        domain_class=classify_domain(
+                            CandidateType.PRODUCT, self.source_id, text=item_name
+                        ),
                         extra={"brand": brand},
                     )
                 )
@@ -78,7 +80,9 @@ class ZozoConnector(BaseConnector):
                             metric=f"rank:{rank}",
                         ),
                         extraction_confidence=ExtractionConfidence.MEDIUM,
-                        domain_class=classify_domain(CandidateType.BRAND, self.source_id, text=brand),
+                        domain_class=classify_domain(
+                            CandidateType.BRAND, self.source_id, text=brand
+                        ),
                     )
                 )
         return candidates

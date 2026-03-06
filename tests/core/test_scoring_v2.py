@@ -9,8 +9,8 @@ from packages.core.models import (
     DomainClass,
     ExtractionConfidence,
     RankingLane,
-    SourceRole,
     SourceFamily,
+    SourceRole,
 )
 from packages.core.scoring_v2 import compute_candidate_feature
 

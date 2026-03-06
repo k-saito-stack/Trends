@@ -29,8 +29,10 @@ class GoogleTrendsConnector(BaseConnector):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            source_id="TRENDS", stability="B",
-            max_consecutive_failures=5, **kwargs,
+            source_id="TRENDS",
+            stability="B",
+            max_consecutive_failures=5,
+            **kwargs,
         )
 
     def fetch(self) -> FetchResult:
@@ -80,24 +82,28 @@ class GoogleTrendsConnector(BaseConnector):
                         cand_type = CandidateType(ent_type)
                     except ValueError:
                         cand_type = CandidateType.KEYWORD
-                    candidates.append(RawCandidate(
-                        name=ent_text,
-                        type=cand_type,
+                    candidates.append(
+                        RawCandidate(
+                            name=ent_text,
+                            type=cand_type,
+                            source_id=self.source_id,
+                            rank=rank,
+                            metric_value=_rank_exposure(rank),
+                            evidence=evidence,
+                        )
+                    )
+            else:
+                # Fallback: full title as KEYWORD
+                candidates.append(
+                    RawCandidate(
+                        name=title,
+                        type=CandidateType.KEYWORD,
                         source_id=self.source_id,
                         rank=rank,
                         metric_value=_rank_exposure(rank),
                         evidence=evidence,
-                    ))
-            else:
-                # Fallback: full title as KEYWORD
-                candidates.append(RawCandidate(
-                    name=title,
-                    type=CandidateType.KEYWORD,
-                    source_id=self.source_id,
-                    rank=rank,
-                    metric_value=_rank_exposure(rank),
-                    evidence=evidence,
-                ))
+                    )
+                )
 
         return candidates
 
@@ -153,11 +159,13 @@ def _parse_trends_rss(xml_content: str) -> list[dict[str, Any]]:
             url = url_el.text if url_el is not None and url_el.text else ""
 
         if title:
-            items.append({
-                "title": title,
-                "url": url,
-                "approx_traffic": traffic,
-            })
+            items.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "approx_traffic": traffic,
+                }
+            )
 
     return items
 

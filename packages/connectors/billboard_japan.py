@@ -59,7 +59,9 @@ class BillboardJapanConnector(BaseConnector):
                             metric=f"rank:{rank}",
                         ),
                         extraction_confidence=ExtractionConfidence.HIGH,
-                        domain_class=classify_domain(CandidateType.MUSIC_TRACK, self.source_id, text=track),
+                        domain_class=classify_domain(
+                            CandidateType.MUSIC_TRACK, self.source_id, text=track
+                        ),
                     )
                 )
             if artist:
@@ -77,7 +79,9 @@ class BillboardJapanConnector(BaseConnector):
                             metric=f"rank:{rank}",
                         ),
                         extraction_confidence=ExtractionConfidence.HIGH,
-                        domain_class=classify_domain(CandidateType.MUSIC_ARTIST, self.source_id, text=artist),
+                        domain_class=classify_domain(
+                            CandidateType.MUSIC_ARTIST, self.source_id, text=artist
+                        ),
                     )
                 )
         return candidates

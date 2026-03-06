@@ -16,9 +16,7 @@ class TestGenerateSummary:
             BucketScore(bucket="YOUTUBE", score=5.0),
             BucketScore(bucket="MUSIC", score=3.0),
         ]
-        result = generate_summary(
-            "YOASOBI", 10.0, breakdown, [], mode=MODE_TEMPLATE
-        )
+        result = generate_summary("YOASOBI", 10.0, breakdown, [], mode=MODE_TEMPLATE)
         assert "YOASOBI" in result
         assert "YOUTUBE" in result
         assert "10.0" in result
@@ -31,9 +29,7 @@ class TestGenerateSummary:
     def test_llm_mode_fallback_to_template(self) -> None:
         # Without LLM client, should fall back to template
         breakdown = [BucketScore(bucket="TRENDS", score=7.0)]
-        result = generate_summary(
-            "米津玄師", 7.0, breakdown, [], mode=MODE_LLM
-        )
+        result = generate_summary("米津玄師", 7.0, breakdown, [], mode=MODE_LLM)
         assert "米津玄師" in result
         # Should still produce valid output (template fallback)
         assert len(result) > 0

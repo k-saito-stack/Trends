@@ -89,8 +89,7 @@ class XTrendingConnector(BaseConnector):
 
             type_str = item.get("type", "KEYWORD").strip()
             cand_type = (
-                CandidateType(type_str) if type_str in _VALID_TYPES
-                else CandidateType.KEYWORD
+                CandidateType(type_str) if type_str in _VALID_TYPES else CandidateType.KEYWORD
             )
 
             engagement = item.get("engagement", 0) or 0
@@ -105,14 +104,16 @@ class XTrendingConnector(BaseConnector):
                 metric=f"rank:{rank},engagement:{engagement}",
             )
 
-            candidates.append(RawCandidate(
-                name=name,
-                type=cand_type,
-                source_id=self.source_id,
-                rank=rank,
-                metric_value=math.log1p(engagement) if engagement > 0 else 1.0,
-                evidence=evidence,
-            ))
+            candidates.append(
+                RawCandidate(
+                    name=name,
+                    type=cand_type,
+                    source_id=self.source_id,
+                    rank=rank,
+                    metric_value=math.log1p(engagement) if engagement > 0 else 1.0,
+                    evidence=evidence,
+                )
+            )
 
         return candidates
 
@@ -207,21 +208,25 @@ class XSearchConnector(BaseConnector):
                 likes = post.get("likes", 0)
                 retweets = post.get("retweets", 0)
 
-                evidence_list.append(Evidence(
-                    source_id=self.source_id,
-                    title=summary[:100] if summary else f"X post about {candidate_name}",
-                    url=url,
-                    metric=f"likes:{likes},RT:{retweets}",
-                    snippet=summary[:200] if summary else "",
-                ))
+                evidence_list.append(
+                    Evidence(
+                        source_id=self.source_id,
+                        title=summary[:100] if summary else f"X post about {candidate_name}",
+                        url=url,
+                        metric=f"likes:{likes},RT:{retweets}",
+                        snippet=summary[:200] if summary else "",
+                    )
+                )
         else:
             # Fallback: use the raw content as a single evidence
-            evidence_list.append(Evidence(
-                source_id=self.source_id,
-                title=f"X posts about {candidate_name}",
-                url="",
-                snippet=content[:200],
-            ))
+            evidence_list.append(
+                Evidence(
+                    source_id=self.source_id,
+                    title=f"X posts about {candidate_name}",
+                    url="",
+                    snippet=content[:200],
+                )
+            )
 
         return evidence_list
 

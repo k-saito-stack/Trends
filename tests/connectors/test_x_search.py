@@ -20,7 +20,7 @@ class TestExtractJsonArray:
         assert result[0]["url"] == "http://x.com/1"
 
     def test_json_in_code_block(self) -> None:
-        text = "Here are the results:\n```json\n[{\"url\": \"u1\"}]\n```"
+        text = 'Here are the results:\n```json\n[{"url": "u1"}]\n```'
         result = _extract_json_array(text)
         assert len(result) == 1
 
@@ -29,7 +29,7 @@ class TestExtractJsonArray:
         assert result == []
 
     def test_json_embedded_in_text(self) -> None:
-        text = "Found: [{\"url\": \"u1\", \"summary\": \"s1\"}] end."
+        text = 'Found: [{"url": "u1", "summary": "s1"}] end.'
         result = _extract_json_array(text)
         assert len(result) == 1
 
@@ -44,15 +44,19 @@ class TestXSearchConnector:
     def test_search_candidate_success(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
-            "output": [{
-                "type": "message",
-                "content": [{
-                    "type": "output_text",
-                    "text": '[{"url": "https://x.com/post1", '
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": '[{"url": "https://x.com/post1", '
                             '"summary": "YOASOBI new song", '
                             '"likes": 5000, "retweets": 1200}]',
-                }],
-            }]
+                        }
+                    ],
+                }
+            ]
         }
         mock_resp.raise_for_status.return_value = None
         mock_post.return_value = mock_resp
@@ -72,13 +76,17 @@ class TestXSearchConnector:
     def test_search_candidate_fallback_on_bad_json(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
-            "output": [{
-                "type": "message",
-                "content": [{
-                    "type": "output_text",
-                    "text": "No structured data, just text about the topic.",
-                }],
-            }]
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "No structured data, just text about the topic.",
+                        }
+                    ],
+                }
+            ]
         }
         mock_resp.raise_for_status.return_value = None
         mock_post.return_value = mock_resp
@@ -109,14 +117,18 @@ class TestXTrendingConnector:
     def test_fetch_success_uses_x_search(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
-            "output": [{
-                "type": "message",
-                "content": [{
-                    "type": "output_text",
-                    "text": '[{"name": "YOASOBI", "type": "MUSIC_ARTIST", '
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": '[{"name": "YOASOBI", "type": "MUSIC_ARTIST", '
                             '"engagement": 5000, "summary": "new release"}]',
-                }],
-            }]
+                        }
+                    ],
+                }
+            ]
         }
         mock_resp.raise_for_status.return_value = None
         mock_post.return_value = mock_resp

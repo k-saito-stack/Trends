@@ -68,9 +68,7 @@ def should_keep_topic(text: str) -> bool:
         return False
     if normalized.lower() in STOP_PHRASES:
         return False
-    if len(topic_match_key(normalized)) <= 1:
-        return False
-    return True
+    return len(topic_match_key(normalized)) > 1
 
 
 def _lemmatize_surface(text: str) -> str:

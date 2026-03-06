@@ -12,7 +12,9 @@ from packages.connectors.base import BaseConnector, FetchResult, SignalResult
 from packages.core.domain_classifier import classify_domain
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
 
-TIKTOK_CREATIVE_CENTER_URL = "https://ads.tiktok.com/business/creativecenter/inspiration/popular/hashtag/pc/en"
+TIKTOK_CREATIVE_CENTER_URL = (
+    "https://ads.tiktok.com/business/creativecenter/inspiration/popular/hashtag/pc/en"
+)
 ITEM_RE = re.compile(
     r"(?:data-hashtag|data-keyword)=[\"']([^\"']+)[\"']|<span[^>]*class=[\"'][^\"']*(?:hashtag|keyword)[^\"']*[\"'][^>]*>([^<]+)</span>",
     re.IGNORECASE,
@@ -50,7 +52,9 @@ class TikTokCreativeCenterConnector(BaseConnector):
             rank = int(item.get("rank", 0) or 0)
             if not keyword:
                 continue
-            candidate_type = CandidateType.HASHTAG if keyword.startswith("#") else CandidateType.PHRASE
+            candidate_type = (
+                CandidateType.HASHTAG if keyword.startswith("#") else CandidateType.PHRASE
+            )
             candidates.append(
                 RawCandidate(
                     name=keyword,
@@ -74,7 +78,11 @@ class TikTokCreativeCenterConnector(BaseConnector):
         self, items: list[dict[str, Any]], candidates: list[RawCandidate]
     ) -> list[SignalResult]:
         return [
-            SignalResult(candidate_name=candidate.name, signal_value=candidate.metric_value, evidence=candidate.evidence)
+            SignalResult(
+                candidate_name=candidate.name,
+                signal_value=candidate.metric_value,
+                evidence=candidate.evidence,
+            )
             for candidate in candidates
         ]
 

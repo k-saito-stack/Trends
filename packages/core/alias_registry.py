@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from packages.core import firestore_client
 from packages.core.models import AliasProvenance, Candidate, CandidateKind, CandidateStatus
@@ -66,9 +66,6 @@ def load_alias_index() -> dict[str, str]:
 
 
 def save_alias_records(records: Iterable[AliasRecord]) -> None:
-    operations = [
-        ("candidate_aliases", record.alias_id, record.to_dict())
-        for record in records
-    ]
+    operations = [("candidate_aliases", record.alias_id, record.to_dict()) for record in records]
     if operations:
         firestore_client.batch_write(operations)

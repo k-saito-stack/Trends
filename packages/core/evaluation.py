@@ -43,4 +43,6 @@ def type_diversity_at_k(features: list[DailyCandidateFeature], k: int = 20) -> f
 def lane_mix_at_k(features: list[DailyCandidateFeature], k: int = 20) -> dict[str, int]:
     relevant = features[:k]
     counts = Counter(feature.lane.value for feature in relevant)
-    return {lane.value: counts.get(lane.value, 0) for lane in RankingLane if lane != RankingLane.SHADOW}
+    return {
+        lane.value: counts.get(lane.value, 0) for lane in RankingLane if lane != RankingLane.SHADOW
+    }

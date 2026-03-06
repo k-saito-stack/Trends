@@ -11,6 +11,7 @@ from typing import Any
 import requests
 
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
+from packages.core.models import RawCandidate
 from packages.core.phrase_mining import extract_topic_raw_candidates
 
 URL = "https://books.rakuten.co.jp/ranking/daily/"
@@ -48,17 +49,31 @@ class EditorialMagazineConnector(BaseConnector):
             parsed.append({"title": title, "publisher": publisher, "rank": rank})
         return parsed
 
-    def extract_candidates(self, items: list[dict[str, Any]]):
-        candidates = []
+    def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
+        candidates: list[RawCandidate] = []
         for item in items:
             title = str(item.get("title", ""))
             rank = int(item.get("rank", 0) or 0)
-            for candidate in extract_topic_raw_candidates(title, self.source_id, metric_value=_rank_exposure(rank)):
+            for candidate in extract_topic_raw_candidates(
+                title, self.source_id, metric_value=_rank_exposure(rank)
+            ):
                 candidates.append(candidate)
         return candidates
 
-    def compute_signals(self, items: list[dict[str, Any]], candidates):
-        return [SignalResult(candidate_name=candidate.name, signal_value=candidate.metric_value, evidence=candidate.evidence) for candidate in candidates]
+    def compute_signals(
+        self,
+        items: list[dict[str, Any]],
+        candidates: list[RawCandidate],
+    ) -> list[SignalResult]:
+        del items
+        return [
+            SignalResult(
+                candidate_name=candidate.name,
+                signal_value=candidate.metric_value,
+                evidence=candidate.evidence,
+            )
+            for candidate in candidates
+        ]
 
 
 def _rank_exposure(rank: int) -> float:

@@ -14,20 +14,66 @@ import re
 # This is the default blacklist; the authoritative list is in Firestore
 DEFAULT_BLACKLIST = {
     # Japanese generic terms
-    "公式", "新作", "予告", "人気", "発表", "最新", "速報", "話題",
-    "注目", "おすすめ", "まとめ", "ランキング", "特集", "独占",
-    "配信", "放送", "開始", "決定", "情報", "解禁", "初公開",
-    "無料", "限定", "特別", "完全", "最強", "衝撃", "感動",
-    "ニュース", "エンタメ", "芸能", "音楽", "映画", "ドラマ",
+    "公式",
+    "新作",
+    "予告",
+    "人気",
+    "発表",
+    "最新",
+    "速報",
+    "話題",
+    "注目",
+    "おすすめ",
+    "まとめ",
+    "ランキング",
+    "特集",
+    "独占",
+    "配信",
+    "放送",
+    "開始",
+    "決定",
+    "情報",
+    "解禁",
+    "初公開",
+    "無料",
+    "限定",
+    "特別",
+    "完全",
+    "最強",
+    "衝撃",
+    "感動",
+    "ニュース",
+    "エンタメ",
+    "芸能",
+    "音楽",
+    "映画",
+    "ドラマ",
     # English generic terms
-    "official", "new", "latest", "best", "top", "breaking",
-    "news", "update", "live", "full", "video", "music",
-    "trailer", "teaser", "preview", "review", "reaction",
+    "official",
+    "new",
+    "latest",
+    "best",
+    "top",
+    "breaking",
+    "news",
+    "update",
+    "live",
+    "full",
+    "video",
+    "music",
+    "trailer",
+    "teaser",
+    "preview",
+    "review",
+    "reaction",
 }
 
 # Short whitelist: known proper nouns that are 2 chars or less
 DEFAULT_WHITELIST = {
-    "IU", "AI", "UA", "YUI",
+    "IU",
+    "AI",
+    "UA",
+    "YUI",
 }
 
 
@@ -82,7 +128,4 @@ def is_proper_noun(
 
 def _is_hiragana_only(text: str) -> bool:
     """Check if text consists only of hiragana characters."""
-    return all(
-        "\u3040" <= c <= "\u309f" or c == " "
-        for c in text
-    )
+    return all("\u3040" <= c <= "\u309f" or c == " " for c in text)

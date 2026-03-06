@@ -34,7 +34,10 @@ class TestCandidate:
             status=CandidateStatus.ACTIVE,
             source_state={
                 "YOUTUBE_TREND_JP": SourceState(
-                    m=1.5, v=0.3, last_sig=2.1, last_updated="2026-03-03",
+                    m=1.5,
+                    v=0.3,
+                    last_sig=2.1,
+                    last_updated="2026-03-03",
                     observation_count=5,
                 )
             },

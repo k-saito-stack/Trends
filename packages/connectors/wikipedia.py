@@ -41,9 +41,7 @@ class WikipediaConnector(BaseConnector):
         """
         return FetchResult(items=[], item_count=0)
 
-    def fetch_pageviews(
-        self, wiki_title: str, start_date: str, end_date: str
-    ) -> int | None:
+    def fetch_pageviews(self, wiki_title: str, start_date: str, end_date: str) -> int | None:
         """Fetch pageview count for a specific Wikipedia article.
 
         Args:

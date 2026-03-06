@@ -13,7 +13,10 @@ def test_entity_resolution_and_topic_resolution_stay_separate() -> None:
     entity_index = {f"{CandidateType.MUSIC_ARTIST.value}:ado": entity.candidate_id}
     topic_index = {"adoメイク": topic.candidate_id}
 
-    assert resolve_entity_candidate("Ado", CandidateType.MUSIC_ARTIST, entity_index, alias_index) == entity.candidate_id
+    assert (
+        resolve_entity_candidate("Ado", CandidateType.MUSIC_ARTIST, entity_index, alias_index)
+        == entity.candidate_id
+    )
     assert resolve_topic_candidate("adoメイク", alias_index, topic_index) == topic.candidate_id
     assert entity.kind == CandidateKind.ENTITY
     assert topic.kind == CandidateKind.TOPIC

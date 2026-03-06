@@ -24,9 +24,7 @@ class TestLLMClient:
     @patch("packages.core.llm_client.requests.post")
     def test_chat_success(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": "Hello!"}}]
-        }
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "Hello!"}}]}
         mock_resp.raise_for_status.return_value = None
         mock_post.return_value = mock_resp
 
@@ -37,9 +35,7 @@ class TestLLMClient:
     @patch("packages.core.llm_client.requests.post")
     def test_chat_json_parses_response(self, mock_post: MagicMock) -> None:
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"key": "value"}'}}]
-        }
+        mock_resp.json.return_value = {"choices": [{"message": {"content": '{"key": "value"}'}}]}
         mock_resp.raise_for_status.return_value = None
         mock_post.return_value = mock_resp
 
@@ -63,6 +59,7 @@ class TestLLMClient:
     @patch("packages.core.llm_client.requests.post")
     def test_chat_handles_api_error(self, mock_post: MagicMock) -> None:
         import requests
+
         mock_post.side_effect = requests.RequestException("timeout")
 
         client = LLMClient(api_key="test-key")

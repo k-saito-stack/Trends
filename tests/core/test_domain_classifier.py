@@ -15,6 +15,8 @@ def test_fashion_terms_map_to_fashion_beauty() -> None:
 
 
 def test_business_keywords_are_excluded_from_main_ranking() -> None:
-    result = classify_domain(CandidateType.KEYWORD, "EDITORIAL_MAGAZINE", text="会社四季報 2026年春号")
+    result = classify_domain(
+        CandidateType.KEYWORD, "EDITORIAL_MAGAZINE", text="会社四季報 2026年春号"
+    )
     assert result == DomainClass.BUSINESS_PROFESSIONAL
     assert is_main_ranking_domain(result) is False

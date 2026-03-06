@@ -9,12 +9,12 @@ from packages.core.entity_resolve import (
 )
 from packages.core.models import Candidate, CandidateKind, CandidateStatus, CandidateType
 from packages.core.normalize import normalize_for_matching
+from packages.core.topic_normalize import topic_match_key
 from packages.core.topic_resolve import (
     build_topic_key_index,
     create_topic_candidate,
     resolve_topic_candidate,
 )
-from packages.core.topic_normalize import topic_match_key
 
 
 def resolve_candidate(

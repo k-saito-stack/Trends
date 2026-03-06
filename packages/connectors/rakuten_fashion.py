@@ -68,7 +68,12 @@ class RakutenFashionConnector(BaseConnector):
                             metric=f"rank:{rank}",
                         ),
                         extraction_confidence=ExtractionConfidence.MEDIUM,
-                        domain_class=classify_domain(CandidateType.PRODUCT, self.source_id, text=f"{item_name} {category}", metadata=metadata),
+                        domain_class=classify_domain(
+                            CandidateType.PRODUCT,
+                            self.source_id,
+                            text=f"{item_name} {category}",
+                            metadata=metadata,
+                        ),
                         extra={"brand": brand, "category": category},
                     )
                 )
@@ -87,7 +92,9 @@ class RakutenFashionConnector(BaseConnector):
                             metric=f"rank:{rank}",
                         ),
                         extraction_confidence=ExtractionConfidence.MEDIUM,
-                        domain_class=classify_domain(CandidateType.BRAND, self.source_id, text=brand, metadata=metadata),
+                        domain_class=classify_domain(
+                            CandidateType.BRAND, self.source_id, text=brand, metadata=metadata
+                        ),
                     )
                 )
         return candidates

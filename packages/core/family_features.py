@@ -4,11 +4,32 @@ from __future__ import annotations
 
 from collections import defaultdict
 from math import log1p
+from typing import TypedDict
 
 from packages.core.models import DailySourceFeature, SourceFamily, SourceRole
 
 
-def aggregate_family_metrics(features: list[DailySourceFeature]) -> dict[str, float | list[str] | dict[str, float]]:
+class FamilyAggregateMetrics(TypedDict):
+    family_scores: dict[str, float]
+    role_scores: dict[str, float]
+    family_counts: dict[str, float]
+    discovery_rise: float
+    broad_confirmation: float
+    editorial_support: float
+    commerce_support: float
+    cross_family_confirm: float
+    lead_lag_bonus: float
+    redundancy_penalty: float
+    source_families: list[str]
+    has_discovery: float
+    has_confirmation: float
+    music_confirmation: float
+    show_confirmation: float
+
+
+def aggregate_family_metrics(
+    features: list[DailySourceFeature],
+) -> FamilyAggregateMetrics:
     family_scores: dict[str, float] = defaultdict(float)
     role_scores: dict[str, float] = defaultdict(float)
     family_counts: dict[str, int] = defaultdict(int)
@@ -28,7 +49,8 @@ def aggregate_family_metrics(features: list[DailySourceFeature]) -> dict[str, fl
     confirmation_families = {
         feature.family_primary.value
         for feature in features
-        if feature.source_role in {SourceRole.CONFIRMATION, SourceRole.EDITORIAL, SourceRole.COMMERCE}
+        if feature.source_role
+        in {SourceRole.CONFIRMATION, SourceRole.EDITORIAL, SourceRole.COMMERCE}
     }
 
     redundancy_penalty = sum(max(0, count - 1) * 0.08 for count in family_counts.values())
@@ -38,7 +60,7 @@ def aggregate_family_metrics(features: list[DailySourceFeature]) -> dict[str, fl
     return {
         "family_scores": dict(family_scores),
         "role_scores": dict(role_scores),
-        "family_counts": dict(family_counts),
+        "family_counts": {key: float(value) for key, value in family_counts.items()},
         "discovery_rise": sum(
             feature.surprise01
             for feature in features
@@ -55,9 +77,7 @@ def aggregate_family_metrics(features: list[DailySourceFeature]) -> dict[str, fl
             if feature.source_role == SourceRole.EDITORIAL
         ),
         "commerce_support": sum(
-            feature.surprise01
-            for feature in features
-            if feature.source_role == SourceRole.COMMERCE
+            feature.surprise01 for feature in features if feature.source_role == SourceRole.COMMERCE
         ),
         "cross_family_confirm": cross_family_confirm,
         "lead_lag_bonus": lead_lag_bonus,

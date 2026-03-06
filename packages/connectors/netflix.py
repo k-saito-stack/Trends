@@ -132,15 +132,17 @@ class NetflixTop10Connector(BaseConnector):
             )
 
             # Title as WORK candidate
-            candidates.append(RawCandidate(
-                name=title,
-                type=CandidateType.WORK,
-                source_id=self.source_id,
-                rank=rank,
-                metric_value=_rank_exposure(rank),
-                evidence=evidence,
-                extra={"category": self.category},
-            ))
+            candidates.append(
+                RawCandidate(
+                    name=title,
+                    type=CandidateType.WORK,
+                    source_id=self.source_id,
+                    rank=rank,
+                    metric_value=_rank_exposure(rank),
+                    evidence=evidence,
+                    extra={"category": self.category},
+                )
+            )
 
             # NER on title for person/group extraction
             entities = extract_entities(title, max_entities=3)
@@ -151,15 +153,17 @@ class NetflixTop10Connector(BaseConnector):
                     cand_type = CandidateType(ent_type)
                 except ValueError:
                     cand_type = CandidateType.KEYWORD
-                candidates.append(RawCandidate(
-                    name=ent_text,
-                    type=cand_type,
-                    source_id=self.source_id,
-                    rank=rank,
-                    metric_value=_rank_exposure(rank),
-                    evidence=evidence,
-                    extra={"category": self.category, "from_title": title},
-                ))
+                candidates.append(
+                    RawCandidate(
+                        name=ent_text,
+                        type=cand_type,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                        extra={"category": self.category, "from_title": title},
+                    )
+                )
 
         return candidates
 

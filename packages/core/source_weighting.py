@@ -114,9 +114,9 @@ def compute_c_predictive_f1(
             if not anchor_set:
                 continue
 
-            future_date = (date.fromisoformat(anchor_date) + timedelta(
-                days=weighting_cfg.horizon_days
-            )).isoformat()
+            future_date = (
+                date.fromisoformat(anchor_date) + timedelta(days=weighting_cfg.horizon_days)
+            ).isoformat()
             future_top_k = _aggregate_future_top_k(
                 day_records=records_by_date.get(future_date, {}),
                 exclude_source_id=source_id,
@@ -133,9 +133,9 @@ def compute_c_predictive_f1(
         if precisions and recalls:
             precision = sum(precisions) / len(precisions)
             recall = sum(recalls) / len(recalls)
-            predictive[source_id] = (
-                2.0 * precision * recall
-            ) / (precision + recall + weighting_cfg.epsilon)
+            predictive[source_id] = (2.0 * precision * recall) / (
+                precision + recall + weighting_cfg.epsilon
+            )
         else:
             predictive[source_id] = NEUTRAL_WEIGHT
 
@@ -152,9 +152,8 @@ def compute_i_independence(
     if not as_of_date:
         return {source_id: NEUTRAL_WEIGHT for source_id in source_ids}
 
-    recent_start = (
-        date.fromisoformat(as_of_date)
-        - timedelta(days=max(weighting_cfg.window_days - 1, 0))
+    recent_start = date.fromisoformat(as_of_date) - timedelta(
+        days=max(weighting_cfg.window_days - 1, 0)
     )
     records_by_date = _index_records_by_date(source_daily_records)
     overlap_values: dict[str, list[float]] = {source_id: [] for source_id in source_ids}
@@ -168,8 +167,7 @@ def compute_i_independence(
             continue
 
         source_sets = {
-            source_id: _top_candidate_ids(day_records.get(source_id))
-            for source_id in source_ids
+            source_id: _top_candidate_ids(day_records.get(source_id)) for source_id in source_ids
         }
         for source_id in source_ids:
             if not source_sets[source_id]:
@@ -207,9 +205,8 @@ def compute_s_stability(
     if not as_of_date:
         return {source_id: NEUTRAL_WEIGHT for source_id in source_ids}
 
-    recent_start = (
-        date.fromisoformat(as_of_date)
-        - timedelta(days=max(weighting_cfg.window_days - 1, 0))
+    recent_start = date.fromisoformat(as_of_date) - timedelta(
+        days=max(weighting_cfg.window_days - 1, 0)
     )
     records_by_source = _index_records_by_source(source_daily_records)
     stability: dict[str, float] = {}
@@ -261,10 +258,7 @@ def normalize_average_to_one(raw_weights: dict[str, float]) -> dict[str, float]:
     source_count = len(raw_weights)
     if total <= 0:
         return {source_id: 1.0 for source_id in raw_weights}
-    return {
-        source_id: source_count * weight / total
-        for source_id, weight in raw_weights.items()
-    }
+    return {source_id: source_count * weight / total for source_id, weight in raw_weights.items()}
 
 
 def build_source_daily_snapshots(

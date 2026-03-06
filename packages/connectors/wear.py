@@ -74,7 +74,11 @@ class WearConnector(BaseConnector):
         self, items: list[dict[str, Any]], candidates: list[RawCandidate]
     ) -> list[SignalResult]:
         return [
-            SignalResult(candidate_name=candidate.name, signal_value=candidate.metric_value, evidence=candidate.evidence)
+            SignalResult(
+                candidate_name=candidate.name,
+                signal_value=candidate.metric_value,
+                evidence=candidate.evidence,
+            )
             for candidate in candidates
         ]
 

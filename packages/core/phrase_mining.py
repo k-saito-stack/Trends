@@ -56,7 +56,20 @@ def extract_topic_raw_candidates(
     candidates: list[RawCandidate] = []
     for phrase in extract_topic_phrases(text):
         candidate_type = CandidateType.HASHTAG if phrase.startswith("#") else CandidateType.PHRASE
-        if any(token in phrase for token in ("界隈", "活", "チャレンジ", "する", "つける", "付ける", "交換", "コーデ", "メイク")):
+        if any(
+            token in phrase
+            for token in (
+                "界隈",
+                "活",
+                "チャレンジ",
+                "する",
+                "つける",
+                "付ける",
+                "交換",
+                "コーデ",
+                "メイク",
+            )
+        ):
             candidate_type = CandidateType.BEHAVIOR
         candidates.append(
             RawCandidate(

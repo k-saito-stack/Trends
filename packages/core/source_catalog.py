@@ -46,7 +46,8 @@ class SourceCatalogEntry:
             supports_phrase_candidates=bool(data.get("supports_phrase_candidates", False)),
             supports_entity_candidates=bool(data.get("supports_entity_candidates", True)),
             target_domains=tuple(
-                DomainClass(value) for value in data.get("target_domains", [DomainClass.OTHER.value])
+                DomainClass(value)
+                for value in data.get("target_domains", [DomainClass.OTHER.value])
             ),
             max_weight_cap=float(data.get("max_weight_cap", 1.0)),
         )
@@ -89,6 +90,8 @@ def get_source_entry(source_id: str) -> SourceCatalogEntry | None:
     return load_source_catalog_map().get(source_id)
 
 
-def iter_active_catalog(statuses: tuple[SourceStatus, ...] | None = None) -> tuple[SourceCatalogEntry, ...]:
+def iter_active_catalog(
+    statuses: tuple[SourceStatus, ...] | None = None,
+) -> tuple[SourceCatalogEntry, ...]:
     allowed = statuses or (SourceStatus.CORE, SourceStatus.EXPERIMENTAL)
     return tuple(entry for entry in load_source_catalog() if entry.status in allowed)

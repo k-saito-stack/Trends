@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
 
 from ulid import ULID
 
-from packages.core.models import Candidate, CandidateKind, CandidateStatus, CandidateType, DomainClass
+from packages.core.models import (
+    Candidate,
+    CandidateKind,
+    CandidateStatus,
+    CandidateType,
+    DomainClass,
+)
 from packages.core.normalize import normalize_for_matching, normalize_name
 
 JST = timezone(timedelta(hours=9))
@@ -20,9 +26,13 @@ def build_entity_key_index(candidates: Iterable[Candidate]) -> dict[str, str]:
             continue
         if (candidate.kind or candidate.type.default_kind) != CandidateKind.ENTITY:
             continue
-        index[f"{candidate.type.value}:{normalize_for_matching(candidate.canonical_name)}"] = candidate.candidate_id
+        index[f"{candidate.type.value}:{normalize_for_matching(candidate.canonical_name)}"] = (
+            candidate.candidate_id
+        )
         for alias in candidate.aliases:
-            index[f"{candidate.type.value}:{normalize_for_matching(alias)}"] = candidate.candidate_id
+            index[f"{candidate.type.value}:{normalize_for_matching(alias)}"] = (
+                candidate.candidate_id
+            )
     return index
 
 

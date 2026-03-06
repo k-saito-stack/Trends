@@ -90,14 +90,16 @@ class YouTubeConnector(BaseConnector):
 
             # Channel as candidate (often a person/group)
             if channel:
-                candidates.append(RawCandidate(
-                    name=channel,
-                    type=CandidateType.PERSON,
-                    source_id=self.source_id,
-                    rank=rank,
-                    metric_value=_rank_exposure(rank),
-                    evidence=evidence,
-                ))
+                candidates.append(
+                    RawCandidate(
+                        name=channel,
+                        type=CandidateType.PERSON,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                    )
+                )
 
             # NER: extract entities from video title
             ner_found = False
@@ -108,26 +110,30 @@ class YouTubeConnector(BaseConnector):
                         cand_type = CandidateType(ent_type)
                     except ValueError:
                         cand_type = CandidateType.KEYWORD
-                    candidates.append(RawCandidate(
-                        name=ent_text,
-                        type=cand_type,
-                        source_id=self.source_id,
-                        rank=rank,
-                        metric_value=_rank_exposure(rank),
-                        evidence=evidence,
-                    ))
+                    candidates.append(
+                        RawCandidate(
+                            name=ent_text,
+                            type=cand_type,
+                            source_id=self.source_id,
+                            rank=rank,
+                            metric_value=_rank_exposure(rank),
+                            evidence=evidence,
+                        )
+                    )
                     ner_found = True
 
             # Fallback: if NER found nothing, keep title as KEYWORD
             if not ner_found and title:
-                candidates.append(RawCandidate(
-                    name=title,
-                    type=CandidateType.KEYWORD,
-                    source_id=self.source_id,
-                    rank=rank,
-                    metric_value=_rank_exposure(rank),
-                    evidence=evidence,
-                ))
+                candidates.append(
+                    RawCandidate(
+                        name=title,
+                        type=CandidateType.KEYWORD,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=_rank_exposure(rank),
+                        evidence=evidence,
+                    )
+                )
 
         return candidates
 

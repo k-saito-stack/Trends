@@ -21,10 +21,7 @@ class TestSelectEvidenceTop3:
         assert sources == {"YOUTUBE", "TRENDS", "MUSIC"}
 
     def test_max_items_cap(self) -> None:
-        pool = [
-            Evidence(source_id=f"S{i}", title=f"T{i}", url=f"u{i}")
-            for i in range(10)
-        ]
+        pool = [Evidence(source_id=f"S{i}", title=f"T{i}", url=f"u{i}") for i in range(10)]
         result = select_evidence_top3(pool, max_items=3)
         assert len(result) == 3
 

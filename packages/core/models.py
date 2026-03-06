@@ -799,13 +799,41 @@ class AlgorithmConfig:
     source_weight_floor: float = 0.25
     family_params: dict[str, dict[str, float]] = field(
         default_factory=lambda: {
-            SourceFamily.SEARCH.value: {"halfLifeDays": 3.0, "warmupDays": 1, "momentumLambda": 0.75},
-            SourceFamily.SOCIAL_DISCOVERY.value: {"halfLifeDays": 3.0, "warmupDays": 1, "momentumLambda": 0.75},
-            SourceFamily.FASHION_STYLE.value: {"halfLifeDays": 4.0, "warmupDays": 1, "momentumLambda": 0.75},
-            SourceFamily.COMMERCE.value: {"halfLifeDays": 6.0, "warmupDays": 2, "momentumLambda": 0.70},
-            SourceFamily.MUSIC_CHART.value: {"halfLifeDays": 7.0, "warmupDays": 2, "momentumLambda": 0.70},
-            SourceFamily.SHOW_CHART.value: {"halfLifeDays": 10.0, "warmupDays": 2, "momentumLambda": 0.80},
-            SourceFamily.EDITORIAL.value: {"halfLifeDays": 5.0, "warmupDays": 1, "momentumLambda": 0.65},
+            SourceFamily.SEARCH.value: {
+                "halfLifeDays": 3.0,
+                "warmupDays": 1,
+                "momentumLambda": 0.75,
+            },
+            SourceFamily.SOCIAL_DISCOVERY.value: {
+                "halfLifeDays": 3.0,
+                "warmupDays": 1,
+                "momentumLambda": 0.75,
+            },
+            SourceFamily.FASHION_STYLE.value: {
+                "halfLifeDays": 4.0,
+                "warmupDays": 1,
+                "momentumLambda": 0.75,
+            },
+            SourceFamily.COMMERCE.value: {
+                "halfLifeDays": 6.0,
+                "warmupDays": 2,
+                "momentumLambda": 0.70,
+            },
+            SourceFamily.MUSIC_CHART.value: {
+                "halfLifeDays": 7.0,
+                "warmupDays": 2,
+                "momentumLambda": 0.70,
+            },
+            SourceFamily.SHOW_CHART.value: {
+                "halfLifeDays": 10.0,
+                "warmupDays": 2,
+                "momentumLambda": 0.80,
+            },
+            SourceFamily.EDITORIAL.value: {
+                "halfLifeDays": 5.0,
+                "warmupDays": 1,
+                "momentumLambda": 0.65,
+            },
         }
     )
 

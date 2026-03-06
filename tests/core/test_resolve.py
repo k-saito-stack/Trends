@@ -36,9 +36,7 @@ class TestResolveCandidate:
         alias_idx = build_alias_index(candidates)
         key_idx = build_key_index(candidates)
 
-        result = resolve_candidate(
-            "ヨアソビ", CandidateType.PERSON, candidates, alias_idx, key_idx
-        )
+        result = resolve_candidate("ヨアソビ", CandidateType.PERSON, candidates, alias_idx, key_idx)
         assert result == "C001"
 
     def test_resolve_by_key(self) -> None:
@@ -47,9 +45,7 @@ class TestResolveCandidate:
         alias_idx = build_alias_index(candidates)
         key_idx = build_key_index(candidates)
 
-        result = resolve_candidate(
-            "Ado", CandidateType.PERSON, candidates, alias_idx, key_idx
-        )
+        result = resolve_candidate("Ado", CandidateType.PERSON, candidates, alias_idx, key_idx)
         assert result == "C002"
 
     def test_resolve_new_returns_none(self) -> None:
@@ -68,9 +64,7 @@ class TestResolveCandidate:
         alias_idx = build_alias_index(candidates)
         key_idx = build_key_index(candidates)
 
-        result = resolve_candidate(
-            "Blocked", CandidateType.PERSON, candidates, alias_idx, key_idx
-        )
+        result = resolve_candidate("Blocked", CandidateType.PERSON, candidates, alias_idx, key_idx)
         assert result is None
 
 
@@ -100,7 +94,6 @@ class TestCreateNewCandidate:
 
     def test_creates_with_aliases(self) -> None:
         cand = create_new_candidate(
-            "timelesz", CandidateType.GROUP, "C-NEW-002",
-            aliases=["タイムレス"]
+            "timelesz", CandidateType.GROUP, "C-NEW-002", aliases=["タイムレス"]
         )
         assert cand.aliases == ["タイムレス"]
