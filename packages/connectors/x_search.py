@@ -24,10 +24,11 @@ logger = logging.getLogger(__name__)
 
 # Valid CandidateType values for parsing LLM output
 _VALID_TYPES = {t.value for t in CandidateType}
+_LIVE_SEARCH_TOOL = [{"type": "live_search"}]
 
 
 class XTrendingConnector(BaseConnector):
-    """Discover trending topics on X via xAI x_search (regular source)."""
+    """Discover trending topics on X via xAI live_search (regular source)."""
 
     def __init__(
         self,
@@ -40,7 +41,7 @@ class XTrendingConnector(BaseConnector):
         self.max_results = max_results
 
     def fetch(self) -> FetchResult:
-        """Fetch trending topics from X via xAI x_search tool."""
+        """Fetch trending topics from X via xAI live_search tool."""
         if not self.llm.available:
             return FetchResult(error="XAI_API_KEY not set")
 
@@ -63,7 +64,7 @@ class XTrendingConnector(BaseConnector):
         result = self.llm.chat(
             messages,
             temperature=0,
-            tools=[{"type": "x_search"}],
+            tools=_LIVE_SEARCH_TOOL,
             max_tokens=1500,
         )
 
@@ -154,7 +155,7 @@ class XSearchConnector(BaseConnector):
     def search_candidate(self, candidate_name: str) -> list[Evidence]:
         """Search X posts related to a candidate name.
 
-        Uses xAI's chat completions with x_search tool to find
+        Uses xAI's chat completions with live_search tool to find
         related posts. Returns a list of Evidence items.
         """
         if not self.llm.available:
@@ -177,7 +178,7 @@ class XSearchConnector(BaseConnector):
         result = self.llm.chat(
             messages,
             temperature=0,
-            tools=[{"type": "x_search"}],
+            tools=_LIVE_SEARCH_TOOL,
             max_tokens=800,
         )
 

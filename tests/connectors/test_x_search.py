@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from packages.connectors.x_search import XSearchConnector, _extract_json_array
+from packages.connectors.x_search import (
+    XSearchConnector,
+    XTrendingConnector,
+    _extract_json_array,
+)
 
 
 class TestExtractJsonArray:
@@ -55,6 +59,7 @@ class TestXSearchConnector:
         assert len(results) == 1
         assert results[0].source_id == "X_SEARCH"
         assert "YOASOBI" in results[0].title or "x.com" in results[0].url
+        assert mock_post.call_args.kwargs["json"]["tools"] == [{"type": "live_search"}]
 
     @patch("packages.core.llm_client.requests.post")
     def test_search_candidate_fallback_on_bad_json(self, mock_post: MagicMock) -> None:
@@ -86,3 +91,27 @@ class TestXSearchConnector:
         result = connector.fetch()
         assert result.items == []
         assert result.item_count == 0
+
+
+class TestXTrendingConnector:
+    @patch("packages.core.llm_client.requests.post")
+    def test_fetch_success_uses_live_search(self, mock_post: MagicMock) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "choices": [{
+                "message": {
+                    "content": '[{"name": "YOASOBI", "type": "MUSIC_ARTIST", '
+                               '"engagement": 5000, "summary": "new release"}]'
+                }
+            }]
+        }
+        mock_resp.raise_for_status.return_value = None
+        mock_post.return_value = mock_resp
+
+        connector = XTrendingConnector(api_key="test-key", max_results=10)
+        result = connector.fetch()
+
+        assert result.error is None
+        assert result.item_count == 1
+        assert result.items[0]["name"] == "YOASOBI"
+        assert mock_post.call_args.kwargs["json"]["tools"] == [{"type": "live_search"}]

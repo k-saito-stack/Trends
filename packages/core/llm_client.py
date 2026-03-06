@@ -51,7 +51,7 @@ class LLMClient:
         Args:
             messages: List of {"role": ..., "content": ...} dicts
             temperature: Sampling temperature (0 = deterministic)
-            tools: Optional tools list (e.g. [{"type": "x_search"}])
+            tools: Optional tools list (e.g. [{"type": "live_search"}])
             max_tokens: Maximum response tokens
 
         Returns:
