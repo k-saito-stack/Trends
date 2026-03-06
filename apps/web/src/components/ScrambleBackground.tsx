@@ -6,7 +6,7 @@ import { useRef, useEffect } from "react";
 
 const CHARS = "01234567890!@#$%^&*()+-=[]{}|;:,.<>?/~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const CHAR_SIZE = 14;
-const COLOR = [25, 37, 170]; // #1925aa in RGB
+const COLOR = [255, 255, 255]; // white
 const CURSOR_RADIUS = 120;
 const SCRAMBLE_SPEED = 0.08; // lower = slower character change rate
 
@@ -113,12 +113,10 @@ export default function ScrambleBackground() {
               : 20 + Math.random() * 80;  // slow ambient swap
           }
 
-          // Alpha: base is very subtle, brighter near cursor
-          let alpha = 0.06;
-          if (inRange) {
-            const proximity = 1 - dist / CURSOR_RADIUS;
-            alpha = 0.06 + proximity * 0.35;
-          }
+          // Only render near cursor — invisible otherwise
+          if (!inRange) continue;
+          const proximity = 1 - dist / CURSOR_RADIUS;
+          const alpha = proximity * 0.45;
 
           // Draw position: slight displacement near cursor
           let drawX = cx;
