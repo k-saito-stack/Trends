@@ -13,27 +13,27 @@ class TestComputeDegradeState:
         assert state.x_search_enabled is True
         assert state.x_search_max == 20
 
-    def test_template_mode_at_60_percent(self) -> None:
+    def test_summary_stays_llm_at_60_percent(self) -> None:
         state = compute_degrade_state(0.65, AppConfig())
-        assert state.summary_mode == "TEMPLATE"
+        assert state.summary_mode == "LLM"
         assert state.x_search_enabled is True
         assert state.x_search_max == 20
 
     def test_reduced_x_search_at_80_percent(self) -> None:
         state = compute_degrade_state(0.85, AppConfig())
-        assert state.summary_mode == "TEMPLATE"
+        assert state.summary_mode == "LLM"
         assert state.x_search_enabled is True
         assert state.x_search_max == 5
 
-    def test_all_disabled_at_100_percent(self) -> None:
+    def test_only_x_search_disabled_at_100_percent(self) -> None:
         state = compute_degrade_state(1.0, AppConfig())
-        assert state.summary_mode == "OFF"
+        assert state.summary_mode == "LLM"
         assert state.x_search_enabled is False
         assert state.x_search_max == 0
 
     def test_over_budget(self) -> None:
         state = compute_degrade_state(1.5, AppConfig())
-        assert state.summary_mode == "OFF"
+        assert state.summary_mode == "LLM"
         assert state.x_search_enabled is False
 
     def test_zero_budget(self) -> None:
@@ -44,7 +44,7 @@ class TestComputeDegradeState:
     def test_custom_thresholds(self) -> None:
         config = AppConfig(template_at_ratio=0.5, x_search_reduce_at_ratio=0.7)
         state = compute_degrade_state(0.55, config)
-        assert state.summary_mode == "TEMPLATE"
+        assert state.summary_mode == "LLM"
 
     def test_degrade_state_to_dict(self) -> None:
         state = compute_degrade_state(0.5, AppConfig())

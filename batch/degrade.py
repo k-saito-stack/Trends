@@ -3,7 +3,9 @@
 When monthly budget usage exceeds thresholds, automatically reduce
 expensive operations to stay within budget.
 
-Spec reference: Section 7 (Cost Degradation Tiers)
+Current policy:
+- xAI summaries stay on even above budget thresholds.
+- Only X search is degraded by budget ratio.
 """
 
 from __future__ import annotations
@@ -39,11 +41,11 @@ def compute_degrade_state(
 ) -> DegradeState:
     """Determine degradation level based on budget usage.
 
-    Thresholds (from spec):
-    - < 60%: Full mode (LLM summaries, full X search)
-    - 60-80%: Switch summaries to TEMPLATE (no LLM cost)
-    - 80-100%: Reduce X search to top 5 only
-    - >= 100%: Disable X search entirely, summaries OFF
+    Thresholds:
+    - < template_at: LLM summaries, full X search
+    - template_at to x_reduce_at: LLM summaries, full X search
+    - x_reduce_at to 100%: LLM summaries, reduced X search
+    - >= 100%: LLM summaries, X search disabled
 
     Args:
         budget_ratio: Current month cost / monthly budget (0.0 to 1.0+)
@@ -58,30 +60,39 @@ def compute_degrade_state(
     reduced_x_search_max = min(5, app_config.top_k)
 
     if budget_ratio >= 1.0:
-        logger.warning("Budget exceeded (%.0f%%), disabling all paid APIs", budget_ratio * 100)
+        logger.warning(
+            "Budget exceeded (%.0f%%), disabling X search but keeping LLM summaries on",
+            budget_ratio * 100,
+        )
         return DegradeState(
-            summary_mode="OFF",
+            summary_mode="LLM",
             x_search_enabled=False,
             x_search_max=0,
-            reason=f"Budget exceeded ({budget_ratio:.0%})",
+            reason=f"Budget exceeded ({budget_ratio:.0%}), X search disabled",
         )
 
     if budget_ratio >= x_reduce_at:
-        logger.info("Budget at %.0f%%, reducing X search to top 5", budget_ratio * 100)
+        logger.info(
+            "Budget at %.0f%%, reducing X search to top 5 while keeping LLM summaries on",
+            budget_ratio * 100,
+        )
         return DegradeState(
-            summary_mode="TEMPLATE",
+            summary_mode="LLM",
             x_search_enabled=True,
             x_search_max=reduced_x_search_max,
             reason=f"Budget at {budget_ratio:.0%}, reducing X search",
         )
 
     if budget_ratio >= template_at:
-        logger.info("Budget at %.0f%%, switching to template summaries", budget_ratio * 100)
+        logger.info(
+            "Budget at %.0f%%, keeping LLM summaries on and leaving X search unchanged",
+            budget_ratio * 100,
+        )
         return DegradeState(
-            summary_mode="TEMPLATE",
+            summary_mode="LLM",
             x_search_enabled=True,
             x_search_max=full_x_search_max,
-            reason=f"Budget at {budget_ratio:.0%}, template summaries",
+            reason=f"Budget at {budget_ratio:.0%}, summaries stay LLM",
         )
 
     # Full mode
