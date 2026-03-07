@@ -70,6 +70,11 @@ logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
 LOCK_TIMEOUT_MINUTES = 30
+PUBLISH_COLLECTIONS = ("daily_rankings", "daily_rankings_v2", "daily_rankings_v2_shadow")
+
+
+def _is_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def get_target_date(date_arg: str) -> str:
@@ -172,6 +177,84 @@ def release_lock(target_date: str, run_id: str, status: str = "COMPLETED") -> No
     )
 
 
+def _load_existing_published_meta(target_date: str) -> DailyRankingMeta | None:
+    from packages.core import firestore_client
+
+    day_doc = firestore_client.get_document("daily_rankings", target_date)
+    if day_doc:
+        day_meta = DailyRankingMeta.from_dict(day_doc)
+        if day_meta.published_at and day_meta.latest_published_run_id:
+            return day_meta
+
+    run_docs = firestore_client.get_collection(f"daily_rankings/{target_date}/runs")
+    published_runs = [
+        DailyRankingMeta.from_dict(doc)
+        for doc in run_docs
+        if doc.get("publishedAt") and doc.get("runId")
+    ]
+    if not published_runs:
+        return None
+    return max(published_runs, key=lambda meta: meta.published_at)
+
+
+def _should_use_light_publish(existing_published_meta: DailyRankingMeta | None) -> bool:
+    if _is_truthy(os.environ.get("BATCH_FORCE_FULL_PERSIST")):
+        return False
+
+    explicit_light_publish = os.environ.get("BATCH_LIGHT_PUBLISH_ONLY")
+    if explicit_light_publish is not None:
+        return _is_truthy(explicit_light_publish)
+
+    return existing_published_meta is not None
+
+
+def _build_item_collection_paths(
+    target_date: str,
+    run_id: str,
+    light_publish: bool,
+) -> tuple[str, ...]:
+    if light_publish:
+        return (f"daily_rankings/{target_date}/runs/{run_id}/items",)
+    return (
+        f"daily_rankings/{target_date}/items",
+        f"daily_rankings_v2_shadow/{target_date}/items",
+        f"daily_rankings/{target_date}/runs/{run_id}/items",
+    )
+
+
+def _build_reset_collection_paths(target_date: str, light_publish: bool) -> tuple[str, ...]:
+    if light_publish:
+        return ()
+    return (
+        f"daily_rankings/{target_date}/items",
+        f"daily_rankings_v2/{target_date}/items",
+        f"daily_rankings_v2_shadow/{target_date}/items",
+    )
+
+
+def _build_publish_meta(
+    target_date: str,
+    generated_at: str,
+    run_id: str,
+    top_k: int,
+    degrade: DegradeState,
+    *,
+    status: str,
+    published_at: str = "",
+    latest_published_run_id: str = "",
+) -> DailyRankingMeta:
+    return DailyRankingMeta(
+        date=target_date,
+        generated_at=generated_at,
+        run_id=run_id,
+        top_k=top_k,
+        degrade_state=degrade.to_dict(),  # type: ignore[arg-type]
+        status=status,
+        published_at=published_at,
+        latest_published_run_id=latest_published_run_id,
+    )
+
+
 def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[BaseConnector]:
     from packages.connectors.registry import build_connectors
 
@@ -211,12 +294,7 @@ def main(date_arg: str = "today") -> None:
     target_date = get_target_date(date_arg)
     run_id = str(ULID())
     errors: list[str] = []
-    allow_completed_rerun = os.environ.get("BATCH_ALLOW_RERUN_COMPLETED", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    allow_completed_rerun = _is_truthy(os.environ.get("BATCH_ALLOW_RERUN_COMPLETED"))
 
     logger.info("=== Trends Daily Batch v2 ===")
     logger.info("Run ID: %s", run_id)
@@ -255,8 +333,17 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     except Exception as exc:
         logger.warning("Failed to compute degrade state: %s", exc)
 
-    with contextlib.suppress(Exception):
-        start_run(run_id, target_date, degrade.to_dict())
+    existing_published_meta = _load_existing_published_meta(target_date)
+    light_publish = _should_use_light_publish(existing_published_meta)
+    if light_publish:
+        logger.info(
+            "Existing published snapshot detected for %s; using light publish mode.",
+            target_date,
+        )
+
+    if not light_publish:
+        with contextlib.suppress(Exception):
+            start_run(run_id, target_date, degrade.to_dict())
 
     connectors = _create_connectors(source_cfg_list)
     source_cfg_map = _build_runtime_source_cfg_map(source_cfg_list, connectors)
@@ -307,8 +394,11 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             source_errors[source_id] = run_result.error
             errors.append(f"{source_id}: {run_result.error}")
 
-        with contextlib.suppress(Exception):
-            update_run_source(run_id, source_id, len(run_result.candidates), error=run_result.error)
+        if not light_publish:
+            with contextlib.suppress(Exception):
+                update_run_source(
+                    run_id, source_id, len(run_result.candidates), error=run_result.error
+                )
 
         if not run_result.ok or entry is None:
             continue
@@ -455,19 +545,22 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
     logger.info("Step 9: Writing observations and rankings...")
     generated_at = datetime.now(JST).isoformat()
-    source_daily_snapshots = build_source_daily_snapshots(
-        target_date=target_date,
-        generated_at=generated_at,
-        source_ids=weighted_source_ids,
-        source_ok=source_ok,
-        source_item_count=source_item_count,
-        source_momentum=source_momentum,
-        source_cfgs=source_cfg_map,
-        weighting_cfg=source_weighting_config,
-    )
+
+    source_daily_snapshots = []
+    if not light_publish:
+        source_daily_snapshots = build_source_daily_snapshots(
+            target_date=target_date,
+            generated_at=generated_at,
+            source_ids=weighted_source_ids,
+            source_ok=source_ok,
+            source_item_count=source_item_count,
+            source_momentum=source_momentum,
+            source_cfgs=source_cfg_map,
+            weighting_cfg=source_weighting_config,
+        )
 
     next_weight_snapshot: SourceWeightSnapshot | None = None
-    if weighted_source_ids:
+    if weighted_source_ids and not light_publish:
         try:
             history_map = load_source_daily(target_date, source_weighting_config)
             for snapshot in source_daily_snapshots:
@@ -521,82 +614,91 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     try:
         from packages.core import firestore_client
 
-        meta = DailyRankingMeta(
-            date=target_date,
+        meta = _build_publish_meta(
+            target_date=target_date,
             generated_at=generated_at,
             run_id=run_id,
             top_k=app_config.top_k,
-            degrade_state=degrade.to_dict(),  # type: ignore[arg-type]
+            degrade=degrade,
             status="BUILDING",
+            published_at=existing_published_meta.published_at if existing_published_meta else "",
+            latest_published_run_id=(
+                existing_published_meta.latest_published_run_id if existing_published_meta else ""
+            ),
         )
-        firestore_client.set_document("daily_rankings", target_date, meta.to_dict())
-        firestore_client.set_document("daily_rankings_v2", target_date, meta.to_dict())
-        firestore_client.set_document("daily_rankings_v2_shadow", target_date, meta.to_dict())
+        if existing_published_meta is None:
+            for collection_name in PUBLISH_COLLECTIONS:
+                firestore_client.set_document(collection_name, target_date, meta.to_dict())
         firestore_client.set_document(f"daily_rankings/{target_date}/runs", run_id, meta.to_dict())
 
-        for collection_path in (
-            f"daily_rankings/{target_date}/items",
-            f"daily_rankings_v2/{target_date}/items",
-            f"daily_rankings_v2_shadow/{target_date}/items",
-            f"daily_rankings/{target_date}/runs/{run_id}/items",
-        ):
+        for collection_path in _build_reset_collection_paths(target_date, light_publish):
             firestore_client.delete_collection_documents(collection_path)
 
         item_ops = []
+        item_collection_paths = _build_item_collection_paths(target_date, run_id, light_publish)
         for item in ranking_items:
             item_dict = item.to_dict()
-            item_ops.append((f"daily_rankings/{target_date}/items", item.candidate_id, item_dict))
-            item_ops.append(
-                (f"daily_rankings_v2/{target_date}/items", item.candidate_id, item_dict)
-            )
-            item_ops.append(
-                (f"daily_rankings_v2_shadow/{target_date}/items", item.candidate_id, item_dict)
-            )
-            item_ops.append(
-                (f"daily_rankings/{target_date}/runs/{run_id}/items", item.candidate_id, item_dict)
-            )
+            for collection_path in item_collection_paths:
+                item_ops.append((collection_path, item.candidate_id, item_dict))
         if item_ops:
-            firestore_client.batch_write(item_ops)
+            if light_publish:
+                firestore_client.batch_write_with_chunk_size(item_ops, chunk_size=10)
+            else:
+                firestore_client.batch_write(item_ops)
 
-        candidate_store.save_observations(observations)
-        candidate_store.save_daily_source_features(source_features)
-        candidate_store.save_daily_candidate_features(candidate_feature_list)
-        candidate_store.upsert_touched_candidates(touched_candidates)
-        candidate_store.save_daily_rankings_v2(target_date, ranked_candidates)
+        if not light_publish:
+            candidate_store.save_observations(observations)
+            candidate_store.save_daily_source_features(source_features)
+            candidate_store.save_daily_candidate_features(candidate_feature_list)
+            candidate_store.upsert_touched_candidates(touched_candidates)
+            candidate_store.save_daily_rankings_v2(target_date, ranked_candidates)
 
-        source_health_ops = [
-            ("source_health", record.document_id, record.to_dict())
-            for record in build_source_health_records(
-                target_date, source_ok, source_item_count, errors=source_errors
-            )
-        ]
-        if source_health_ops:
-            firestore_client.batch_write(source_health_ops)
+            source_health_ops = [
+                ("source_health", record.document_id, record.to_dict())
+                for record in build_source_health_records(
+                    target_date, source_ok, source_item_count, errors=source_errors
+                )
+            ]
+            if source_health_ops:
+                firestore_client.batch_write(source_health_ops)
 
-        source_daily_ops = [
-            ("source_daily", snapshot.document_id, snapshot.to_dict())
-            for snapshot in source_daily_snapshots
-        ]
-        if source_daily_ops:
-            firestore_client.batch_write(source_daily_ops)
+            source_daily_ops = [
+                ("source_daily", snapshot.document_id, snapshot.to_dict())
+                for snapshot in source_daily_snapshots
+            ]
+            if source_daily_ops:
+                firestore_client.batch_write(source_daily_ops)
 
-        if next_weight_snapshot is not None:
-            firestore_client.set_document(
-                "source_weights", next_weight_snapshot.date, next_weight_snapshot.to_dict()
-            )
-            firestore_client.set_document(
-                "config", "source_weights_current", next_weight_snapshot.to_dict()
-            )
+            if next_weight_snapshot is not None:
+                firestore_client.set_document(
+                    "source_weights", next_weight_snapshot.date, next_weight_snapshot.to_dict()
+                )
+                firestore_client.set_document(
+                    "config", "source_weights_current", next_weight_snapshot.to_dict()
+                )
 
-        publish_fields = {
-            "status": "PUBLISHED",
-            "publishedAt": datetime.now(JST).isoformat(),
-            "latestPublishedRunId": run_id,
-        }
-        for collection in ("daily_rankings", "daily_rankings_v2", "daily_rankings_v2_shadow"):
-            firestore_client.update_document(collection, target_date, publish_fields)
+        published_at = datetime.now(JST).isoformat()
+        publish_meta = _build_publish_meta(
+            target_date=target_date,
+            generated_at=generated_at,
+            run_id=run_id,
+            top_k=app_config.top_k,
+            degrade=degrade,
+            status="PUBLISHED",
+            published_at=published_at,
+            latest_published_run_id=run_id,
+        )
+        collections_to_publish = ("daily_rankings",) if light_publish else PUBLISH_COLLECTIONS
+        for collection in collections_to_publish:
+            firestore_client.set_document(collection, target_date, publish_meta.to_dict())
         firestore_client.update_document(
-            f"daily_rankings/{target_date}/runs", run_id, publish_fields
+            f"daily_rankings/{target_date}/runs",
+            run_id,
+            {
+                "status": "PUBLISHED",
+                "publishedAt": published_at,
+                "latestPublishedRunId": run_id,
+            },
         )
         published_successfully = True
     except Exception as exc:
@@ -605,13 +707,14 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
     logger.info("Step 10: Finalize run...")
     cost_jpy = estimate_run_cost(sources_used, 0, llm_summary_calls)
-    with contextlib.suppress(Exception):
-        record_run_cost(
-            run_id,
-            target_date,
-            cost_jpy,
-            {"sources": sources_used, "xSearchCalls": 0, "llmSummaryCalls": llm_summary_calls},
-        )
+    if not light_publish:
+        with contextlib.suppress(Exception):
+            record_run_cost(
+                run_id,
+                target_date,
+                cost_jpy,
+                {"sources": sources_used, "xSearchCalls": 0, "llmSummaryCalls": llm_summary_calls},
+            )
 
     run_status = (
         "SUCCESS"
@@ -620,15 +723,16 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         if published_successfully
         else "FAILED"
     )
-    with contextlib.suppress(Exception):
-        end_run(
-            run_id,
-            status=run_status,
-            candidate_count=len(touched_candidates),
-            top_k=len(top_candidates),
-            errors=errors or None,
-            cost_jpy=cost_jpy,
-        )
+    if not light_publish:
+        with contextlib.suppress(Exception):
+            end_run(
+                run_id,
+                status=run_status,
+                candidate_count=len(touched_candidates),
+                top_k=len(top_candidates),
+                errors=errors or None,
+                cost_jpy=cost_jpy,
+            )
 
     with contextlib.suppress(Exception):
         release_lock(

@@ -1,0 +1,135 @@
+"""Tests for rerun publish mode selection."""
+
+from __future__ import annotations
+
+from batch import run as run_module
+from packages.core.models import DailyRankingMeta
+
+
+class TestLoadExistingPublishedMeta:
+    def test_prefers_day_document_when_publish_fields_exist(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "packages.core.firestore_client.get_document",
+            lambda *args, **kwargs: {
+                "date": "2026-03-07",
+                "generatedAt": "2026-03-07T02:09:35+09:00",
+                "runId": "run_day",
+                "topK": 50,
+                "status": "PUBLISHED",
+                "publishedAt": "2026-03-07T02:09:44+09:00",
+                "latestPublishedRunId": "run_day",
+            },
+        )
+        monkeypatch.setattr(
+            "packages.core.firestore_client.get_collection",
+            lambda *args, **kwargs: [],
+        )
+
+        meta = run_module._load_existing_published_meta("2026-03-07")
+
+        assert isinstance(meta, DailyRankingMeta)
+        assert meta is not None
+        assert meta.run_id == "run_day"
+
+    def test_falls_back_to_latest_published_run_when_day_doc_was_overwritten(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            "packages.core.firestore_client.get_document",
+            lambda *args, **kwargs: {
+                "date": "2026-03-07",
+                "generatedAt": "2026-03-07T07:36:56+09:00",
+                "runId": "failed_run",
+                "topK": 50,
+                "status": "BUILDING",
+                "publishedAt": "",
+                "latestPublishedRunId": "",
+            },
+        )
+        monkeypatch.setattr(
+            "packages.core.firestore_client.get_collection",
+            lambda *args, **kwargs: [
+                {
+                    "date": "2026-03-07",
+                    "generatedAt": "2026-03-07T02:02:35+09:00",
+                    "runId": "run_old",
+                    "topK": 50,
+                    "status": "PUBLISHED",
+                    "publishedAt": "2026-03-07T02:02:45+09:00",
+                    "latestPublishedRunId": "run_old",
+                },
+                {
+                    "date": "2026-03-07",
+                    "generatedAt": "2026-03-07T02:09:35+09:00",
+                    "runId": "run_new",
+                    "topK": 50,
+                    "status": "PUBLISHED",
+                    "publishedAt": "2026-03-07T02:09:44+09:00",
+                    "latestPublishedRunId": "run_new",
+                },
+            ],
+        )
+
+        meta = run_module._load_existing_published_meta("2026-03-07")
+
+        assert isinstance(meta, DailyRankingMeta)
+        assert meta is not None
+        assert meta.run_id == "run_new"
+
+
+class TestLightPublishMode:
+    def test_uses_light_publish_when_existing_snapshot_exists(self, monkeypatch) -> None:
+        monkeypatch.delenv("BATCH_FORCE_FULL_PERSIST", raising=False)
+        monkeypatch.delenv("BATCH_LIGHT_PUBLISH_ONLY", raising=False)
+
+        existing = DailyRankingMeta(
+            date="2026-03-07",
+            generated_at="2026-03-07T02:09:35+09:00",
+            run_id="run_new",
+            top_k=50,
+            status="PUBLISHED",
+            published_at="2026-03-07T02:09:44+09:00",
+            latest_published_run_id="run_new",
+        )
+
+        assert run_module._should_use_light_publish(existing) is True
+
+    def test_force_full_persist_disables_light_publish(self, monkeypatch) -> None:
+        monkeypatch.setenv("BATCH_FORCE_FULL_PERSIST", "1")
+        monkeypatch.delenv("BATCH_LIGHT_PUBLISH_ONLY", raising=False)
+
+        existing = DailyRankingMeta(
+            date="2026-03-07",
+            generated_at="2026-03-07T02:09:35+09:00",
+            run_id="run_new",
+            top_k=50,
+            status="PUBLISHED",
+            published_at="2026-03-07T02:09:44+09:00",
+            latest_published_run_id="run_new",
+        )
+
+        assert run_module._should_use_light_publish(existing) is False
+
+
+class TestPublishPathPlanning:
+    def test_light_publish_writes_only_versioned_run_items(self) -> None:
+        paths = run_module._build_item_collection_paths(
+            "2026-03-07",
+            "run_new",
+            light_publish=True,
+        )
+
+        assert paths == ("daily_rankings/2026-03-07/runs/run_new/items",)
+
+    def test_full_publish_keeps_legacy_and_shadow_paths(self) -> None:
+        paths = run_module._build_item_collection_paths(
+            "2026-03-07",
+            "run_new",
+            light_publish=False,
+        )
+
+        assert paths == (
+            "daily_rankings/2026-03-07/items",
+            "daily_rankings_v2_shadow/2026-03-07/items",
+            "daily_rankings/2026-03-07/runs/run_new/items",
+        )

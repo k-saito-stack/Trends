@@ -223,9 +223,19 @@ def batch_write(operations: list[tuple[str, str, dict[str, Any]]]) -> None:
         operations: List of (collection_path, document_id, data) tuples.
             collection_path can be nested like "daily_rankings/2026-03-03/items"
     """
+    batch_write_with_chunk_size(operations)
+
+
+def batch_write_with_chunk_size(
+    operations: list[tuple[str, str, dict[str, Any]]],
+    *,
+    chunk_size: int = MAX_BATCH_WRITE_OPERATIONS,
+) -> None:
+    """Execute multiple writes in batches using a caller-specified chunk size."""
     db = get_db()
-    for i in range(0, len(operations), MAX_BATCH_WRITE_OPERATIONS):
-        chunk = operations[i : i + MAX_BATCH_WRITE_OPERATIONS]
+    effective_chunk_size = max(1, min(chunk_size, MAX_BATCH_WRITE_OPERATIONS))
+    for i in range(0, len(operations), effective_chunk_size):
+        chunk = operations[i : i + effective_chunk_size]
         batch = db.batch()
         for collection_path, doc_id, data in chunk:
             doc_ref = db.collection(collection_path).document(doc_id)

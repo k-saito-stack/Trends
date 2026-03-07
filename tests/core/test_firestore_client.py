@@ -61,6 +61,18 @@ class TestBatchWrite:
 
         assert fake_db.commit_sizes == [500, 1]
 
+    def test_batch_write_with_custom_chunk_size(self, monkeypatch) -> None:
+        fake_db = FakeDB()
+        monkeypatch.setattr(firestore_client, "get_db", lambda: fake_db)
+
+        operations = [
+            ("daily_rankings/2026-03-07/items", f"cand_{i}", {"rank": i}) for i in range(5)
+        ]
+
+        firestore_client.batch_write_with_chunk_size(operations, chunk_size=2)
+
+        assert fake_db.commit_sizes == [2, 2, 1]
+
     def test_batch_write_retries_on_quota_errors(self, monkeypatch) -> None:
         fake_db = FakeDB()
         fake_db.fail_commit_attempts = 1
