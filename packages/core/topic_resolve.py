@@ -22,7 +22,7 @@ JST = timezone(timedelta(hours=9))
 def build_topic_key_index(candidates: Iterable[Candidate]) -> dict[str, str]:
     index: dict[str, str] = {}
     for candidate in candidates:
-        if candidate.status == CandidateStatus.BLOCKED:
+        if candidate.status != CandidateStatus.ACTIVE:
             continue
         if (candidate.kind or candidate.type.default_kind) != CandidateKind.TOPIC:
             continue

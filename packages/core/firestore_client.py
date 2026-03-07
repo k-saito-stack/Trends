@@ -278,6 +278,13 @@ def delete_collection_documents(collection_path: str) -> int:
     return deleted
 
 
+def delete_document(collection: str, document_id: str) -> None:
+    """Delete a single document from Firestore."""
+    db = get_db()
+    doc_ref = db.collection(collection).document(document_id)
+    _run_with_retry(doc_ref.delete)
+
+
 def reset_client() -> None:
     """Reset the client (for testing)."""
     global _app, _db

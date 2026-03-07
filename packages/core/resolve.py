@@ -32,7 +32,7 @@ def resolve_candidate(
             candidate_id = external_id_index.get(key)
             if candidate_id:
                 candidate = existing_candidates.get(candidate_id)
-                if candidate is not None and candidate.status != CandidateStatus.BLOCKED:
+                if candidate is not None and candidate.status == CandidateStatus.ACTIVE:
                     return candidate_id
 
     if candidate_type.default_kind == CandidateKind.TOPIC:
@@ -45,7 +45,7 @@ def resolve_candidate(
     if candidate_id is None:
         return None
     candidate = existing_candidates.get(candidate_id)
-    if candidate is None or candidate.status == CandidateStatus.BLOCKED:
+    if candidate is None or candidate.status != CandidateStatus.ACTIVE:
         return None
     if candidate.manual_lock and not _matches_locked_surface(candidate, name):
         return None
@@ -55,7 +55,7 @@ def resolve_candidate(
 def build_alias_index(candidates: dict[str, Candidate]) -> dict[str, str]:
     alias_index: dict[str, str] = {}
     for candidate in candidates.values():
-        if candidate.status == CandidateStatus.BLOCKED:
+        if candidate.status != CandidateStatus.ACTIVE:
             continue
         aliases = [candidate.canonical_name, *candidate.aliases]
         for alias in aliases:
@@ -76,7 +76,7 @@ def build_key_index(candidates: dict[str, Candidate]) -> dict[str, str]:
 def build_external_id_index(candidates: dict[str, Candidate]) -> dict[str, str]:
     index: dict[str, str] = {}
     for candidate in candidates.values():
-        if candidate.status == CandidateStatus.BLOCKED:
+        if candidate.status != CandidateStatus.ACTIVE:
             continue
         for provider, external_id in candidate.external_ids.items():
             normalized_provider = str(provider).strip()

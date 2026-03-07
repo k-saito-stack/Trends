@@ -165,6 +165,10 @@ def _pair_guardrails_pass(left: Candidate, right: Candidate) -> bool:
         return False
     if _external_ids_conflict(left, right):
         return False
+    if right.candidate_id in _resolution_exclude_ids(left):
+        return False
+    if left.candidate_id in _resolution_exclude_ids(right):
+        return False
     return not (
         right.candidate_id in left.related_candidate_ids
         or left.candidate_id in right.related_candidate_ids
@@ -333,6 +337,13 @@ def _token_overlap(left_name: str, right_name: str) -> float:
 def _build_pair_id(left_candidate_id: str, right_candidate_id: str) -> str:
     ordered = sorted([left_candidate_id, right_candidate_id])
     return hashlib.sha1(f"{ordered[0]}|{ordered[1]}".encode()).hexdigest()
+
+
+def _resolution_exclude_ids(candidate: Candidate) -> set[str]:
+    raw = candidate.metadata.get("resolutionExcludeIds", [])
+    if not isinstance(raw, list):
+        return set()
+    return {str(value) for value in raw if value}
 
 
 def _register_relation(

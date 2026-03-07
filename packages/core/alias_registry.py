@@ -34,7 +34,7 @@ class AliasRecord:
 def build_alias_records(candidates: Iterable[Candidate]) -> list[AliasRecord]:
     records: list[AliasRecord] = []
     for candidate in candidates:
-        if candidate.status == CandidateStatus.BLOCKED:
+        if candidate.status != CandidateStatus.ACTIVE:
             continue
         for alias in [candidate.canonical_name, *candidate.aliases]:
             match_key = (
@@ -69,3 +69,15 @@ def save_alias_records(records: Iterable[AliasRecord]) -> None:
     operations = [("candidate_aliases", record.alias_id, record.to_dict()) for record in records]
     if operations:
         firestore_client.batch_write(operations)
+
+
+def delete_alias_records_for_candidate(candidate_id: str) -> int:
+    docs = firestore_client.get_collection("candidate_aliases")
+    alias_ids = [
+        str(doc.get("aliasId", ""))
+        for doc in docs
+        if str(doc.get("candidateId", "")) == candidate_id and doc.get("aliasId")
+    ]
+    for alias_id in alias_ids:
+        firestore_client.delete_document("candidate_aliases", alias_id)
+    return len(alias_ids)

@@ -68,6 +68,15 @@ class TestResolveCandidate:
         result = resolve_candidate("Blocked", CandidateType.PERSON, candidates, alias_idx, key_idx)
         assert result is None
 
+    def test_merged_candidate_not_resolved(self) -> None:
+        cand = _make_candidate("C003M", "Merged", status=CandidateStatus.MERGED)
+        candidates = {"C003M": cand}
+        alias_idx = build_alias_index(candidates)
+        key_idx = build_key_index(candidates)
+
+        result = resolve_candidate("Merged", CandidateType.PERSON, candidates, alias_idx, key_idx)
+        assert result is None
+
     def test_resolve_by_external_id_first(self) -> None:
         cand = _make_candidate("C004", "Mrs. GREEN APPLE", CandidateType.MUSIC_ARTIST)
         cand.external_ids = {"apple_music_artist": "am-123"}
@@ -122,6 +131,11 @@ class TestBuildAliasIndex:
 
     def test_blocked_excluded(self) -> None:
         cand = _make_candidate("C001", "Blocked", status=CandidateStatus.BLOCKED)
+        idx = build_alias_index({"C001": cand})
+        assert len(idx) == 0
+
+    def test_merged_excluded(self) -> None:
+        cand = _make_candidate("C001", "Merged", status=CandidateStatus.MERGED)
         idx = build_alias_index({"C001": cand})
         assert len(idx) == 0
 

@@ -719,6 +719,8 @@ def _run_pipeline(
             resolution_results,
             created_at=datetime.now(JST).isoformat(),
         )
+        for queue_item in unresolved_queue_items:
+            queue_item["date"] = target_date
         if unresolved_relations:
             relation_map = {relation.document_id: relation for relation in candidate_relations}
             for relation in unresolved_relations:

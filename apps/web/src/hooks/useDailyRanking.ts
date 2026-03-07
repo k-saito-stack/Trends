@@ -5,6 +5,8 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query } from "firebas
 import { useCallback, useEffect, useState } from "react";
 import { db } from "../firebase";
 
+const PUBLIC_RANKING_COLLECTION = import.meta.env.VITE_PUBLIC_RANKING_COLLECTION || "daily_rankings";
+
 export interface BucketScore {
   bucket: string;
   score: number;
@@ -45,6 +47,7 @@ export interface RankingMeta {
   runId: string;
   topK: number;
   degradeState: Record<string, unknown>;
+  algorithmVersion?: string;
   status?: string;
   publishedAt?: string;
   latestPublishedRunId?: string;
@@ -61,31 +64,36 @@ export function useDailyRanking(date: string) {
     setError(null);
     try {
       let activeMeta: RankingMeta | null = null;
-      let itemsRef = collection(db, "daily_rankings", date, "items");
+      let itemsRef = collection(db, PUBLIC_RANKING_COLLECTION, date, "items");
       let hasPublishedRun = false;
 
       // Read the day document first for legacy fallback and status messaging.
-      const metaSnap = await getDoc(doc(db, "daily_rankings", date));
+      const metaSnap = await getDoc(doc(db, PUBLIC_RANKING_COLLECTION, date));
       if (metaSnap.exists()) {
         activeMeta = metaSnap.data() as RankingMeta;
       }
 
-      // Prefer the latest published run snapshot for the selected day.
-      try {
-        const runsRef = collection(db, "daily_rankings", date, "runs");
-        const latestPublishedRunQuery = query(runsRef, orderBy("publishedAt", "desc"), limit(1));
-        const latestPublishedRunSnap = await getDocs(latestPublishedRunQuery);
-        if (!latestPublishedRunSnap.empty) {
-          const latestRunDoc = latestPublishedRunSnap.docs[0];
-          activeMeta = {
-            ...(latestRunDoc.data() as RankingMeta),
-            runId: latestRunDoc.data().runId || latestRunDoc.id,
-          };
-          itemsRef = collection(db, "daily_rankings", date, "runs", latestRunDoc.id, "items");
-          hasPublishedRun = true;
+      // Prefer the latest published run snapshot only for the legacy public collection.
+      if (PUBLIC_RANKING_COLLECTION === "daily_rankings") {
+        try {
+          const runsRef = collection(db, "daily_rankings", date, "runs");
+          const latestPublishedRunQuery = query(runsRef, orderBy("publishedAt", "desc"), limit(1));
+          const latestPublishedRunSnap = await getDocs(latestPublishedRunQuery);
+          if (!latestPublishedRunSnap.empty) {
+            const latestRunDoc = latestPublishedRunSnap.docs[0];
+            activeMeta = {
+              ...(latestRunDoc.data() as RankingMeta),
+              runId: latestRunDoc.data().runId || latestRunDoc.id,
+            };
+            itemsRef = collection(db, "daily_rankings", date, "runs", latestRunDoc.id, "items");
+            hasPublishedRun = true;
+          }
+        } catch (runQueryError) {
+          console.warn(
+            "Failed to query versioned daily ranking runs, falling back to legacy path.",
+            runQueryError,
+          );
         }
-      } catch (runQueryError) {
-        console.warn("Failed to query versioned daily ranking runs, falling back to legacy path.", runQueryError);
       }
 
       if (activeMeta) {
@@ -109,28 +117,7 @@ export function useDailyRanking(date: string) {
       // Fetch items for the latest published run, or fall back to the legacy path.
       const q = query(itemsRef, orderBy("rank"));
       const snapshot = await getDocs(q);
-      const rankingItems: RankingItem[] = snapshot.docs.map((d) => {
-        const data = d.data();
-        return {
-          rank: data.rank,
-          candidateId: data.candidateId,
-          candidateType: data.candidateType,
-          candidateKind: data.candidateKind,
-          displayName: data.displayName,
-          trendScore: data.trendScore,
-          comingScore: data.comingScore,
-          massHeat: data.massHeat,
-          primaryScore: data.primaryScore,
-          lane: data.lane,
-          maturity: data.maturity,
-          sourceFamilies: data.sourceFamilies || [],
-          breakdownBuckets: data.breakdownBuckets || [],
-          sparkline7d: data.sparkline7d || [],
-          evidenceTop3: data.evidenceTop3 || [],
-          summary: data.summary || "",
-          power: data.power,
-        };
-      });
+      const rankingItems: RankingItem[] = snapshot.docs.map((d) => mapRankingItem(d.data()));
       setItems(rankingItems);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch ranking");
@@ -144,4 +131,39 @@ export function useDailyRanking(date: string) {
   }, [fetchRanking]);
 
   return { items, meta, loading, error, refetch: fetchRanking };
+}
+
+function mapRankingItem(data: Record<string, unknown>): RankingItem {
+  const evidenceTop3 = Array.isArray(data.evidenceTop3)
+    ? (data.evidenceTop3 as EvidenceItem[])
+    : Array.isArray(data.evidenceTop5)
+      ? ((data.evidenceTop5 as EvidenceItem[]).slice(0, 3))
+      : [];
+
+  const primaryScore = asNumber(data.primaryScore);
+  const trendScore = asNumber(data.trendScore) ?? primaryScore ?? 0;
+
+  return {
+    rank: asNumber(data.rank) ?? 0,
+    candidateId: String(data.candidateId || ""),
+    candidateType: String(data.candidateType || ""),
+    candidateKind: data.candidateKind ? String(data.candidateKind) : undefined,
+    displayName: String(data.displayName || ""),
+    trendScore,
+    comingScore: asNumber(data.comingScore),
+    massHeat: asNumber(data.massHeat),
+    primaryScore,
+    lane: data.lane ? String(data.lane) : undefined,
+    maturity: asNumber(data.maturity),
+    sourceFamilies: Array.isArray(data.sourceFamilies) ? (data.sourceFamilies as string[]) : [],
+    breakdownBuckets: Array.isArray(data.breakdownBuckets) ? (data.breakdownBuckets as BucketScore[]) : [],
+    sparkline7d: Array.isArray(data.sparkline7d) ? (data.sparkline7d as (number | null)[]) : [],
+    evidenceTop3,
+    summary: String(data.summary || ""),
+    power: asNumber(data.power),
+  };
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
 }
