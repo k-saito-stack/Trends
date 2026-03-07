@@ -10,15 +10,27 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any, cast
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.api_core import exceptions as google_exceptions
 from google.cloud.firestore_v1 import Client as FirestoreClient
 
 _app: firebase_admin.App | None = None
 _db: FirestoreClient | None = None
 MAX_BATCH_WRITE_OPERATIONS = 500
+MAX_RETRY_ATTEMPTS = 5
+INITIAL_RETRY_DELAY_SECONDS = 1.0
+RETRYABLE_ERROR_TOKENS = (
+    "429",
+    "quota exceeded",
+    "deadline exceeded",
+    "service unavailable",
+    "resource exhausted",
+    "temporarily unavailable",
+)
 
 
 def _initialize() -> None:
@@ -60,6 +72,34 @@ def get_db() -> FirestoreClient:
     return _db
 
 
+def _is_retryable_error(exc: Exception) -> bool:
+    if isinstance(
+        exc,
+        (
+            google_exceptions.Aborted,
+            google_exceptions.DeadlineExceeded,
+            google_exceptions.ResourceExhausted,
+            google_exceptions.ServiceUnavailable,
+        ),
+    ):
+        return True
+
+    message = str(exc).lower()
+    return any(token in message for token in RETRYABLE_ERROR_TOKENS)
+
+
+def _run_with_retry(operation: Any) -> Any:
+    delay_seconds = INITIAL_RETRY_DELAY_SECONDS
+    for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
+        try:
+            return operation()
+        except Exception as exc:
+            if attempt >= MAX_RETRY_ATTEMPTS or not _is_retryable_error(exc):
+                raise
+            time.sleep(delay_seconds)
+            delay_seconds *= 2
+
+
 def get_document(collection: str, document_id: str) -> dict[str, Any] | None:
     """Read a single document from Firestore.
 
@@ -67,7 +107,7 @@ def get_document(collection: str, document_id: str) -> dict[str, Any] | None:
     """
     db = get_db()
     doc_ref = db.collection(collection).document(document_id)
-    doc: Any = doc_ref.get()
+    doc: Any = _run_with_retry(doc_ref.get)
     if doc.exists:
         return cast(dict[str, Any], doc.to_dict())
     return None
@@ -95,7 +135,7 @@ def set_document(collection: str, document_id: str, data: dict[str, Any]) -> Non
     """Write a document to Firestore (overwrite)."""
     db = get_db()
     doc_ref = db.collection(collection).document(document_id)
-    doc_ref.set(data)
+    _run_with_retry(lambda: doc_ref.set(data))
 
 
 def upsert_document(
@@ -107,14 +147,14 @@ def upsert_document(
     """Idempotent upsert helper used by the observation-first pipeline."""
     db = get_db()
     doc_ref = db.collection(collection).document(document_id)
-    doc_ref.set(data, merge=merge)
+    _run_with_retry(lambda: doc_ref.set(data, merge=merge))
 
 
 def update_document(collection: str, document_id: str, data: dict[str, Any]) -> None:
     """Update specific fields of a document."""
     db = get_db()
     doc_ref = db.collection(collection).document(document_id)
-    doc_ref.update(data)
+    _run_with_retry(lambda: doc_ref.update(data))
 
 
 def get_collection(
@@ -136,7 +176,7 @@ def get_collection(
         query = query.order_by(order_by)
     if limit:
         query = query.limit(limit)
-    docs = query.stream()
+    docs = _run_with_retry(lambda: list(query.stream()))
     return [doc.to_dict() for doc in docs]
 
 
@@ -155,7 +195,7 @@ def set_subcollection_document(
         .collection(sub_collection)
         .document(document_id)
     )
-    doc_ref.set(data)
+    _run_with_retry(lambda: doc_ref.set(data))
 
 
 def get_subcollection(
@@ -172,7 +212,7 @@ def get_subcollection(
         query = query.order_by(order_by)
     if limit:
         query = query.limit(limit)
-    docs = query.stream()
+    docs = _run_with_retry(lambda: list(query.stream()))
     return [doc.to_dict() for doc in docs]
 
 
@@ -190,7 +230,7 @@ def batch_write(operations: list[tuple[str, str, dict[str, Any]]]) -> None:
         for collection_path, doc_id, data in chunk:
             doc_ref = db.collection(collection_path).document(doc_id)
             batch.set(doc_ref, data)
-        batch.commit()
+        _run_with_retry(batch.commit)
 
 
 def batch_upsert(
@@ -205,7 +245,7 @@ def batch_upsert(
         for collection_path, doc_id, data in chunk:
             doc_ref = db.collection(collection_path).document(doc_id)
             batch.set(doc_ref, data, merge=merge)
-        batch.commit()
+        _run_with_retry(batch.commit)
 
 
 def delete_collection_documents(collection_path: str) -> int:
@@ -214,7 +254,7 @@ def delete_collection_documents(collection_path: str) -> int:
     Returns the number of deleted documents.
     """
     db = get_db()
-    docs = list(db.collection(collection_path).stream())
+    docs = _run_with_retry(lambda: list(db.collection(collection_path).stream()))
     deleted = 0
 
     for i in range(0, len(docs), MAX_BATCH_WRITE_OPERATIONS):
@@ -222,7 +262,7 @@ def delete_collection_documents(collection_path: str) -> int:
         batch = db.batch()
         for doc in chunk:
             batch.delete(doc.reference)
-        batch.commit()
+        _run_with_retry(batch.commit)
         deleted += len(chunk)
 
     return deleted

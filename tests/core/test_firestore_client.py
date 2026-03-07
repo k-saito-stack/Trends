@@ -28,12 +28,18 @@ class FakeBatch:
         self._ops.append((doc_ref.collection_path, doc_ref.document_id))
 
     def commit(self) -> None:
+        self._db.commit_attempts += 1
+        if self._db.fail_commit_attempts > 0:
+            self._db.fail_commit_attempts -= 1
+            raise RuntimeError("429 Quota exceeded.")
         self._db.commit_sizes.append(len(self._ops))
 
 
 class FakeDB:
     def __init__(self) -> None:
         self.commit_sizes: list[int] = []
+        self.commit_attempts = 0
+        self.fail_commit_attempts = 0
 
     def collection(self, path: str) -> FakeCollectionReference:
         return FakeCollectionReference(path)
@@ -54,3 +60,16 @@ class TestBatchWrite:
         firestore_client.batch_write(operations)
 
         assert fake_db.commit_sizes == [500, 1]
+
+    def test_batch_write_retries_on_quota_errors(self, monkeypatch) -> None:
+        fake_db = FakeDB()
+        fake_db.fail_commit_attempts = 1
+        monkeypatch.setattr(firestore_client, "get_db", lambda: fake_db)
+        monkeypatch.setattr(firestore_client.time, "sleep", lambda _: None)
+
+        firestore_client.batch_write(
+            [("daily_rankings/2026-03-07/items", "cand_1", {"rank": 1})]
+        )
+
+        assert fake_db.commit_attempts == 2
+        assert fake_db.commit_sizes == [1]
