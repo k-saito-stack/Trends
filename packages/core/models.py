@@ -416,6 +416,7 @@ class DailyRankingMeta:
     status: str = "PUBLISHED"
     published_at: str = ""
     latest_published_run_id: str = ""
+    publish_health: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -429,6 +430,7 @@ class DailyRankingMeta:
             "status": self.status,
             "publishedAt": self.published_at,
             "latestPublishedRunId": self.latest_published_run_id,
+            "publishHealth": self.publish_health,
         }
 
     @classmethod
@@ -444,6 +446,7 @@ class DailyRankingMeta:
             status=data.get("status", "PUBLISHED"),
             published_at=data.get("publishedAt", ""),
             latest_published_run_id=data.get("latestPublishedRunId", ""),
+            publish_health=dict(data.get("publishHealth", {})),
         )
 
 

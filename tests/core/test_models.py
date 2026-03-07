@@ -111,6 +111,7 @@ class TestDailyRankingMeta:
             status="PUBLISHED",
             published_at="2026-03-06T11:16:00+09:00",
             latest_published_run_id="01KK1234567890",
+            publish_health={"publicEligible": True},
         )
 
         restored = DailyRankingMeta.from_dict(meta.to_dict())
@@ -118,6 +119,7 @@ class TestDailyRankingMeta:
         assert restored.run_id == "01KK1234567890"
         assert restored.published_at == "2026-03-06T11:16:00+09:00"
         assert restored.latest_published_run_id == "01KK1234567890"
+        assert restored.publish_health == {"publicEligible": True}
 
 
 class TestAppConfig:

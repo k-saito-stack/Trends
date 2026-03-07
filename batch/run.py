@@ -45,6 +45,7 @@ from packages.core.models import (
     RawCandidate,
     SourceWeightSnapshot,
 )
+from packages.core.publish_health import evaluate_publish_health
 from packages.core.ranking import build_ranked_candidates_v2
 from packages.core.relation_building import apply_candidate_relations, build_candidate_relations
 from packages.core.resolve import (
@@ -275,6 +276,8 @@ def _build_reset_collection_paths(
 
 
 def _build_publish_collections(light_publish: bool, shadow_only: bool) -> tuple[str, ...]:
+    if light_publish and shadow_only:
+        return ()
     if not light_publish and shadow_only:
         return ("daily_rankings_v2_shadow",)
     if light_publish:
@@ -292,6 +295,7 @@ def _build_publish_meta(
     status: str,
     published_at: str = "",
     latest_published_run_id: str = "",
+    publish_health: dict[str, Any] | None = None,
 ) -> DailyRankingMeta:
     return DailyRankingMeta(
         date=target_date,
@@ -302,6 +306,7 @@ def _build_publish_meta(
         status=status,
         published_at=published_at,
         latest_published_run_id=latest_published_run_id,
+        publish_health=dict(publish_health or {}),
     )
 
 
@@ -806,6 +811,25 @@ def _run_pipeline(
         )
         for item in ranked_candidates
     ]
+    source_health_records = build_source_health_records(
+        target_date,
+        source_ok,
+        source_item_count,
+        source_kept_count=source_kept_count,
+        errors=source_errors,
+        availability_tiers=source_availability_tier,
+        fallback_used=source_fallback_used,
+        response_ms=source_response_ms,
+    )
+    publish_health = evaluate_publish_health(
+        source_health_records,
+        source_plan,
+        ranking_items,
+        top_window=min(20, app_config.top_k),
+    )
+    effective_shadow_only = options.shadow_only or bool(publish_health.get("shadowOnly"))
+    if effective_shadow_only and options.publish:
+        logger.warning("Public publish gated; shadow-only mode engaged: %s", publish_health)
 
     try:
         from packages.core import firestore_client
@@ -826,9 +850,14 @@ def _run_pipeline(
                     if existing_published_meta
                     else ""
                 ),
+                publish_health=publish_health,
             )
-            if existing_published_meta is None and not options.shadow_only:
-                for collection_name in PUBLISH_COLLECTIONS:
+            prepublish_collections = _build_publish_collections(
+                light_publish=light_publish,
+                shadow_only=effective_shadow_only,
+            )
+            if existing_published_meta is None:
+                for collection_name in prepublish_collections:
                     firestore_client.set_document(collection_name, target_date, meta.to_dict())
             firestore_client.set_document(
                 f"daily_rankings/{target_date}/runs", run_id, meta.to_dict()
@@ -837,7 +866,7 @@ def _run_pipeline(
             for collection_path in _build_reset_collection_paths(
                 target_date,
                 light_publish,
-                shadow_only=options.shadow_only,
+                shadow_only=effective_shadow_only,
             ):
                 firestore_client.delete_collection_documents(collection_path)
 
@@ -846,7 +875,7 @@ def _run_pipeline(
                 target_date,
                 run_id,
                 light_publish,
-                shadow_only=options.shadow_only,
+                shadow_only=effective_shadow_only,
             )
             for item in ranking_items:
                 item_dict = item.to_dict()
@@ -866,22 +895,13 @@ def _run_pipeline(
         if persist_candidates:
             candidate_store.upsert_touched_candidates(touched_candidates)
             candidate_store.save_candidate_relations(candidate_relations)
-        if persist_features and not options.shadow_only:
+        if persist_features and not effective_shadow_only:
             candidate_store.save_daily_rankings_v2(target_date, ranked_candidates)
 
         if persist_features:
             source_health_ops = [
                 ("source_health", record.document_id, record.to_dict())
-                for record in build_source_health_records(
-                    target_date,
-                    source_ok,
-                    source_item_count,
-                    source_kept_count=source_kept_count,
-                    errors=source_errors,
-                    availability_tiers=source_availability_tier,
-                    fallback_used=source_fallback_used,
-                    response_ms=source_response_ms,
-                )
+                for record in source_health_records
             ]
             if source_health_ops:
                 firestore_client.batch_write(source_health_ops)
@@ -907,19 +927,21 @@ def _run_pipeline(
 
         if options.publish:
             published_at = datetime.now(JST).isoformat()
+            final_publish_status = "PUBLISHED" if not effective_shadow_only else "SHADOW_ONLY"
             publish_meta = _build_publish_meta(
                 target_date=target_date,
                 generated_at=generated_at,
                 run_id=run_id,
                 top_k=app_config.top_k,
                 degrade=degrade,
-                status="PUBLISHED",
+                status=final_publish_status,
                 published_at=published_at,
                 latest_published_run_id=run_id,
+                publish_health=publish_health,
             )
             collections_to_publish = _build_publish_collections(
                 light_publish=light_publish,
-                shadow_only=options.shadow_only,
+                shadow_only=effective_shadow_only,
             )
             for collection in collections_to_publish:
                 firestore_client.set_document(collection, target_date, publish_meta.to_dict())
@@ -927,9 +949,10 @@ def _run_pipeline(
                 f"daily_rankings/{target_date}/runs",
                 run_id,
                 {
-                    "status": "PUBLISHED",
+                    "status": final_publish_status,
                     "publishedAt": published_at,
-                    "latestPublishedRunId": run_id,
+                    "latestPublishedRunId": run_id if collections_to_publish else "",
+                    "publishHealth": publish_health,
                 },
             )
             published_successfully = True
@@ -982,6 +1005,7 @@ def _run_pipeline(
         source_response_ms=source_response_ms,
         runtime_cfg_validation=runtime_cfg_validation,
         source_plan=source_plan,
+        publish_health=publish_health,
     )
 
     if options.publish and not published_successfully:
@@ -1307,6 +1331,7 @@ def _write_connector_summary(
     source_response_ms: dict[str, int] | None = None,
     runtime_cfg_validation: dict[str, list[str]] | None = None,
     source_plan: list[dict[str, Any]] | None = None,
+    publish_health: dict[str, Any] | None = None,
 ) -> None:
     result_path = os.environ.get("BATCH_RESULT_PATH", "/tmp/batch_result.json")
     source_item_count = source_item_count or {}
@@ -1335,6 +1360,7 @@ def _write_connector_summary(
         "failed_sources": list(failed.keys()),
         "runtimeConfigValidation": runtime_cfg_validation or {},
         "sourcePlan": source_plan or [],
+        "publishHealth": publish_health or {},
     }
     with contextlib.suppress(Exception), open(result_path, "w", encoding="utf-8") as handle:
         json.dump(summary, handle, ensure_ascii=False, indent=2)
