@@ -5,6 +5,7 @@ from __future__ import annotations
 from packages.core.models import Candidate, CandidateStatus, CandidateType
 from packages.core.resolve import (
     build_alias_index,
+    build_external_id_index,
     build_key_index,
     create_new_candidate,
     resolve_candidate,
@@ -67,6 +68,48 @@ class TestResolveCandidate:
         result = resolve_candidate("Blocked", CandidateType.PERSON, candidates, alias_idx, key_idx)
         assert result is None
 
+    def test_resolve_by_external_id_first(self) -> None:
+        cand = _make_candidate("C004", "Mrs. GREEN APPLE", CandidateType.MUSIC_ARTIST)
+        cand.external_ids = {"apple_music_artist": "am-123"}
+        candidates = {"C004": cand}
+        alias_idx = build_alias_index(candidates)
+        key_idx = build_key_index(candidates)
+
+        result = resolve_candidate(
+            "Mrs. GREEN APPLE",
+            CandidateType.MUSIC_ARTIST,
+            candidates,
+            alias_idx,
+            key_idx,
+            external_ids={"apple_music_artist": "am-123"},
+        )
+
+        assert result == "C004"
+
+    def test_manual_lock_blocks_unlisted_surface(self) -> None:
+        cand = Candidate(
+            candidate_id="C005",
+            type=CandidateType.GROUP,
+            canonical_name="Snow Man",
+            display_name="Snow Man",
+            aliases=[],
+            status=CandidateStatus.ACTIVE,
+        )
+        cand.manual_lock = True
+        candidates = {"C005": cand}
+        alias_idx = build_alias_index(candidates)
+        key_idx = build_key_index(candidates)
+
+        result = resolve_candidate(
+            "SnowMan",
+            CandidateType.GROUP,
+            candidates,
+            alias_idx,
+            key_idx,
+        )
+
+        assert result is None
+
 
 class TestBuildAliasIndex:
     def test_includes_canonical_and_aliases(self) -> None:
@@ -97,3 +140,13 @@ class TestCreateNewCandidate:
             "timelesz", CandidateType.GROUP, "C-NEW-002", aliases=["タイムレス"]
         )
         assert cand.aliases == ["タイムレス"]
+
+
+class TestBuildExternalIdIndex:
+    def test_builds_provider_scoped_external_id_index(self) -> None:
+        cand = _make_candidate("C006", "Ado", CandidateType.MUSIC_ARTIST)
+        cand.external_ids = {"youtube_channel": "yt-1"}
+
+        index = build_external_id_index({"C006": cand})
+
+        assert index == {"youtube_channel:yt-1": "C006"}

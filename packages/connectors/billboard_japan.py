@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from hashlib import sha1
 from typing import Any
 
 import requests
@@ -75,12 +76,14 @@ class BillboardJapanConnector(BaseConnector):
             rank = int(item.get("rank", 0) or 0)
             track = str(item.get("track", "")).strip()
             artist = str(item.get("artist", "")).strip()
+            source_item_id = _source_item_id(self.source_id, rank, track, artist)
             if track:
                 candidates.append(
                     RawCandidate(
                         name=track,
                         type=CandidateType.MUSIC_TRACK,
                         source_id=self.source_id,
+                        source_item_id=source_item_id,
                         rank=rank,
                         metric_value=_rank_exposure(rank),
                         evidence=Evidence(
@@ -102,6 +105,7 @@ class BillboardJapanConnector(BaseConnector):
                         name=artist,
                         type=CandidateType.MUSIC_ARTIST,
                         source_id=self.source_id,
+                        source_item_id=source_item_id,
                         rank=rank,
                         metric_value=_rank_exposure(rank) * 0.8,
                         evidence=Evidence(
@@ -138,3 +142,8 @@ class BillboardJapanConnector(BaseConnector):
 
 def _rank_exposure(rank: int) -> float:
     return 1.0 / math.log2(max(rank, 1) + 1)
+
+
+def _source_item_id(source_id: str, rank: int, track: str, artist: str) -> str:
+    raw = f"{source_id}|{rank}|{track}|{artist}"
+    return sha1(raw.encode("utf-8")).hexdigest()[:16]

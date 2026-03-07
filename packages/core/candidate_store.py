@@ -9,6 +9,7 @@ from packages.core import firestore_client
 from packages.core.alias_registry import build_alias_records, save_alias_records
 from packages.core.models import (
     Candidate,
+    CandidateRelation,
     DailyCandidateFeature,
     DailySourceFeature,
     HindsightLabel,
@@ -147,6 +148,15 @@ def save_source_posteriors(posteriors: list[SourcePosterior]) -> None:
     ]
     if operations:
         firestore_client.batch_write(operations)
+
+
+def save_candidate_relations(relations: list[CandidateRelation]) -> None:
+    operations = [
+        ("candidate_relations", relation.document_id, relation.to_dict())
+        for relation in relations
+    ]
+    if operations:
+        firestore_client.batch_upsert(operations)
 
 
 def save_daily_rankings_v2(date: str, items: list[RankedCandidateV2]) -> None:

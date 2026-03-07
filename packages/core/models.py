@@ -183,6 +183,46 @@ class BucketScore:
 
 
 @dataclass
+class CandidateRelation:
+    """Lightweight relation edge between candidate nodes."""
+
+    src_candidate_id: str
+    relation_type: str
+    dst_candidate_id: str
+    confidence: float
+    source: str
+    created_at: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def document_id(self) -> str:
+        return f"{self.src_candidate_id}__{self.relation_type}__{self.dst_candidate_id}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "srcCandidateId": self.src_candidate_id,
+            "relationType": self.relation_type,
+            "dstCandidateId": self.dst_candidate_id,
+            "confidence": self.confidence,
+            "source": self.source,
+            "createdAt": self.created_at,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CandidateRelation:
+        return cls(
+            src_candidate_id=str(data.get("srcCandidateId", "")),
+            relation_type=str(data.get("relationType", "")),
+            dst_candidate_id=str(data.get("dstCandidateId", "")),
+            confidence=float(data.get("confidence", 0.0)),
+            source=str(data.get("source", "")),
+            created_at=str(data.get("createdAt", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
 class Candidate:
     """Candidate master record stored in /candidates/{candidateId}."""
 

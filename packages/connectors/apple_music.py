@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+from hashlib import sha1
 from typing import Any
 
 import requests
@@ -66,6 +67,7 @@ class AppleMusicConnector(BaseConnector):
             track_name = item.get("name", "")
             artist_name = item.get("artistName", "")
             track_url = item.get("url", "")
+            source_item_id = _source_item_id(self.source_id, rank, track_name, artist_name)
 
             evidence = Evidence(
                 source_id=self.source_id,
@@ -81,6 +83,7 @@ class AppleMusicConnector(BaseConnector):
                         name=track_name,
                         type=CandidateType.MUSIC_TRACK,
                         source_id=self.source_id,
+                        source_item_id=source_item_id,
                         rank=rank,
                         metric_value=_rank_exposure(rank),
                         evidence=evidence,
@@ -95,6 +98,7 @@ class AppleMusicConnector(BaseConnector):
                         name=artist_name,
                         type=CandidateType.MUSIC_ARTIST,
                         source_id=self.source_id,
+                        source_item_id=source_item_id,
                         rank=rank,
                         metric_value=_rank_exposure(rank),
                         evidence=evidence,
@@ -132,3 +136,8 @@ class AppleMusicConnector(BaseConnector):
 def _rank_exposure(rank: int) -> float:
     """E(rank) = 1 / log2(rank + 1)"""
     return 1.0 / math.log2(rank + 1)
+
+
+def _source_item_id(source_id: str, rank: int, track_name: str, artist_name: str) -> str:
+    raw = f"{source_id}|{rank}|{track_name}|{artist_name}"
+    return sha1(raw.encode("utf-8")).hexdigest()[:16]

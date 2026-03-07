@@ -23,7 +23,18 @@ def resolve_candidate(
     existing_candidates: dict[str, Candidate],
     alias_index: dict[str, str],
     key_index: dict[str, str],
+    external_ids: dict[str, str] | None = None,
 ) -> str | None:
+    external_id_index = build_external_id_index(existing_candidates)
+    if external_ids:
+        for provider, external_id in external_ids.items():
+            key = f"{provider}:{external_id}"
+            candidate_id = external_id_index.get(key)
+            if candidate_id:
+                candidate = existing_candidates.get(candidate_id)
+                if candidate is not None and candidate.status != CandidateStatus.BLOCKED:
+                    return candidate_id
+
     if candidate_type.default_kind == CandidateKind.TOPIC:
         topic_index = build_topic_key_index(existing_candidates.values())
         candidate_id = resolve_topic_candidate(name, alias_index, topic_index)
@@ -35,6 +46,8 @@ def resolve_candidate(
         return None
     candidate = existing_candidates.get(candidate_id)
     if candidate is None or candidate.status == CandidateStatus.BLOCKED:
+        return None
+    if candidate.manual_lock and not _matches_locked_surface(candidate, name):
         return None
     return candidate_id
 
@@ -60,6 +73,19 @@ def build_key_index(candidates: dict[str, Candidate]) -> dict[str, str]:
     return index
 
 
+def build_external_id_index(candidates: dict[str, Candidate]) -> dict[str, str]:
+    index: dict[str, str] = {}
+    for candidate in candidates.values():
+        if candidate.status == CandidateStatus.BLOCKED:
+            continue
+        for provider, external_id in candidate.external_ids.items():
+            normalized_provider = str(provider).strip()
+            normalized_id = str(external_id).strip()
+            if normalized_provider and normalized_id:
+                index[f"{normalized_provider}:{normalized_id}"] = candidate.candidate_id
+    return index
+
+
 def create_new_candidate(
     name: str,
     candidate_type: CandidateType,
@@ -74,3 +100,13 @@ def create_new_candidate(
     if aliases and candidate.kind == CandidateKind.ENTITY:
         candidate.aliases = aliases
     return candidate
+
+
+def _matches_locked_surface(candidate: Candidate, surface: str) -> bool:
+    aliases = [candidate.canonical_name, candidate.display_name, *candidate.aliases]
+    surface_key = _strict_surface_key(surface)
+    return any(_strict_surface_key(alias) == surface_key for alias in aliases if alias)
+
+
+def _strict_surface_key(surface: str) -> str:
+    return " ".join(str(surface).strip().split()).casefold()

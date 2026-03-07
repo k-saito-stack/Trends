@@ -7,6 +7,7 @@ import math
 import os
 import re
 from collections.abc import Sequence
+from hashlib import sha1
 from typing import Any
 from urllib.parse import unquote
 
@@ -334,11 +335,19 @@ class TikTokCreativeCenterConnector(BaseConnector):
             if item.get("regionalScore") is not None:
                 extra["regionalScore"] = metric_value
             extra["surface"] = self.surface
+            source_item_id = _surface_item_id(
+                self.source_id,
+                self.surface,
+                rank,
+                keyword,
+                extra.get("countryCode", ""),
+            )
             candidates.append(
                 RawCandidate(
                     name=keyword,
                     type=candidate_type,
                     source_id=self.source_id,
+                    source_item_id=source_item_id,
                     rank=rank,
                     metric_value=metric_value,
                     evidence=Evidence(
@@ -362,12 +371,20 @@ class TikTokCreativeCenterConnector(BaseConnector):
             artist = str(item.get("artist", "")).strip()
             metric_value = float(item.get("regionalScore") or _rank_exposure(rank))
             extra = _surface_extra(item, self.surface, metric_value)
+            source_item_id = _surface_item_id(
+                self.source_id,
+                self.surface,
+                rank,
+                track,
+                artist,
+            )
             if track:
                 candidates.append(
                     RawCandidate(
                         name=track,
                         type=CandidateType.MUSIC_TRACK,
                         source_id=self.source_id,
+                        source_item_id=source_item_id,
                         rank=rank,
                         metric_value=metric_value,
                         evidence=Evidence(
@@ -391,6 +408,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
                         name=artist,
                         type=CandidateType.MUSIC_ARTIST,
                         source_id=self.source_id,
+                        source_item_id=source_item_id,
                         rank=rank,
                         metric_value=metric_value * 0.75,
                         evidence=Evidence(
@@ -419,11 +437,13 @@ class TikTokCreativeCenterConnector(BaseConnector):
                 continue
             metric_value = float(item.get("regionalScore") or _rank_exposure(rank))
             extra = _surface_extra(item, self.surface, metric_value)
+            source_item_id = _surface_item_id(self.source_id, self.surface, rank, name)
             candidates.append(
                 RawCandidate(
                     name=name,
                     type=CandidateType.PERSON,
                     source_id=self.source_id,
+                    source_item_id=source_item_id,
                     rank=rank,
                     metric_value=metric_value,
                     evidence=Evidence(
@@ -450,6 +470,13 @@ class TikTokCreativeCenterConnector(BaseConnector):
                 str(tag) for tag in item.get("hashtags", []) if isinstance(tag, str)
             )
             text = " ".join([name, hashtag_text]).strip()
+            source_item_id = _surface_item_id(
+                self.source_id,
+                self.surface,
+                rank,
+                name,
+                hashtag_text,
+            )
             evidence = Evidence(
                 source_id=self.source_id,
                 title=name[:120] if name else "TikTok video theme",
@@ -465,6 +492,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
                 max_candidates=5,
             )
             for candidate in extracted:
+                candidate.source_item_id = source_item_id
                 candidate.rank = rank
                 candidates.append(candidate)
         return candidates
@@ -596,6 +624,16 @@ def _surface_extra(item: dict[str, Any], surface: str, metric_value: float) -> d
     if item.get("regionalScore") is not None:
         extra["regionalScore"] = metric_value
     return extra
+
+
+def _surface_item_id(
+    source_id: str,
+    surface: str,
+    rank: int,
+    *parts: str,
+) -> str:
+    raw = "|".join([source_id, surface, str(rank), *[str(part) for part in parts if part]])
+    return sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _public_page_url(surface: str) -> str:

@@ -46,6 +46,7 @@ from packages.core.models import (
     SourceWeightSnapshot,
 )
 from packages.core.ranking import build_ranked_candidates_v2
+from packages.core.relation_building import apply_candidate_relations, build_candidate_relations
 from packages.core.resolve import (
     build_alias_index,
     build_key_index,
@@ -477,6 +478,7 @@ def _run_pipeline(
     key_index = build_key_index(existing_candidates)
     touched_candidates: dict[str, Candidate] = {}
     observations: list[Observation] = []
+    resolved_raw_candidates: list[RawCandidate] = []
     raw_by_candidate_source: dict[tuple[str, str], list[RawCandidate]] = defaultdict(list)
     source_ok: dict[str, bool] = {}
     source_item_count: dict[str, int] = {}
@@ -537,6 +539,7 @@ def _run_pipeline(
             candidate_id = candidate.candidate_id
             touched_candidates[candidate_id] = candidate
             raw_candidate.candidate_id = candidate_id
+            resolved_raw_candidates.append(raw_candidate)
 
             observation = _build_observation(target_date, raw_candidate, candidate, entry)
             observations.append(observation)
@@ -547,6 +550,12 @@ def _run_pipeline(
         len(touched_candidates),
         len(observations),
     )
+
+    candidate_relations = build_candidate_relations(
+        resolved_raw_candidates,
+        created_at=datetime.now(JST).isoformat(),
+    )
+    apply_candidate_relations(touched_candidates, candidate_relations)
 
     logger.info("Step 5-8: Build local features, score, rank...")
     source_features: list[DailySourceFeature] = []
@@ -856,6 +865,7 @@ def _run_pipeline(
             candidate_store.save_daily_candidate_features(candidate_feature_list)
         if persist_candidates:
             candidate_store.upsert_touched_candidates(touched_candidates)
+            candidate_store.save_candidate_relations(candidate_relations)
         if persist_features and not options.shadow_only:
             candidate_store.save_daily_rankings_v2(target_date, ranked_candidates)
 
@@ -1091,6 +1101,11 @@ def _resolve_raw_candidate(
         existing_candidates,
         alias_index,
         key_index,
+        external_ids=(
+            dict(raw_candidate.extra.get("externalIds", {}))
+            if isinstance(raw_candidate.extra.get("externalIds"), dict)
+            else None
+        ),
     )
     if candidate_id is None:
         candidate_id = str(ULID())
