@@ -63,4 +63,7 @@ def test_build_hindsight_labels_marks_breakout_and_lead_days() -> None:
     assert labels[0].breakout_1d is False
     assert labels[0].mass_7d is True
     assert labels[0].lead_days == 7
+    assert labels[0].jp_confirm_3d is False
+    assert labels[0].public_confirm_7d is False
+    assert labels[0].trivial_noise_7d is False
     assert labels[0].new_confirmation_families == ["MUSIC_CHART"]

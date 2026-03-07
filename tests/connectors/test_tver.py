@@ -64,7 +64,7 @@ class TestTVerRankingConnector:
         items = parse_tver_ranking_html(html)
         candidates = connector.extract_candidates(items)
 
-        works = [c for c in candidates if c.type.value == "WORK"]
+        works = [c for c in candidates if c.type.value == "SHOW"]
         persons = [c for c in candidates if c.type.value == "PERSON"]
         assert len(works) == 3
         assert len(persons) >= 7  # 3+2+2 cast members

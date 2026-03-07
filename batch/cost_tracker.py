@@ -25,6 +25,8 @@ COST_TABLE: dict[str, float] = {
     "APPLE_MUSIC_KR": 0.0,         # Apple RSS is free
     "APPLE_MUSIC_GLOBAL": 0.0,     # Apple RSS is free
     "TRENDS": 0.0,                 # Google Trends RSS is free
+    "TRENDS_JP_24H_ENT": 0.0,
+    "TRENDS_JP_24H_BEAUTY_FASHION": 0.0,
     "NEWS_RSS": 0.0,               # RSS is free
     "RAKUTEN_MAG": 0.0,            # Rakuten API free tier
     "WIKIPEDIA": 0.0,              # Wikipedia API is free

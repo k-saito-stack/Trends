@@ -6,12 +6,12 @@ from collections import Counter
 from typing import Any
 
 from packages.core.models import DailyRankingItem
+from packages.core.public_rank_rules import load_public_rank_rules
 from packages.core.source_health import SourceHealthRecord
 
 PUBLIC_CORE_HEALTHY_MIN = 6
 PUBLIC_DISCOVERY_FAMILY_MIN = 2
 PUBLIC_CONFIRMATION_FAMILY_MIN = 2
-PUBLIC_WORDS_BEHAVIORS_MIN = 3
 HEALTHY_FAILURE_CLASSES = {"healthy"}
 CONFIRMATION_ROLES = {"CONFIRMATION", "EDITORIAL", "COMMERCE"}
 MATURE_PEOPLE_MUSIC_TYPES = {"PERSON", "GROUP", "MUSIC_ARTIST", "MUSIC_TRACK"}
@@ -24,6 +24,7 @@ def evaluate_publish_health(
     *,
     top_window: int = 20,
 ) -> dict[str, Any]:
+    rules = load_public_rank_rules()
     plan_by_id = {
         str(entry.get("sourceId")): entry for entry in source_plan if entry.get("sourceId")
     }
@@ -92,10 +93,16 @@ def evaluate_publish_health(
             "confirmation_families"
             f"<{PUBLIC_CONFIRMATION_FAMILY_MIN}:{len(healthy_confirmation_families)}"
         )
-    if lane_counts.get("words_behaviors", 0) < PUBLIC_WORDS_BEHAVIORS_MIN:
+    required_words_behaviors = int(rules.get("credible_words_behaviors_min", 1))
+    if lane_counts.get("words_behaviors", 0) < required_words_behaviors:
         reasons.append(
-            f"words_behaviors_top{top_window}<{PUBLIC_WORDS_BEHAVIORS_MIN}:"
+            f"words_behaviors_top{top_window}<{required_words_behaviors}:"
             f"{lane_counts.get('words_behaviors', 0)}"
+        )
+    if single_family_dominance > float(rules.get("single_family_dominance_max", 0.45)):
+        reasons.append(
+            "single_family_dominance"
+            f">{rules.get('single_family_dominance_max', 0.45)}:{round(single_family_dominance, 4)}"
         )
 
     public_eligible = not reasons

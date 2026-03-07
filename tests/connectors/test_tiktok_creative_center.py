@@ -135,7 +135,7 @@ def test_extract_candidates_preserves_regional_metadata() -> None:
     candidates = connector.extract_candidates(
         [
             {
-                "keyword": "#ライブ配信",
+                "keyword": "#メガ割",
                 "rank": 1,
                 "countries": ["JP", "KR"],
                 "countryRanks": {"JP": 1, "KR": 3},

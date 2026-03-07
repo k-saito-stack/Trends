@@ -12,7 +12,7 @@ from packages.connectors.billboard_japan import BillboardJapanConnector
 from packages.connectors.editorial_fashionsnap import EditorialFashionsnapConnector
 from packages.connectors.editorial_magazine import EditorialMagazineConnector
 from packages.connectors.editorial_modelpress import EditorialModelpressConnector
-from packages.connectors.google_trends import GoogleTrendsConnector
+from packages.connectors.google_trends import GoogleTrendingNowConnector
 from packages.connectors.netflix import NetflixTop10Connector
 from packages.connectors.rakuten_fashion import RakutenFashionConnector
 from packages.connectors.rakuten_ichiba_ranking import RakutenIchibaRankingConnector
@@ -36,7 +36,33 @@ from packages.core.source_catalog import get_source_entry, iter_active_catalog
 logger = logging.getLogger(__name__)
 
 FACTORIES: dict[str, Callable[[dict[str, Any]], BaseConnector]] = {
-    "TRENDS": lambda cfg: GoogleTrendsConnector(enabled=cfg.get("enabled", True)),
+    "TRENDS": lambda cfg: GoogleTrendingNowConnector(
+        source_id="TRENDS",
+        category="GENERAL",
+        geo="JP",
+        time_window_hours=24,
+        active_only=True,
+        max_results=cfg.get("fetchLimit", 50),
+        enabled=cfg.get("enabled", True),
+    ),
+    "TRENDS_JP_24H_ENT": lambda cfg: GoogleTrendingNowConnector(
+        source_id="TRENDS_JP_24H_ENT",
+        category="ENTERTAINMENT",
+        geo="JP",
+        time_window_hours=24,
+        active_only=True,
+        max_results=cfg.get("fetchLimit", 50),
+        enabled=cfg.get("enabled", True),
+    ),
+    "TRENDS_JP_24H_BEAUTY_FASHION": lambda cfg: GoogleTrendingNowConnector(
+        source_id="TRENDS_JP_24H_BEAUTY_FASHION",
+        category="BEAUTY_FASHION",
+        geo="JP",
+        time_window_hours=24,
+        active_only=True,
+        max_results=cfg.get("fetchLimit", 50),
+        enabled=cfg.get("enabled", True),
+    ),
     "YAHOO_REALTIME": lambda cfg: YahooRealtimeConnector(enabled=cfg.get("enabled", True)),
     "WEAR_WORDS": lambda cfg: WearConnector(enabled=cfg.get("enabled", True)),
     "ZOZO_RANKING": lambda cfg: ZozoConnector(enabled=cfg.get("enabled", True)),
@@ -102,7 +128,9 @@ FACTORIES: dict[str, Callable[[dict[str, Any]], BaseConnector]] = {
     ),
     "EDITORIAL_MAGAZINE": lambda cfg: EditorialMagazineConnector(enabled=cfg.get("enabled", True)),
     "YOUTUBE_TREND_JP": lambda cfg: YouTubeConnector(
-        max_results=cfg.get("fetchLimit", 50), enabled=cfg.get("enabled", True)
+        max_results=cfg.get("fetchLimit", 50),
+        emit_channel_candidate=cfg.get("emitChannelCandidate", False),
+        enabled=cfg.get("enabled", True),
     ),
 }
 

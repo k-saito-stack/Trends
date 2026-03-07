@@ -55,6 +55,7 @@ from packages.core.models import (
 from packages.core.publish_health import evaluate_publish_health
 from packages.core.ranking import build_ranked_candidates_v2
 from packages.core.relation_building import apply_candidate_relations, build_candidate_relations
+from packages.core.relation_propagation import build_relation_support_features
 from packages.core.resolution_llm import resolve_uncertain_pairs
 from packages.core.resolve import (
     build_alias_index,
@@ -644,8 +645,9 @@ def _run_pipeline(
         source_features.append(feature)
         source_momentum[source_id].append((candidate_id, feature.surprise01))
 
-    candidate_feature_list = []
     feature_map = group_features_by_candidate(source_features)
+    relation_support_map = build_relation_support_features(feature_map, candidate_relations)
+    candidate_feature_list = []
     for candidate_id, features in feature_map.items():
         candidate = touched_candidates[candidate_id]
         lane = infer_lane(candidate.type)
@@ -659,6 +661,7 @@ def _run_pipeline(
             domain_class=domain_class,
             source_features=features,
             algo_config=algo_config,
+            relation_support=relation_support_map.get(candidate_id, {}),
         )
         candidate.trend_history_7d.append(candidate_feature.primary_score)
         candidate.trend_history_7d = candidate.trend_history_7d[-7:]
@@ -1580,8 +1583,25 @@ def _build_source_feature_metadata(
     countries: list[str] = []
     country_ranks: dict[str, int] = {}
     best_regional_score: float | None = None
+    shared_metadata_keys = {
+        "trendCategory",
+        "trendGeo",
+        "timeWindowHours",
+        "activeTrend",
+        "searchVolumeText",
+        "startedText",
+        "trendBreakdownCount",
+        "sourceSurface",
+        "sortMode",
+        "netflixSurface",
+    }
 
     for item in raw_items:
+        for key in shared_metadata_keys:
+            value = item.extra.get(key)
+            if value not in (None, "", []):
+                metadata[key] = value
+
         region = item.extra.get("region")
         if isinstance(region, str) and region:
             regions.append(region)
@@ -1633,6 +1653,13 @@ def _build_source_feature_metadata(
         }
     if best_regional_score is not None:
         metadata["regionalScore"] = best_regional_score
+    query_variants: list[str] = []
+    for item in raw_items:
+        for variant in item.extra.get("queryVariants", []):
+            if isinstance(variant, str) and variant:
+                query_variants.append(variant)
+    if query_variants:
+        metadata["queryVariants"] = sorted(dict.fromkeys(query_variants))
 
     return metadata
 

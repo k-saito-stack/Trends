@@ -76,6 +76,8 @@ def test_compute_source_posteriors_builds_bucketed_stats() -> None:
     assert posterior.source_id == "TIKTOK_CREATIVE_CENTER_HASHTAGS"
     assert posterior.observations == 2
     assert 0.0 < posterior.reliability < 1.0
+    assert 0.0 < posterior.public_precision <= 1.0
+    assert 0.0 < posterior.topic_precision <= 1.0
 
     resolved = resolve_source_posterior(
         "TIKTOK_CREATIVE_CENTER_HASHTAGS",

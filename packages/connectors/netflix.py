@@ -113,8 +113,8 @@ class NetflixTop10Connector(BaseConnector):
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
         """Extract candidates from Netflix Top 10 items.
 
-        Each title is added as a WORK candidate.
-        NER is run on the title for additional person/group extraction.
+        Titles remain the primary signal. Entity spillover is kept weak and
+        attached via relation metadata rather than treated as equivalent.
         """
         candidates: list[RawCandidate] = []
 
@@ -124,6 +124,7 @@ class NetflixTop10Connector(BaseConnector):
             if not title:
                 continue
 
+            source_item_id = f"{self.category}:{rank}:{title}"
             evidence = Evidence(
                 source_id=self.source_id,
                 title=title,
@@ -131,20 +132,26 @@ class NetflixTop10Connector(BaseConnector):
                 metric=f"rank:{rank}",
             )
 
-            # Title as WORK candidate
+            work_type = CandidateType.SHOW if self.category == "tv" else CandidateType.WORK
             candidates.append(
                 RawCandidate(
                     name=title,
-                    type=CandidateType.WORK,
+                    type=work_type,
                     source_id=self.source_id,
                     rank=rank,
                     metric_value=_rank_exposure(rank),
                     evidence=evidence,
-                    extra={"category": self.category},
+                    extra={
+                        "category": self.category,
+                        "netflixSurface": self.category,
+                        "countryCode": "JP",
+                        "region": "JP",
+                    },
+                    source_item_id=source_item_id,
                 )
             )
 
-            # NER on title for person/group extraction
+            # Weak entity extraction for relation-only spillover.
             entities = extract_entities(title, max_entities=3)
             for ent_text, ent_type in entities:
                 if ent_text == title:
@@ -161,7 +168,13 @@ class NetflixTop10Connector(BaseConnector):
                         rank=rank,
                         metric_value=_rank_exposure(rank),
                         evidence=evidence,
-                        extra={"category": self.category, "from_title": title},
+                        extra={
+                            "category": self.category,
+                            "from_title": title,
+                            "countryCode": "JP",
+                            "region": "JP",
+                        },
+                        source_item_id=source_item_id,
                     )
                 )
 

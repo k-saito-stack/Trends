@@ -95,7 +95,7 @@ class TVerRankingConnector(BaseConnector):
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
         """Extract candidates from TVer ranking items.
 
-        - Each show title -> WORK candidate
+        - Each show title -> SHOW candidate
         - Each cast member -> PERSON candidate
         """
         candidates: list[RawCandidate] = []
@@ -109,6 +109,7 @@ class TVerRankingConnector(BaseConnector):
             if not title:
                 continue
 
+            source_item_id = f"tver:{rank}:{title}"
             evidence = Evidence(
                 source_id=self.source_id,
                 title=title,
@@ -116,16 +117,17 @@ class TVerRankingConnector(BaseConnector):
                 metric=f"rank:{rank},points:{points}",
             )
 
-            # Show title as WORK
+            # Show title as SHOW
             candidates.append(
                 RawCandidate(
                     name=title,
-                    type=CandidateType.WORK,
+                    type=CandidateType.SHOW,
                     source_id=self.source_id,
                     rank=rank,
                     metric_value=_rank_exposure(rank),
                     evidence=evidence,
-                    extra={"cast": cast, "points": points},
+                    extra={"cast": cast, "points": points, "countryCode": "JP", "region": "JP"},
+                    source_item_id=source_item_id,
                 )
             )
 
@@ -139,7 +141,13 @@ class TVerRankingConnector(BaseConnector):
                         rank=rank,
                         metric_value=_rank_exposure(rank),
                         evidence=evidence,
-                        extra={"show": title, "points": points},
+                        extra={
+                            "show": title,
+                            "points": points,
+                            "countryCode": "JP",
+                            "region": "JP",
+                        },
+                        source_item_id=source_item_id,
                     )
                 )
 

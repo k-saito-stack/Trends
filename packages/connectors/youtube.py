@@ -31,11 +31,15 @@ class YouTubeConnector(BaseConnector):
         self,
         api_key: str | None = None,
         max_results: int = 50,
+        emit_channel_candidate: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(source_id="YOUTUBE_TREND_JP", stability="A", **kwargs)
         self.api_key = api_key or os.environ.get("YOUTUBE_API_KEY", "")
         self.max_results = max_results
+        self.emit_channel_candidate = emit_channel_candidate or (
+            os.environ.get("YOUTUBE_EMIT_CHANNEL_CANDIDATE", "0") == "1"
+        )
 
     def fetch(self) -> FetchResult:
         """Fetch mostPopular videos from YouTube Data API."""
@@ -61,10 +65,10 @@ class YouTubeConnector(BaseConnector):
         return FetchResult(items=items, item_count=len(items))
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
-        """Extract candidate names from video titles and channel names.
+        """Extract candidate names from video titles.
 
         Uses NER to extract PERSON/GROUP/WORK entities from video titles.
-        Channel names are always included as PERSON candidates.
+        Channel names stay in evidence metadata unless explicitly enabled.
         """
         from packages.core.ner import extract_entities
 
@@ -85,11 +89,10 @@ class YouTubeConnector(BaseConnector):
                 title=title,
                 url=video_url,
                 published_at=snippet.get("publishedAt", ""),
-                metric=f"rank:{rank},views:{view_count}",
+                metric=f"rank:{rank},views:{view_count},channel:{channel}",
             )
 
-            # Channel as candidate (often a person/group)
-            if channel:
+            if self.emit_channel_candidate and channel:
                 candidates.append(
                     RawCandidate(
                         name=channel,

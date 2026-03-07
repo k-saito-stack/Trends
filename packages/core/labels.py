@@ -67,6 +67,10 @@ def build_hindsight_labels(
                 mass_7d=compute_mass_labels(anchor, feature_map, anchor_date, 7)
                 if 7 in available_mass_horizons
                 else False,
+                jp_confirm_3d=compute_jp_confirm(anchor, feature_map, anchor_date, 3),
+                jp_confirm_7d=compute_jp_confirm(anchor, feature_map, anchor_date, 7),
+                public_confirm_7d=compute_public_confirm(anchor, feature_map, anchor_date, 7),
+                trivial_noise_7d=compute_trivial_noise(anchor, feature_map, anchor_date, 7),
                 new_confirmation_families=sorted(
                     compute_new_confirmation_families(anchor, feature_map, anchor_date, 14)
                 ),
@@ -137,6 +141,65 @@ def compute_lead_days(
         ):
             return offset
     return None
+
+
+def compute_jp_confirm(
+    anchor: DailyCandidateFeature,
+    feature_map: dict[str, dict[str, DailyCandidateFeature]],
+    anchor_date: str,
+    horizon_days: int,
+) -> bool:
+    future_features = _iter_future_features(
+        feature_map,
+        anchor_date,
+        anchor.candidate_id,
+        horizon_days,
+    )
+    for feature in future_features:
+        if (
+            feature.constrained_trends_ent_support > 0
+            or feature.constrained_trends_beauty_support > 0
+            or feature.yahoo_realtime_support > 0
+        ):
+            return True
+    return False
+
+
+def compute_public_confirm(
+    anchor: DailyCandidateFeature,
+    feature_map: dict[str, dict[str, DailyCandidateFeature]],
+    anchor_date: str,
+    horizon_days: int,
+) -> bool:
+    future_features = _iter_future_features(
+        feature_map,
+        anchor_date,
+        anchor.candidate_id,
+        horizon_days,
+    )
+    for feature in future_features:
+        if feature.public_gate_passed or feature.public_rankability_prob >= 0.5:
+            return True
+    return False
+
+
+def compute_trivial_noise(
+    anchor: DailyCandidateFeature,
+    feature_map: dict[str, dict[str, DailyCandidateFeature]],
+    anchor_date: str,
+    horizon_days: int,
+) -> bool:
+    if anchor.candidate_kind != CandidateKind.TOPIC:
+        return False
+    if compute_jp_confirm(anchor, feature_map, anchor_date, horizon_days):
+        return False
+    if compute_public_confirm(anchor, feature_map, anchor_date, horizon_days):
+        return False
+    return (
+        len(set(anchor.source_families)) <= 1
+        and anchor.public_noise_penalty >= 0.55
+        and anchor.public_rankability_prob < 0.5
+    )
 
 
 def _compute_breakout_labels(

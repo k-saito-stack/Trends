@@ -1,0 +1,8 @@
+{
+  "features_in": 0.55,
+  "voice_acts_in": 0.45,
+  "theme_song_of_exact": 0.50,
+  "theme_song_of_fuzzy": 0.35,
+  "appears_in_reality_show": 0.60,
+  "associated_with_work": 0.35
+}

@@ -31,14 +31,13 @@ class TestYouTubeConnector:
             return json.load(f)
 
     def test_extract_candidates(self) -> None:
-        connector = YouTubeConnector(api_key="test")
+        connector = YouTubeConnector(api_key="test", emit_channel_candidate=True)
         data = self._load_fixture()
         candidates = connector.extract_candidates(data["items"])
 
-        # 3 videos -> 3 channel + 3 title fallback (when NER not available) = 6
         assert len(candidates) >= 3
 
-        # First candidate is YOASOBI (channel of video #1)
+        # Channel candidates stay available when explicitly enabled.
         assert candidates[0].name == "YOASOBI"
         assert candidates[0].source_id == "YOUTUBE_TREND_JP"
         assert candidates[0].rank == 1
@@ -46,7 +45,7 @@ class TestYouTubeConnector:
         assert "abc123" in candidates[0].evidence.url
 
     def test_compute_signals_aggregates_same_channel(self) -> None:
-        connector = YouTubeConnector(api_key="test")
+        connector = YouTubeConnector(api_key="test", emit_channel_candidate=True)
         data = self._load_fixture()
         candidates = connector.extract_candidates(data["items"])
         signals = connector.compute_signals(data["items"], candidates)

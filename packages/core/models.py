@@ -632,6 +632,10 @@ class HindsightLabel:
     mass_now: bool = False
     mass_3d: bool = False
     mass_7d: bool = False
+    jp_confirm_3d: bool = False
+    jp_confirm_7d: bool = False
+    public_confirm_7d: bool = False
+    trivial_noise_7d: bool = False
     new_confirmation_families: list[str] = field(default_factory=list)
     lead_days: int | None = None
     available_breakout_horizons: list[int] = field(default_factory=list)
@@ -653,6 +657,10 @@ class HindsightLabel:
             "massNow": self.mass_now,
             "mass3d": self.mass_3d,
             "mass7d": self.mass_7d,
+            "jpConfirm3d": self.jp_confirm_3d,
+            "jpConfirm7d": self.jp_confirm_7d,
+            "publicConfirm7d": self.public_confirm_7d,
+            "trivialNoise7d": self.trivial_noise_7d,
             "newConfirmationFamilies": self.new_confirmation_families,
             "availableBreakoutHorizons": self.available_breakout_horizons,
             "availableMassHorizons": self.available_mass_horizons,
@@ -676,6 +684,10 @@ class HindsightLabel:
             mass_now=bool(data.get("massNow", False)),
             mass_3d=bool(data.get("mass3d", False)),
             mass_7d=bool(data.get("mass7d", False)),
+            jp_confirm_3d=bool(data.get("jpConfirm3d", False)),
+            jp_confirm_7d=bool(data.get("jpConfirm7d", False)),
+            public_confirm_7d=bool(data.get("publicConfirm7d", False)),
+            trivial_noise_7d=bool(data.get("trivialNoise7d", False)),
             new_confirmation_families=[
                 str(value) for value in data.get("newConfirmationFamilies", []) if value
             ],
@@ -761,6 +773,8 @@ class SourcePosterior:
     lead_score: float = 0.0
     persistence: float = 0.0
     region_fit: float = 1.0
+    public_precision: float = 0.5
+    topic_precision: float = 0.5
     observations: int = 0
     positives: int = 0
     negatives: int = 0
@@ -778,6 +792,8 @@ class SourcePosterior:
             "leadScore": self.lead_score,
             "persistence": self.persistence,
             "regionFit": self.region_fit,
+            "publicPrecision": self.public_precision,
+            "topicPrecision": self.topic_precision,
             "observations": self.observations,
             "positives": self.positives,
             "negatives": self.negatives,
@@ -793,6 +809,8 @@ class SourcePosterior:
             lead_score=float(data.get("leadScore", 0.0)),
             persistence=float(data.get("persistence", 0.0)),
             region_fit=float(data.get("regionFit", 1.0)),
+            public_precision=float(data.get("publicPrecision", 0.5)),
+            topic_precision=float(data.get("topicPrecision", 0.5)),
             observations=int(data.get("observations", 0)),
             positives=int(data.get("positives", 0)),
             negatives=int(data.get("negatives", 0)),
@@ -1010,6 +1028,17 @@ class DailyCandidateFeature:
     broad_confirmation: float = 0.0
     sustained_presence: float = 0.0
     mainstream_reach: float = 0.0
+    jp_relevance: float = 0.0
+    constrained_trends_ent_support: float = 0.0
+    constrained_trends_beauty_support: float = 0.0
+    yahoo_realtime_support: float = 0.0
+    topic_specificity: float = 0.0
+    behavior_objectness: float = 0.0
+    public_noise_penalty: float = 0.0
+    mature_mass_only_penalty: float = 0.0
+    relation_support_total: float = 0.0
+    public_rankability_prob: float = 0.0
+    public_score: float = 0.0
     breakout_prob_1d: float = 0.0
     breakout_prob_3d: float = 0.0
     breakout_prob_7d: float = 0.0
@@ -1018,6 +1047,7 @@ class DailyCandidateFeature:
     mass_heat: float = 0.0
     primary_score: float = 0.0
     ranking_gate_passed: bool = False
+    public_gate_passed: bool = False
     related_entity_ids: list[str] = field(default_factory=list)
     related_candidate_ids: list[str] = field(default_factory=list)
     source_contrib: dict[str, float] = field(default_factory=dict)
@@ -1049,6 +1079,17 @@ class DailyCandidateFeature:
             "broadConfirmation": self.broad_confirmation,
             "sustainedPresence": self.sustained_presence,
             "mainstreamReach": self.mainstream_reach,
+            "jpRelevance": self.jp_relevance,
+            "constrainedTrendsEntSupport": self.constrained_trends_ent_support,
+            "constrainedTrendsBeautySupport": self.constrained_trends_beauty_support,
+            "yahooRealtimeSupport": self.yahoo_realtime_support,
+            "topicSpecificity": self.topic_specificity,
+            "behaviorObjectness": self.behavior_objectness,
+            "publicNoisePenalty": self.public_noise_penalty,
+            "matureMassOnlyPenalty": self.mature_mass_only_penalty,
+            "relationSupportTotal": self.relation_support_total,
+            "publicRankabilityProb": self.public_rankability_prob,
+            "publicScore": self.public_score,
             "breakoutProb1d": self.breakout_prob_1d,
             "breakoutProb3d": self.breakout_prob_3d,
             "breakoutProb7d": self.breakout_prob_7d,
@@ -1057,6 +1098,7 @@ class DailyCandidateFeature:
             "massHeat": self.mass_heat,
             "primaryScore": self.primary_score,
             "rankingGatePassed": self.ranking_gate_passed,
+            "publicGatePassed": self.public_gate_passed,
             "relatedEntityIds": self.related_entity_ids,
             "relatedCandidateIds": self.related_candidate_ids,
             "sourceContrib": self.source_contrib,
@@ -1087,6 +1129,21 @@ class DailyCandidateFeature:
             broad_confirmation=float(data.get("broadConfirmation", 0.0)),
             sustained_presence=float(data.get("sustainedPresence", 0.0)),
             mainstream_reach=float(data.get("mainstreamReach", 0.0)),
+            jp_relevance=float(data.get("jpRelevance", 0.0)),
+            constrained_trends_ent_support=float(
+                data.get("constrainedTrendsEntSupport", 0.0)
+            ),
+            constrained_trends_beauty_support=float(
+                data.get("constrainedTrendsBeautySupport", 0.0)
+            ),
+            yahoo_realtime_support=float(data.get("yahooRealtimeSupport", 0.0)),
+            topic_specificity=float(data.get("topicSpecificity", 0.0)),
+            behavior_objectness=float(data.get("behaviorObjectness", 0.0)),
+            public_noise_penalty=float(data.get("publicNoisePenalty", 0.0)),
+            mature_mass_only_penalty=float(data.get("matureMassOnlyPenalty", 0.0)),
+            relation_support_total=float(data.get("relationSupportTotal", 0.0)),
+            public_rankability_prob=float(data.get("publicRankabilityProb", 0.0)),
+            public_score=float(data.get("publicScore", 0.0)),
             breakout_prob_1d=float(data.get("breakoutProb1d", 0.0)),
             breakout_prob_3d=float(data.get("breakoutProb3d", 0.0)),
             breakout_prob_7d=float(data.get("breakoutProb7d", 0.0)),
@@ -1095,6 +1152,7 @@ class DailyCandidateFeature:
             mass_heat=float(data.get("massHeat", 0.0)),
             primary_score=float(data.get("primaryScore", 0.0)),
             ranking_gate_passed=bool(data.get("rankingGatePassed", False)),
+            public_gate_passed=bool(data.get("publicGatePassed", False)),
             related_entity_ids=[str(value) for value in data.get("relatedEntityIds", []) if value],
             related_candidate_ids=[
                 str(value) for value in data.get("relatedCandidateIds", []) if value

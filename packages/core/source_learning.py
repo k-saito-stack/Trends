@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from packages.core.models import (
+    CandidateKind,
     DailySourceFeature,
     HindsightLabel,
     SourceFamily,
@@ -35,6 +36,10 @@ class _PosteriorAccumulator:
     observations: int = 0
     positives: int = 0
     negatives: int = 0
+    public_total: int = 0
+    public_pos: int = 0
+    topic_total: int = 0
+    topic_pos: int = 0
     persistence_total: int = 0
     persistence_pos: int = 0
     region_total: int = 0
@@ -122,9 +127,16 @@ def compute_source_posteriors(
         )
 
         is_positive = bool(label.breakout_7d or label.mass_now)
+        is_public_positive = bool(label.public_confirm_7d or label.jp_confirm_3d)
         persistence_available = 7 in label.available_mass_horizons
         is_persistent = bool(label.mass_7d) if persistence_available else False
         is_non_jp = region_bucket != "JP"
+        is_topic = feature.candidate_kind == CandidateKind.TOPIC
+        is_topic_positive = bool(
+            is_topic
+            and not label.trivial_noise_7d
+            and (label.jp_confirm_3d or label.public_confirm_7d or label.breakout_7d)
+        )
 
         for accumulator in (accumulators[source_id], bucket_accumulators[source_id][bucket_key]):
             accumulator.observations += 1
@@ -132,6 +144,13 @@ def compute_source_posteriors(
                 accumulator.positives += 1
             else:
                 accumulator.negatives += 1
+            accumulator.public_total += 1
+            if is_public_positive:
+                accumulator.public_pos += 1
+            if is_topic:
+                accumulator.topic_total += 1
+                if is_topic_positive:
+                    accumulator.topic_pos += 1
             if persistence_available:
                 accumulator.persistence_total += 1
                 if is_persistent:
@@ -172,6 +191,8 @@ def compute_source_posteriors(
                 lead_score=float(summary["leadScore"]),
                 persistence=float(summary["persistence"]),
                 region_fit=float(summary["regionFit"]),
+                public_precision=float(summary["publicPrecision"]),
+                topic_precision=float(summary["topicPrecision"]),
                 observations=accumulator.observations,
                 positives=accumulator.positives,
                 negatives=accumulator.negatives,
@@ -250,6 +271,12 @@ def _serialize_bucket(
     persistence = (prior.persist_alpha + accumulator.persistence_pos) / (
         prior.persist_alpha + prior.persist_beta + accumulator.persistence_total
     )
+    public_precision = (prior.rel_alpha + accumulator.public_pos) / (
+        prior.rel_alpha + prior.rel_beta + accumulator.public_total
+    )
+    topic_precision = (prior.rel_alpha + accumulator.topic_pos) / (
+        prior.rel_alpha + prior.rel_beta + accumulator.topic_total
+    )
     region_fit = 1.0
     if region_bucket != "JP":
         region_fit = (prior.region_alpha + accumulator.region_pos) / (
@@ -268,6 +295,8 @@ def _serialize_bucket(
         "negatives": accumulator.negatives,
         "reliability": reliability,
         "persistence": persistence,
+        "publicPrecision": public_precision,
+        "topicPrecision": topic_precision,
         "regionFit": region_fit,
         "meanLeadDays": mean_lead_days,
         "leadScore": lead_score,

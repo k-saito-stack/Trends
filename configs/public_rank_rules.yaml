@@ -1,0 +1,10 @@
+{
+  "topic_single_family_public_threshold": 0.78,
+  "topic_multi_family_public_threshold": 0.52,
+  "relation_only_public_threshold": 0.60,
+  "low_value_penalty_block_threshold": 0.70,
+  "mature_mass_only_rank_cap": 15,
+  "credible_words_behaviors_min": 1,
+  "single_family_dominance_max": 0.45,
+  "public_rankability_min": 0.50
+}

@@ -143,7 +143,12 @@ def predict_breakout_prob(feature_vector: dict[str, float], horizon_days: int = 
         + 0.22 * feature_vector["regional_overlap"]
         + 0.18 * feature_vector["regional_priority"]
         + 0.25 * feature_vector["tiktok_priority"]
+        + 0.26 * feature_vector.get("jp_relevance", 0.0)
+        + 0.24 * feature_vector.get("constrained_trends_support", 0.0)
+        + 0.18 * feature_vector.get("yahoo_realtime_support", 0.0)
+        + 0.16 * feature_vector.get("relation_confirmed_support", 0.0)
         + 0.12 * feature_vector["family_count"]
+        - 0.22 * feature_vector.get("public_noise_penalty", 0.0)
         - 0.84 * feature_vector["maturity_penalty"]
         - 0.72 * feature_vector["redundancy_penalty"]
         - 1.34
@@ -168,7 +173,10 @@ def predict_mass_prob(feature_vector: dict[str, float]) -> float:
         + 0.24 * feature_vector["has_confirmation"]
         + 0.12 * feature_vector["music_confirmation"]
         + 0.12 * feature_vector["show_confirmation"]
+        + 0.18 * feature_vector.get("jp_relevance", 0.0)
+        + 0.12 * feature_vector.get("relation_confirmed_support", 0.0)
         - 0.38 * feature_vector["novelty"]
+        - 0.32 * feature_vector.get("public_noise_penalty", 0.0)
         - 0.28 * feature_vector["redundancy_penalty"]
         - 0.92
     )
@@ -186,6 +194,80 @@ def compute_primary_score(
 
     gamma = _mass_gamma(candidate_type, domain_class)
     return round(4.0 * breakout_prob + 4.0 * gamma * mass_prob, 4)
+
+
+def build_public_feature_vector(
+    *,
+    breakout_prob: float,
+    mass_prob: float,
+    jp_relevance: float,
+    constrained_trends_ent_support: float,
+    constrained_trends_beauty_support: float,
+    yahoo_realtime_support: float,
+    posterior_reliability: float,
+    extraction_confidence: float,
+    relation_confirmed_support: float,
+    public_noise_penalty: float,
+    mature_mass_only_penalty: float,
+    family_count: float,
+    source_count: float,
+) -> dict[str, float]:
+    constrained_support = max(
+        constrained_trends_ent_support,
+        constrained_trends_beauty_support,
+    )
+    source_credibility = min(
+        1.0,
+        posterior_reliability * 0.6
+        + extraction_confidence * 0.2
+        + min(1.0, family_count / 3.0) * 0.2,
+    )
+    evidence_diversity = min(1.0, family_count * 0.35 + source_count * 0.08)
+    category_fit = max(constrained_support, yahoo_realtime_support * 0.8, jp_relevance * 0.75)
+    return {
+        "breakout_prob": breakout_prob,
+        "mass_prob": mass_prob,
+        "jp_relevance": jp_relevance,
+        "constrained_trends_support": constrained_support,
+        "yahoo_realtime_support": yahoo_realtime_support,
+        "source_credibility": source_credibility,
+        "evidence_diversity": evidence_diversity,
+        "category_fit": category_fit,
+        "relation_confirmed_support": relation_confirmed_support,
+        "public_noise_penalty": public_noise_penalty,
+        "mature_mass_only_penalty": mature_mass_only_penalty,
+        "single_source_domination": 1.0 if family_count <= 1 and source_count <= 1 else 0.0,
+    }
+
+
+def predict_public_rankability_prob(feature_vector: dict[str, float]) -> float:
+    logit = (
+        2.1 * feature_vector["breakout_prob"]
+        + 0.52 * feature_vector["constrained_trends_support"]
+        + 0.48 * feature_vector["yahoo_realtime_support"]
+        + 0.44 * feature_vector["jp_relevance"]
+        + 0.35 * feature_vector["source_credibility"]
+        + 0.28 * feature_vector["evidence_diversity"]
+        + 0.24 * feature_vector["category_fit"]
+        + 0.22 * feature_vector["relation_confirmed_support"]
+        - 0.95 * feature_vector["public_noise_penalty"]
+        - 0.72 * feature_vector["mature_mass_only_penalty"]
+        - 0.4 * feature_vector["single_source_domination"]
+        - 1.12
+    )
+    probability = _logistic(logit)
+    return _apply_monotonic_calibration(probability, BREAKOUT_CALIBRATION_POINTS)
+
+
+def compute_public_score(
+    *,
+    breakout_prob: float,
+    mass_prob: float,
+    public_rankability_prob: float,
+) -> float:
+    coming_score = 4.0 * breakout_prob
+    mass_heat = 4.0 * mass_prob
+    return round(0.65 * coming_score + 0.20 * (4.0 * public_rankability_prob) + 0.15 * mass_heat, 4)
 
 
 def _mass_gamma(candidate_type: CandidateType, domain_class: DomainClass) -> float:

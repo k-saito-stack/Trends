@@ -27,6 +27,7 @@ def build_candidate_relations(
     relation_map: dict[str, CandidateRelation] = {}
     for group_items in grouped.values():
         _add_music_relations(group_items, relation_map, created_at)
+        _add_work_relations(group_items, relation_map, created_at)
         _add_topic_context_relations(group_items, relation_map, created_at)
 
     return sorted(relation_map.values(), key=lambda item: item.document_id)
@@ -161,6 +162,67 @@ def _add_topic_context_relations(
                     dst_candidate_id=left_id,
                     confidence=0.55,
                     source="deterministic:shared_item",
+                    created_at=created_at,
+                ),
+            )
+
+
+def _add_work_relations(
+    group_items: list[RawCandidate],
+    relation_map: dict[str, CandidateRelation],
+    created_at: str,
+) -> None:
+    works = [
+        item
+        for item in group_items
+        if item.type in {CandidateType.WORK, CandidateType.SHOW, CandidateType.REALITY_SHOW}
+    ]
+    people = [
+        item
+        for item in group_items
+        if item.type in {CandidateType.PERSON, CandidateType.GROUP, CandidateType.MUSIC_ARTIST}
+    ]
+    for work in works:
+        work_name = normalize_for_matching(work.name)
+        for person in people:
+            show_hint = normalize_for_matching(str(person.extra.get("show", "")))
+            title_hint = normalize_for_matching(str(person.extra.get("from_title", "")))
+            if show_hint and show_hint == work_name:
+                relation_type = (
+                    "appears_in_reality_show"
+                    if work.type == CandidateType.REALITY_SHOW
+                    else "features_in"
+                )
+                confidence = 0.87
+            elif title_hint and title_hint == work_name:
+                relation_type = "associated_with_work"
+                confidence = 0.42
+            else:
+                continue
+            _register_relation(
+                relation_map,
+                CandidateRelation(
+                    src_candidate_id=person.candidate_id,
+                    relation_type=relation_type,
+                    dst_candidate_id=work.candidate_id,
+                    confidence=confidence,
+                    source=_relation_source(person, work),
+                    created_at=created_at,
+                ),
+            )
+            reverse_relation = (
+                "has_cast"
+                if relation_type != "associated_with_work"
+                else "references"
+            )
+            _register_relation(
+                relation_map,
+                CandidateRelation(
+                    src_candidate_id=work.candidate_id,
+                    relation_type=reverse_relation,
+                    dst_candidate_id=person.candidate_id,
+                    confidence=confidence,
+                    source=_relation_source(person, work),
                     created_at=created_at,
                 ),
             )

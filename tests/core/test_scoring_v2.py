@@ -105,13 +105,13 @@ def test_single_family_discovery_topic_requires_stronger_signal() -> None:
     assert feature.primary_score < 1.0
 
 
-def test_regional_tiktok_topic_can_pass_with_japan_or_multi_market_signal() -> None:
+def test_regional_tiktok_topic_can_pass_with_japan_signal_and_jp_confirmation() -> None:
     candidate = Candidate(
         candidate_id="cand_regional",
         type=CandidateType.HASHTAG,
         kind=CandidateKind.TOPIC,
-        canonical_name="#ライブ配信",
-        display_name="#ライブ配信",
+        canonical_name="#メガ割",
+        display_name="#メガ割",
         domain_class=DomainClass.CONSUMER_CULTURE,
     )
     features = [
@@ -129,7 +129,22 @@ def test_regional_tiktok_topic_can_pass_with_japan_or_multi_market_signal() -> N
             extraction_confidence=ExtractionConfidence.HIGH,
             domain_class=DomainClass.CONSUMER_CULTURE,
             metadata={"countries": ["JP", "KR"], "countryRanks": {"JP": 2, "KR": 5}},
-        )
+        ),
+        DailySourceFeature(
+            date="2026-03-06",
+            source_id="YAHOO_REALTIME",
+            candidate_id="cand_regional",
+            candidate_type=CandidateType.HASHTAG,
+            candidate_kind=CandidateKind.TOPIC,
+            source_role=SourceRole.DISCOVERY,
+            family_primary=SourceFamily.SOCIAL_DISCOVERY,
+            signal_value=0.6,
+            anomaly_score=1.8,
+            surprise01=0.32,
+            extraction_confidence=ExtractionConfidence.HIGH,
+            domain_class=DomainClass.CONSUMER_CULTURE,
+            metadata={"countryCode": "JP"},
+        ),
     ]
 
     feature = compute_candidate_feature(

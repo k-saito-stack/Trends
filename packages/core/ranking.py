@@ -28,6 +28,8 @@ SOURCE_TO_BUCKET: dict[str, str] = {
     "APPLE_MUSIC_KR": DisplayBucket.MUSIC,
     "APPLE_MUSIC_GLOBAL": DisplayBucket.MUSIC,
     "TRENDS": DisplayBucket.TRENDS,
+    "TRENDS_JP_24H_ENT": DisplayBucket.TRENDS,
+    "TRENDS_JP_24H_BEAUTY_FASHION": DisplayBucket.TRENDS,
     "NEWS_RSS": DisplayBucket.NEWS_RSS,
     "RAKUTEN_MAG": DisplayBucket.MAGAZINES,
     "X_SEARCH": DisplayBucket.X,
@@ -179,7 +181,7 @@ def select_top_k(
 
 
 def _selection_score(feature: DailyCandidateFeature) -> float:
-    base_score = feature.primary_score
+    base_score = feature.public_score or feature.primary_score
     role_scores = feature.metadata.get("roleScores", {})
     discovery_score = float(role_scores.get("DISCOVERY", 0.0))
     breakout_prob = feature.breakout_prob_7d
@@ -190,6 +192,8 @@ def _selection_score(feature: DailyCandidateFeature) -> float:
         and feature.source_families[0] in {"MUSIC_CHART", "SHOW_CHART"}
     )
 
+    if feature.public_gate_passed:
+        return base_score + 0.9 + breakout_prob + feature.public_rankability_prob * 0.6
     if feature.ranking_gate_passed:
         return base_score + 0.8 + breakout_prob
     if discovery_score > 0 and feature.candidate_kind == CandidateKind.TOPIC:
@@ -214,7 +218,7 @@ def build_ranked_candidates_v2(
             "domain_class": feature.domain_class,
             "coming_score": feature.coming_score,
             "mass_heat": feature.mass_heat,
-            "primary_score": feature.primary_score,
+            "primary_score": feature.public_score or feature.primary_score,
             "source_families": feature.source_families,
             "evidence": feature.evidence,
             "summary": "",
@@ -225,7 +229,7 @@ def build_ranked_candidates_v2(
         if is_main_ranking_domain(feature.domain_class)
     ]
     eligible = [
-        entry for entry in main_domain_entries if entry["feature"].ranking_gate_passed
+        entry for entry in main_domain_entries if entry["feature"].public_gate_passed
     ]
     if len(eligible) < top_k:
         seen_candidate_ids = {entry["candidate_id"] for entry in eligible}
@@ -260,7 +264,12 @@ def build_ranked_candidates_v2(
                 source_families=list(entry["source_families"]),
                 evidence=list(entry["evidence"])[:5],
                 summary=str(entry.get("summary", "")),
-                metadata={"feature": entry["feature"].to_dict()},
+                metadata={
+                    "feature": entry["feature"].to_dict(),
+                    "rawPrimaryScore": entry["feature"].primary_score,
+                    "publicScore": entry["feature"].public_score,
+                    "publicRankabilityProb": entry["feature"].public_rankability_prob,
+                },
             )
         )
     return ranked

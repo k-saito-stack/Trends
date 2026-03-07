@@ -9,9 +9,12 @@ from collections.abc import Iterable
 from packages.core.family_features import FamilyAggregateMetrics, aggregate_family_metrics
 from packages.core.fusion_model import (
     build_candidate_feature_vector,
+    build_public_feature_vector,
     compute_primary_score,
+    compute_public_score,
     predict_breakout_prob,
     predict_mass_prob,
+    predict_public_rankability_prob,
 )
 from packages.core.models import (
     AlgorithmConfig,
@@ -25,6 +28,14 @@ from packages.core.models import (
     RankingLane,
     SourceFamily,
     SourceRole,
+)
+from packages.core.noise_filter import compute_public_noise_penalty
+from packages.core.public_rank_rules import load_public_rank_rules
+from packages.core.realism_features import (
+    compute_constrained_trends_support,
+    compute_jp_relevance,
+    compute_mature_mass_only_penalty,
+    compute_yahoo_realtime_support,
 )
 from packages.core.scoring import momentum, update_source_state
 
@@ -141,14 +152,17 @@ def compute_candidate_feature(
     domain_class: DomainClass,
     source_features: Iterable[DailySourceFeature],
     algo_config: AlgorithmConfig,
+    relation_support: dict[str, float] | None = None,
 ) -> DailyCandidateFeature:
     feature_list = list(source_features)
     aggregate = aggregate_family_metrics(feature_list)
+    rules = load_public_rank_rules()
 
     novelty = _compute_novelty(candidate)
     domain_fit = _compute_domain_fit(candidate.type, feature_list)
     extraction_confidence = _confidence_score(feature_list)
     maturity_penalty = candidate.maturity * 0.6 + (0.25 if not aggregate["has_discovery"] else 0.0)
+    relation_support = relation_support or {}
     heuristic_coming_score = max(
         0.0,
         float(aggregate["discovery_rise"])
@@ -181,12 +195,58 @@ def compute_candidate_feature(
         maturity_penalty=maturity_penalty,
         sustained_presence=sustained_presence,
     )
+    jp_relevance = compute_jp_relevance(feature_list, candidate)
+    constrained_trends_ent_support, constrained_trends_beauty_support = (
+        compute_constrained_trends_support(feature_list, domain_class)
+    )
+    yahoo_realtime_support = compute_yahoo_realtime_support(feature_list)
+    public_noise_penalty, topic_specificity, behavior_objectness = (
+        compute_public_noise_penalty(candidate, feature_list)
+    )
+    mature_mass_only_penalty = compute_mature_mass_only_penalty(candidate, aggregate)
+    relation_support = relation_support or {}
+    relation_support_total = float(relation_support.get("relation_support_total", 0.0))
+    relation_confirmed_support = float(relation_support.get("relation_confirmed_support", 0.0))
+    fusion_vector.update(
+        {
+            "jp_relevance": jp_relevance,
+            "constrained_trends_support": max(
+                constrained_trends_ent_support,
+                constrained_trends_beauty_support,
+            ),
+            "yahoo_realtime_support": yahoo_realtime_support,
+            "public_noise_penalty": public_noise_penalty,
+            "relation_confirmed_support": relation_confirmed_support,
+        }
+    )
     breakout_prob_1d = predict_breakout_prob(fusion_vector, horizon_days=1)
     breakout_prob_3d = predict_breakout_prob(fusion_vector, horizon_days=3)
     breakout_prob_7d = predict_breakout_prob(fusion_vector, horizon_days=7)
     mass_prob = predict_mass_prob(fusion_vector)
     coming_score = breakout_prob_7d * 4.0
     mass_heat = mass_prob * 4.0
+
+    public_vector = build_public_feature_vector(
+        breakout_prob=breakout_prob_7d,
+        mass_prob=mass_prob,
+        jp_relevance=jp_relevance,
+        constrained_trends_ent_support=constrained_trends_ent_support,
+        constrained_trends_beauty_support=constrained_trends_beauty_support,
+        yahoo_realtime_support=yahoo_realtime_support,
+        posterior_reliability=fusion_vector["posterior_reliability"],
+        extraction_confidence=extraction_confidence,
+        relation_confirmed_support=relation_confirmed_support,
+        public_noise_penalty=public_noise_penalty,
+        mature_mass_only_penalty=mature_mass_only_penalty,
+        family_count=fusion_vector["family_count"],
+        source_count=fusion_vector["source_count"],
+    )
+    public_rankability_prob = predict_public_rankability_prob(public_vector)
+    public_score = compute_public_score(
+        breakout_prob=breakout_prob_7d,
+        mass_prob=mass_prob,
+        public_rankability_prob=public_rankability_prob,
+    )
 
     ranking_gate_passed = passes_ranking_gate(
         candidate,
@@ -195,6 +255,17 @@ def compute_candidate_feature(
         breakout_prob_7d,
         novelty,
         algo_config,
+        public_rankability_prob=public_rankability_prob,
+        public_noise_penalty=public_noise_penalty,
+        mature_mass_only_penalty=mature_mass_only_penalty,
+        constrained_trends_ent_support=constrained_trends_ent_support,
+        constrained_trends_beauty_support=constrained_trends_beauty_support,
+        yahoo_realtime_support=yahoo_realtime_support,
+        relation_support_total=relation_support_total,
+        rules=rules,
+    )
+    public_gate_passed = ranking_gate_passed and public_rankability_prob >= float(
+        rules["public_rankability_min"]
     )
 
     model_primary_score = compute_primary_score(
@@ -238,6 +309,17 @@ def compute_candidate_feature(
         sustained_presence=sustained_presence,
         mainstream_reach=float(aggregate["music_confirmation"])
         + float(aggregate["show_confirmation"]),
+        jp_relevance=jp_relevance,
+        constrained_trends_ent_support=constrained_trends_ent_support,
+        constrained_trends_beauty_support=constrained_trends_beauty_support,
+        yahoo_realtime_support=yahoo_realtime_support,
+        topic_specificity=topic_specificity,
+        behavior_objectness=behavior_objectness,
+        public_noise_penalty=public_noise_penalty,
+        mature_mass_only_penalty=mature_mass_only_penalty,
+        relation_support_total=relation_support_total,
+        public_rankability_prob=public_rankability_prob,
+        public_score=public_score,
         breakout_prob_1d=breakout_prob_1d,
         breakout_prob_3d=breakout_prob_3d,
         breakout_prob_7d=breakout_prob_7d,
@@ -246,6 +328,7 @@ def compute_candidate_feature(
         mass_heat=mass_heat,
         primary_score=primary_score,
         ranking_gate_passed=ranking_gate_passed,
+        public_gate_passed=public_gate_passed,
         related_entity_ids=list(candidate.related_entity_ids),
         related_candidate_ids=list(candidate.related_candidate_ids),
         source_contrib={
@@ -263,7 +346,13 @@ def compute_candidate_feature(
                 "breakoutProb3d": round(breakout_prob_3d, 4),
                 "breakoutProb7d": round(breakout_prob_7d, 4),
                 "massProb": round(mass_prob, 4),
+                "publicRankabilityProb": round(public_rankability_prob, 4),
+                "publicScore": round(public_score, 4),
                 "modelPrimaryScore": round(model_primary_score, 4),
+                "publicVector": {key: round(value, 4) for key, value in public_vector.items()},
+                "relationSupport": {
+                    key: round(float(value), 4) for key, value in relation_support.items()
+                },
             },
         },
     )
@@ -276,26 +365,53 @@ def passes_ranking_gate(
     breakout_prob_7d: float,
     novelty: float,
     algo_config: AlgorithmConfig,
+    *,
+    public_rankability_prob: float,
+    public_noise_penalty: float,
+    mature_mass_only_penalty: float,
+    constrained_trends_ent_support: float,
+    constrained_trends_beauty_support: float,
+    yahoo_realtime_support: float,
+    relation_support_total: float,
+    rules: dict[str, float],
 ) -> bool:
     has_discovery = bool(aggregate["has_discovery"])
     support_families = len(aggregate["source_families"])
+    constrained_support = max(
+        constrained_trends_ent_support,
+        constrained_trends_beauty_support,
+    )
+    jp_credibility = max(constrained_support, yahoo_realtime_support)
 
     candidate_kind = candidate.kind or candidate.type.default_kind
+    if public_noise_penalty >= float(rules["low_value_penalty_block_threshold"]):
+        return False
+    if public_rankability_prob < float(rules["public_rankability_min"]):
+        return False
+    if mature_mass_only_penalty > 0.85:
+        return False
 
-    if candidate_kind == CandidateKind.TOPIC and has_discovery and support_families >= 3:
-        return True
-
-    if candidate_kind == CandidateKind.TOPIC and has_discovery and support_families >= 2:
-        return breakout_prob_7d >= 0.45
-
-    if has_discovery:
-        if candidate_kind == CandidateKind.TOPIC and support_families == 1:
-            min_threshold = 0.74 if _has_priority_regional_tiktok_signal(feature_list) else 0.93
-            return breakout_prob_7d >= max(
-                algo_config.ranking_gate_discovery_threshold,
-                min_threshold,
+    if candidate_kind == CandidateKind.TOPIC:
+        if has_discovery and support_families >= 2:
+            return (
+                breakout_prob_7d >= float(rules["topic_multi_family_public_threshold"])
+                and (jp_credibility > 0 or relation_support_total > 0.18)
             )
-        if breakout_prob_7d >= algo_config.ranking_gate_discovery_threshold:
+        if has_discovery and support_families == 1:
+            if not _has_priority_regional_tiktok_signal(feature_list):
+                return False
+            return (
+                breakout_prob_7d >= float(rules["topic_single_family_public_threshold"])
+                and jp_credibility > 0.08
+            )
+        return False
+
+    if relation_support_total > 0 and not has_discovery and jp_credibility <= 0:
+        return public_rankability_prob >= float(rules["relation_only_public_threshold"]) and (
+            relation_support_total >= 0.25
+        )
+
+    if has_discovery and breakout_prob_7d >= algo_config.ranking_gate_discovery_threshold:
             return True
 
     return candidate.type in {
@@ -307,6 +423,7 @@ def passes_ranking_gate(
     } and (
         novelty >= 0.4
         and len(feature_list) >= 2
+        and public_noise_penalty <= 0.5
         and (
             aggregate["music_confirmation"] > 0.35
             or aggregate["show_confirmation"] > 0.35

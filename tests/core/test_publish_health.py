@@ -128,4 +128,4 @@ def test_evaluate_publish_health_falls_back_to_shadow_when_coverage_is_weak() ->
     assert report["publicEligible"] is False
     assert report["shadowOnly"] is True
     assert "healthy_core_sources<6:1" in report["reasons"]
-    assert "words_behaviors_top20<3:0" in report["reasons"]
+    assert "words_behaviors_top20<1:0" in report["reasons"]
