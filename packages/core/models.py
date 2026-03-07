@@ -508,6 +508,129 @@ class SourceWeightSnapshot:
 
 
 @dataclass
+class HindsightLabel:
+    """Weak-supervision labels generated from future spread."""
+
+    date: str
+    candidate_id: str
+    breakout_1d: bool = False
+    breakout_3d: bool = False
+    breakout_7d: bool = False
+    breakout_14d: bool = False
+    mass_now: bool = False
+    mass_3d: bool = False
+    mass_7d: bool = False
+    new_confirmation_families: list[str] = field(default_factory=list)
+    lead_days: int | None = None
+    available_breakout_horizons: list[int] = field(default_factory=list)
+    available_mass_horizons: list[int] = field(default_factory=list)
+    created_at: str = ""
+
+    @property
+    def document_id(self) -> str:
+        return self.candidate_id
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "date": self.date,
+            "candidateId": self.candidate_id,
+            "breakout1d": self.breakout_1d,
+            "breakout3d": self.breakout_3d,
+            "breakout7d": self.breakout_7d,
+            "breakout14d": self.breakout_14d,
+            "massNow": self.mass_now,
+            "mass3d": self.mass_3d,
+            "mass7d": self.mass_7d,
+            "newConfirmationFamilies": self.new_confirmation_families,
+            "availableBreakoutHorizons": self.available_breakout_horizons,
+            "availableMassHorizons": self.available_mass_horizons,
+            "createdAt": self.created_at,
+        }
+        if self.lead_days is not None:
+            payload["leadDays"] = self.lead_days
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> HindsightLabel:
+        lead_days_raw = data.get("leadDays")
+        lead_days = int(lead_days_raw) if lead_days_raw is not None else None
+        return cls(
+            date=str(data.get("date", "")),
+            candidate_id=str(data.get("candidateId", "")),
+            breakout_1d=bool(data.get("breakout1d", False)),
+            breakout_3d=bool(data.get("breakout3d", False)),
+            breakout_7d=bool(data.get("breakout7d", False)),
+            breakout_14d=bool(data.get("breakout14d", False)),
+            mass_now=bool(data.get("massNow", False)),
+            mass_3d=bool(data.get("mass3d", False)),
+            mass_7d=bool(data.get("mass7d", False)),
+            new_confirmation_families=[
+                str(value) for value in data.get("newConfirmationFamilies", []) if value
+            ],
+            lead_days=lead_days,
+            available_breakout_horizons=[
+                int(value) for value in data.get("availableBreakoutHorizons", []) if value
+            ],
+            available_mass_horizons=[
+                int(value) for value in data.get("availableMassHorizons", []) if value
+            ],
+            created_at=str(data.get("createdAt", "")),
+        )
+
+
+@dataclass
+class SourcePosterior:
+    """Learned per-source posterior stats with optional bucket overrides."""
+
+    source_id: str
+    updated_at: str
+    reliability: float = 1.0
+    lead_score: float = 0.0
+    persistence: float = 0.0
+    region_fit: float = 1.0
+    observations: int = 0
+    positives: int = 0
+    negatives: int = 0
+    buckets: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    @property
+    def document_id(self) -> str:
+        return self.source_id
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sourceId": self.source_id,
+            "updatedAt": self.updated_at,
+            "reliability": self.reliability,
+            "leadScore": self.lead_score,
+            "persistence": self.persistence,
+            "regionFit": self.region_fit,
+            "observations": self.observations,
+            "positives": self.positives,
+            "negatives": self.negatives,
+            "buckets": self.buckets,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SourcePosterior:
+        return cls(
+            source_id=str(data.get("sourceId", "")),
+            updated_at=str(data.get("updatedAt", "")),
+            reliability=float(data.get("reliability", 1.0)),
+            lead_score=float(data.get("leadScore", 0.0)),
+            persistence=float(data.get("persistence", 0.0)),
+            region_fit=float(data.get("regionFit", 1.0)),
+            observations=int(data.get("observations", 0)),
+            positives=int(data.get("positives", 0)),
+            negatives=int(data.get("negatives", 0)),
+            buckets={
+                str(bucket_key): dict(bucket)
+                for bucket_key, bucket in dict(data.get("buckets", {})).items()
+            },
+        )
+
+
+@dataclass
 class RawCandidate:
     """Intermediate candidate extracted from a source item."""
 
@@ -646,6 +769,50 @@ class DailySourceFeature:
             "metadata": self.metadata,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DailySourceFeature:
+        return cls(
+            date=str(data.get("date", "")),
+            source_id=str(data.get("sourceId", "")),
+            candidate_id=str(data.get("candidateId", "")),
+            candidate_type=CandidateType(data.get("candidateType", CandidateType.KEYWORD.value)),
+            candidate_kind=CandidateKind(
+                data.get("candidateKind", CandidateType.KEYWORD.default_kind.value)
+            ),
+            source_role=SourceRole(data.get("sourceRole", SourceRole.DISCOVERY.value)),
+            family_primary=SourceFamily(data.get("familyPrimary", SourceFamily.UNKNOWN.value)),
+            family_secondary=(
+                SourceFamily(data["familySecondary"])
+                if data.get("familySecondary")
+                else None
+            ),
+            signal_value=float(data.get("signalValue", 0.0)),
+            anomaly_score=float(data.get("anomalyScore", 0.0)),
+            surprise01=float(data.get("surprise01", 0.0)),
+            momentum=float(data.get("momentum", 0.0)),
+            extraction_confidence=ExtractionConfidence(
+                data.get("extractionConfidence", ExtractionConfidence.MEDIUM.value)
+            ),
+            domain_class=DomainClass(data.get("domainClass", DomainClass.OTHER.value)),
+            posterior_reliability=float(data.get("posteriorReliability", 1.0)),
+            posterior_lead=float(data.get("posteriorLead", 0.0)),
+            posterior_persistence=float(data.get("posteriorPersistence", 0.0)),
+            observation_ids=[str(value) for value in data.get("observationIds", []) if value],
+            evidence=[
+                Evidence(
+                    source_id=str(item.get("sourceId", "")),
+                    title=str(item.get("title", "")),
+                    url=str(item.get("url", "")),
+                    published_at=str(item.get("publishedAt", "")),
+                    metric=str(item.get("metric", "")),
+                    snippet=str(item.get("snippet", "")),
+                )
+                for item in data.get("evidence", [])
+                if isinstance(item, dict)
+            ],
+            metadata=dict(data.get("metadata", {})),
+        )
+
 
 @dataclass
 class DailyCandidateFeature:
@@ -722,6 +889,61 @@ class DailyCandidateFeature:
             "sourceContrib": self.source_contrib,
             "metadata": self.metadata,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DailyCandidateFeature:
+        return cls(
+            date=str(data.get("date", "")),
+            candidate_id=str(data.get("candidateId", "")),
+            display_name=str(data.get("displayName", "")),
+            candidate_type=CandidateType(data.get("candidateType", CandidateType.KEYWORD.value)),
+            candidate_kind=CandidateKind(
+                data.get("candidateKind", CandidateType.KEYWORD.default_kind.value)
+            ),
+            lane=RankingLane(data.get("lane", RankingLane.SHADOW.value)),
+            domain_class=DomainClass(data.get("domainClass", DomainClass.OTHER.value)),
+            source_families=[str(value) for value in data.get("sourceFamilies", []) if value],
+            discovery_rise=float(data.get("discoveryRise", 0.0)),
+            cross_family_confirm=float(data.get("crossFamilyConfirm", 0.0)),
+            lead_lag_bonus=float(data.get("leadLagBonus", 0.0)),
+            novelty=float(data.get("novelty", 0.0)),
+            domain_fit=float(data.get("domainFit", 0.0)),
+            extraction_confidence=float(data.get("extractionConfidence", 0.0)),
+            maturity_penalty=float(data.get("maturityPenalty", 0.0)),
+            redundancy_penalty=float(data.get("redundancyPenalty", 0.0)),
+            broad_confirmation=float(data.get("broadConfirmation", 0.0)),
+            sustained_presence=float(data.get("sustainedPresence", 0.0)),
+            mainstream_reach=float(data.get("mainstreamReach", 0.0)),
+            breakout_prob_1d=float(data.get("breakoutProb1d", 0.0)),
+            breakout_prob_3d=float(data.get("breakoutProb3d", 0.0)),
+            breakout_prob_7d=float(data.get("breakoutProb7d", 0.0)),
+            mass_prob=float(data.get("massProb", 0.0)),
+            coming_score=float(data.get("comingScore", 0.0)),
+            mass_heat=float(data.get("massHeat", 0.0)),
+            primary_score=float(data.get("primaryScore", 0.0)),
+            ranking_gate_passed=bool(data.get("rankingGatePassed", False)),
+            related_entity_ids=[str(value) for value in data.get("relatedEntityIds", []) if value],
+            related_candidate_ids=[
+                str(value) for value in data.get("relatedCandidateIds", []) if value
+            ],
+            source_contrib={
+                str(key): float(value)
+                for key, value in dict(data.get("sourceContrib", {})).items()
+            },
+            evidence=[
+                Evidence(
+                    source_id=str(item.get("sourceId", "")),
+                    title=str(item.get("title", "")),
+                    url=str(item.get("url", "")),
+                    published_at=str(item.get("publishedAt", "")),
+                    metric=str(item.get("metric", "")),
+                    snippet=str(item.get("snippet", "")),
+                )
+                for item in data.get("evidence", [])
+                if isinstance(item, dict)
+            ],
+            metadata=dict(data.get("metadata", {})),
+        )
 
 
 @dataclass

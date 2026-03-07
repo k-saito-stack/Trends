@@ -11,8 +11,10 @@ from packages.core.models import (
     Candidate,
     DailyCandidateFeature,
     DailySourceFeature,
+    HindsightLabel,
     Observation,
     RankedCandidateV2,
+    SourcePosterior,
 )
 
 logger = logging.getLogger(__name__)
@@ -84,6 +86,64 @@ def save_daily_source_features(features: list[DailySourceFeature]) -> None:
 def save_daily_candidate_features(features: list[DailyCandidateFeature]) -> None:
     operations = [
         ("daily_candidate_features", feature.document_id, feature.to_dict()) for feature in features
+    ]
+    if operations:
+        firestore_client.batch_write(operations)
+
+
+def load_daily_source_features_by_dates(dates: list[str]) -> list[DailySourceFeature]:
+    date_set = {value for value in dates if value}
+    if not date_set:
+        return []
+    docs = firestore_client.get_collection("daily_source_features")
+    return [
+        DailySourceFeature.from_dict(doc)
+        for doc in docs
+        if str(doc.get("date", "")) in date_set
+    ]
+
+
+def load_daily_candidate_features_by_dates(dates: list[str]) -> list[DailyCandidateFeature]:
+    date_set = {value for value in dates if value}
+    if not date_set:
+        return []
+    docs = firestore_client.get_collection("daily_candidate_features")
+    return [
+        DailyCandidateFeature.from_dict(doc)
+        for doc in docs
+        if str(doc.get("date", "")) in date_set
+    ]
+
+
+def load_hindsight_labels(date: str) -> dict[str, HindsightLabel]:
+    docs = firestore_client.get_collection(f"hindsight_labels/{date}/items")
+    labels = [HindsightLabel.from_dict(doc) for doc in docs]
+    return {label.candidate_id: label for label in labels if label.candidate_id}
+
+
+def save_hindsight_labels(labels: list[HindsightLabel]) -> None:
+    operations = [
+        (f"hindsight_labels/{label.date}/items", label.document_id, label.to_dict())
+        for label in labels
+    ]
+    if operations:
+        firestore_client.batch_write(operations)
+
+
+def load_source_posteriors() -> dict[str, SourcePosterior]:
+    docs = firestore_client.get_collection("source_posteriors")
+    posteriors = [SourcePosterior.from_dict(doc) for doc in docs]
+    return {
+        posterior.source_id: posterior
+        for posterior in posteriors
+        if posterior.source_id
+    }
+
+
+def save_source_posteriors(posteriors: list[SourcePosterior]) -> None:
+    operations = [
+        ("source_posteriors", posterior.document_id, posterior.to_dict())
+        for posterior in posteriors
     ]
     if operations:
         firestore_client.batch_write(operations)

@@ -88,6 +88,7 @@ def compute_source_feature_score(
     algo_config: AlgorithmConfig,
     target_date: str,
     family: SourceFamily,
+    posterior_multiplier: float = 1.0,
 ) -> tuple[float, float]:
     params = algo_config.family_params.get(family.value, {})
     local_algo = AlgorithmConfig(
@@ -117,7 +118,8 @@ def compute_source_feature_score(
     updated_state.sig_history = sig_history[:3]
     local_momentum = momentum(sig_history, local_algo.momentum_lambda)
     surprise01 = normalize_surprise(anomaly)
-    return anomaly, surprise01 + min(0.25, local_momentum * 0.08)
+    composite = surprise01 + min(0.25, local_momentum * 0.08)
+    return anomaly, min(1.0, composite * posterior_multiplier)
 
 
 def normalize_surprise(anomaly_score: float) -> float:
@@ -206,11 +208,19 @@ def compute_candidate_feature(
         sustained_presence=_sustained_presence(candidate),
         mainstream_reach=float(aggregate["music_confirmation"])
         + float(aggregate["show_confirmation"]),
+        breakout_prob_1d=_probability_from_score(coming_score, 1.7),
+        breakout_prob_3d=_probability_from_score(coming_score, 1.25),
+        breakout_prob_7d=_probability_from_score(coming_score, 0.9),
+        mass_prob=_probability_from_score(mass_heat, 0.8),
         coming_score=coming_score,
         mass_heat=mass_heat,
         primary_score=primary_score,
         ranking_gate_passed=ranking_gate_passed,
         related_entity_ids=list(candidate.related_entity_ids),
+        related_candidate_ids=list(candidate.related_candidate_ids),
+        source_contrib={
+            feature.source_id: round(feature.surprise01, 4) for feature in feature_list
+        },
         evidence=evidence[:5],
         metadata={
             "familyScores": aggregate["family_scores"],
@@ -320,6 +330,10 @@ def _compute_novelty(candidate: Candidate) -> float:
     history_len = len([score for score in candidate.trend_history_7d if score > 0])
     base = 1.0 / (1.0 + math.log1p(history_len + candidate.maturity * 5.0))
     return max(0.0, min(1.0, base))
+
+
+def _probability_from_score(score: float, center: float) -> float:
+    return max(0.0, min(1.0, 1.0 / (1.0 + math.exp(-(score - center)))))
 
 
 def _compute_domain_fit(candidate_type: CandidateType, features: list[DailySourceFeature]) -> float:

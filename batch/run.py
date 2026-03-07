@@ -8,7 +8,7 @@ import json
 import logging
 import os
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from ulid import ULID
@@ -27,6 +27,7 @@ from packages.core.config import (
 )
 from packages.core.diversification import infer_lane
 from packages.core.domain_classifier import classify_domain
+from packages.core.labels import build_hindsight_labels
 from packages.core.models import (
     BucketScore,
     Candidate,
@@ -38,6 +39,7 @@ from packages.core.models import (
     DomainClass,
     Evidence,
     ExtractionConfidence,
+    HindsightLabel,
     Observation,
     RawCandidate,
     SourceWeightSnapshot,
@@ -57,6 +59,7 @@ from packages.core.scoring_v2 import (
 )
 from packages.core.source_catalog import get_source_entry
 from packages.core.source_health import build_source_health_records
+from packages.core.source_learning import compute_source_posteriors, resolve_source_posterior
 from packages.core.source_weighting import (
     build_source_daily_snapshots,
     compute_weight_snapshot,
@@ -373,6 +376,12 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         errors.append(f"source_weights_current: {exc}")
         logger.warning("Failed to load current source weights: %s", exc)
         source_weights = {}
+    try:
+        current_source_posteriors = candidate_store.load_source_posteriors()
+    except Exception as exc:
+        errors.append(f"source_posteriors_current: {exc}")
+        logger.warning("Failed to load current source posteriors: %s", exc)
+        current_source_posteriors = {}
 
     existing_candidates = _load_existing_candidates()
     alias_index = build_alias_index(existing_candidates)
@@ -459,6 +468,15 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         if entry is None:
             continue
         total_signal = sum(item.metric_value for item in raw_items)
+        source_weight = source_weights.get(source_id, 1.0)
+        metadata = _build_source_feature_metadata(raw_items, source_weight)
+        posterior_stats = resolve_source_posterior(
+            source_id,
+            candidate.type.value,
+            entry.role.value,
+            metadata,
+            current_source_posteriors,
+        )
         anomaly_score, surprise01 = compute_source_feature_score(
             candidate,
             source_id,
@@ -466,8 +484,8 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             algo_config,
             target_date,
             entry.family_primary,
+            posterior_multiplier=float(posterior_stats["multiplier"]),
         )
-        source_weight = source_weights.get(source_id, 1.0)
         weighted_surprise = (
             min(entry.max_weight_cap, max(algo_config.source_weight_floor, source_weight))
             * surprise01
@@ -488,13 +506,21 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             momentum=min(1.0, weighted_surprise),
             extraction_confidence=_max_confidence(raw_items),
             domain_class=_pick_domain(candidate, raw_items),
+            posterior_reliability=float(posterior_stats["reliability"]),
+            posterior_lead=float(posterior_stats["leadScore"]),
+            posterior_persistence=float(posterior_stats["persistence"]),
             observation_ids=[
                 obs.observation_id
                 for obs in observations
                 if obs.candidate_id == candidate_id and obs.source_id == source_id
             ],
             evidence=evidence[:5],
-            metadata=_build_source_feature_metadata(raw_items, source_weight),
+            metadata=dict(
+                metadata,
+                posteriorBucket=str(posterior_stats["bucketKey"]),
+                posteriorMultiplier=float(posterior_stats["multiplier"]),
+                posteriorRegionFit=float(posterior_stats["regionFit"]),
+            ),
         )
         source_features.append(feature)
         source_momentum[source_id].append((candidate_id, feature.surprise01))
@@ -598,6 +624,57 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         except Exception as exc:
             errors.append(f"source_weight_compute: {exc}")
             logger.warning("Failed to compute next source weights: %s", exc)
+
+    hindsight_labels = []
+    next_source_posteriors = []
+    if not light_publish:
+        try:
+            label_plan = _build_label_plan(target_date)
+            label_dates = _collect_label_related_dates(target_date, label_plan)
+            historical_candidate_features = candidate_store.load_daily_candidate_features_by_dates(
+                label_dates
+            )
+            candidate_feature_history = _index_candidate_features_by_date(
+                historical_candidate_features
+            )
+            candidate_feature_history[target_date] = {
+                feature.candidate_id: feature for feature in candidate_feature_list
+            }
+
+            labels_by_date: dict[str, dict[str, HindsightLabel]] = {}
+            for anchor_date, horizons in label_plan.items():
+                anchor_features = list(candidate_feature_history.get(anchor_date, {}).values())
+                if not anchor_features:
+                    continue
+                existing_labels = candidate_store.load_hindsight_labels(anchor_date)
+                computed_labels = build_hindsight_labels(
+                    anchor_date,
+                    anchor_features,
+                    candidate_feature_history,
+                    available_breakout_horizons=horizons["breakout"],
+                    available_mass_horizons=horizons["mass"],
+                    created_at=generated_at,
+                )
+                merged_labels = [
+                    _merge_hindsight_label(existing_labels.get(label.candidate_id), label)
+                    for label in computed_labels
+                ]
+                hindsight_labels.extend(merged_labels)
+                labels_by_date[anchor_date] = {
+                    label.candidate_id: label for label in merged_labels
+                }
+
+            source_history = candidate_store.load_daily_source_features_by_dates(
+                list(labels_by_date)
+            )
+            next_source_posteriors = compute_source_posteriors(
+                source_history,
+                labels_by_date,
+                updated_at=generated_at,
+            )
+        except Exception as exc:
+            errors.append(f"source_learning: {exc}")
+            logger.warning("Failed to update hindsight labels/source posteriors: %s", exc)
 
     ranking_items = [
         DailyRankingItem(
@@ -704,6 +781,10 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
                 firestore_client.set_document(
                     "config", "source_weights_current", next_weight_snapshot.to_dict()
                 )
+            if hindsight_labels:
+                candidate_store.save_hindsight_labels(hindsight_labels)
+            if next_source_posteriors:
+                candidate_store.save_source_posteriors(next_source_posteriors)
 
         published_at = datetime.now(JST).isoformat()
         publish_meta = _build_publish_meta(
@@ -807,6 +888,77 @@ def _load_existing_candidates() -> dict[str, Candidate]:
     except Exception as exc:
         logger.warning("Failed to bootstrap existing candidates: %s", exc)
         return {}
+
+
+def _build_label_plan(target_date: str) -> dict[str, dict[str, list[int]]]:
+    target = date.fromisoformat(target_date)
+    return {
+        (target - timedelta(days=1)).isoformat(): {"breakout": [1], "mass": []},
+        (target - timedelta(days=3)).isoformat(): {"breakout": [1, 3], "mass": [3]},
+        (target - timedelta(days=7)).isoformat(): {"breakout": [1, 3, 7], "mass": [3, 7]},
+        (target - timedelta(days=14)).isoformat(): {
+            "breakout": [1, 3, 7, 14],
+            "mass": [3, 7],
+        },
+    }
+
+
+def _collect_label_related_dates(
+    target_date: str,
+    label_plan: dict[str, dict[str, list[int]]],
+) -> list[str]:
+    target = date.fromisoformat(target_date)
+    min_anchor = min(date.fromisoformat(anchor_date) for anchor_date in label_plan)
+    return [
+        (min_anchor + timedelta(days=offset)).isoformat()
+        for offset in range((target - min_anchor).days + 1)
+    ]
+
+
+def _index_candidate_features_by_date(
+    features: list[DailyCandidateFeature],
+) -> dict[str, dict[str, DailyCandidateFeature]]:
+    indexed: dict[str, dict[str, DailyCandidateFeature]] = defaultdict(dict)
+    for feature in features:
+        indexed[feature.date][feature.candidate_id] = feature
+    return indexed
+
+
+def _merge_hindsight_label(
+    existing: HindsightLabel | None,
+    computed: HindsightLabel,
+) -> HindsightLabel:
+    if existing is None:
+        return computed
+
+    return HindsightLabel(
+        date=computed.date,
+        candidate_id=computed.candidate_id,
+        breakout_1d=computed.breakout_1d or existing.breakout_1d,
+        breakout_3d=computed.breakout_3d or existing.breakout_3d,
+        breakout_7d=computed.breakout_7d or existing.breakout_7d,
+        breakout_14d=computed.breakout_14d or existing.breakout_14d,
+        mass_now=computed.mass_now or existing.mass_now,
+        mass_3d=computed.mass_3d or existing.mass_3d,
+        mass_7d=computed.mass_7d or existing.mass_7d,
+        new_confirmation_families=sorted(
+            set(existing.new_confirmation_families) | set(computed.new_confirmation_families)
+        ),
+        lead_days=(
+            min(existing.lead_days, computed.lead_days)
+            if existing.lead_days is not None and computed.lead_days is not None
+            else computed.lead_days
+            if computed.lead_days is not None
+            else existing.lead_days
+        ),
+        available_breakout_horizons=sorted(
+            set(existing.available_breakout_horizons) | set(computed.available_breakout_horizons)
+        ),
+        available_mass_horizons=sorted(
+            set(existing.available_mass_horizons) | set(computed.available_mass_horizons)
+        ),
+        created_at=computed.created_at or existing.created_at,
+    )
 
 
 def _resolve_raw_candidate(
