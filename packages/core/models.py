@@ -401,6 +401,75 @@ class DailyRankingItem:
             payload["sourceFamilies"] = self.source_families
         return payload
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DailyRankingItem:
+        return cls(
+            rank=int(data.get("rank", 0)),
+            candidate_id=str(data.get("candidateId", "")),
+            candidate_type=str(data.get("candidateType", "")),
+            display_name=str(data.get("displayName", "")),
+            trend_score=float(data.get("trendScore", 0.0)),
+            breakdown_buckets=[
+                BucketScore(
+                    bucket=str(item.get("bucket", "")),
+                    score=float(item.get("score", 0.0)),
+                    details=list(item.get("details", [])),
+                )
+                for item in data.get("breakdownBuckets", [])
+                if isinstance(item, dict)
+            ],
+            breakdown_details=list(data.get("breakdownDetails", [])),
+            sparkline_7d=[
+                float(value) if value is not None else None
+                for value in data.get("sparkline7d", [])
+            ],
+            evidence_top3=[
+                Evidence(
+                    source_id=str(item.get("sourceId", "")),
+                    title=str(item.get("title", "")),
+                    url=str(item.get("url", "")),
+                    published_at=str(item.get("publishedAt", "")),
+                    metric=str(item.get("metric", "")),
+                    snippet=str(item.get("snippet", "")),
+                )
+                for item in data.get("evidenceTop3", [])
+                if isinstance(item, dict)
+            ],
+            summary=str(data.get("summary", "")),
+            power=(
+                float(data["power"])
+                if data.get("power") is not None
+                else None
+            ),
+            coming_score=(
+                float(data["comingScore"])
+                if data.get("comingScore") is not None
+                else None
+            ),
+            mass_heat=(
+                float(data["massHeat"])
+                if data.get("massHeat") is not None
+                else None
+            ),
+            primary_score=(
+                float(data["primaryScore"])
+                if data.get("primaryScore") is not None
+                else None
+            ),
+            candidate_kind=(
+                str(data["candidateKind"])
+                if data.get("candidateKind") is not None
+                else None
+            ),
+            lane=str(data["lane"]) if data.get("lane") is not None else None,
+            maturity=(
+                float(data["maturity"])
+                if data.get("maturity") is not None
+                else None
+            ),
+            source_families=[str(value) for value in data.get("sourceFamilies", []) if value],
+        )
+
 
 @dataclass
 class DailyRankingMeta:
@@ -618,6 +687,67 @@ class HindsightLabel:
                 int(value) for value in data.get("availableMassHorizons", []) if value
             ],
             created_at=str(data.get("createdAt", "")),
+        )
+
+
+@dataclass
+class RankingEvaluation:
+    """Offline ranking quality snapshot for one date and variant."""
+
+    date: str
+    variant: str
+    top_k: int
+    breakout_horizon_days: int
+    source_collection: str = ""
+    ranking_source: str = ""
+    item_count: int = 0
+    metrics: dict[str, Any] = field(default_factory=dict)
+    publish_health: dict[str, Any] = field(default_factory=dict)
+    compared_variant: str = ""
+    comparison: dict[str, Any] = field(default_factory=dict)
+    run_id: str = ""
+    created_at: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def document_id(self) -> str:
+        return f"{self.date}__{self.variant}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "date": self.date,
+            "variant": self.variant,
+            "topK": self.top_k,
+            "breakoutHorizonDays": self.breakout_horizon_days,
+            "sourceCollection": self.source_collection,
+            "rankingSource": self.ranking_source,
+            "itemCount": self.item_count,
+            "metrics": self.metrics,
+            "publishHealth": self.publish_health,
+            "comparedVariant": self.compared_variant,
+            "comparison": self.comparison,
+            "runId": self.run_id,
+            "createdAt": self.created_at,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RankingEvaluation:
+        return cls(
+            date=str(data.get("date", "")),
+            variant=str(data.get("variant", "")),
+            top_k=int(data.get("topK", 20)),
+            breakout_horizon_days=int(data.get("breakoutHorizonDays", 7)),
+            source_collection=str(data.get("sourceCollection", "")),
+            ranking_source=str(data.get("rankingSource", "")),
+            item_count=int(data.get("itemCount", 0)),
+            metrics=dict(data.get("metrics", {})),
+            publish_health=dict(data.get("publishHealth", {})),
+            compared_variant=str(data.get("comparedVariant", "")),
+            comparison=dict(data.get("comparison", {})),
+            run_id=str(data.get("runId", "")),
+            created_at=str(data.get("createdAt", "")),
+            metadata=dict(data.get("metadata", {})),
         )
 
 

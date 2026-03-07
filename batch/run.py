@@ -28,6 +28,12 @@ from packages.core.config import (
 )
 from packages.core.diversification import infer_lane
 from packages.core.domain_classifier import classify_domain
+from packages.core.evaluation import (
+    build_ranked_entries_from_features,
+    build_ranked_entries_from_items,
+    compare_variant_metrics,
+    evaluate_ranked_entries,
+)
 from packages.core.labels import build_hindsight_labels
 from packages.core.models import (
     BucketScore,
@@ -42,6 +48,7 @@ from packages.core.models import (
     ExtractionConfidence,
     HindsightLabel,
     Observation,
+    RankingEvaluation,
     RawCandidate,
     SourceWeightSnapshot,
 )
@@ -54,6 +61,7 @@ from packages.core.resolve import (
     create_new_candidate,
     resolve_candidate,
 )
+from packages.core.rollout_gate import evaluate_shadow_rollout
 from packages.core.run_logger import end_run, start_run, update_run_source
 from packages.core.scoring_v2 import (
     compute_candidate_feature,
@@ -89,6 +97,7 @@ class BatchRuntimeOptions:
     persist_candidates: bool = True
     persist_labels: bool = True
     persist_source_posteriors: bool = True
+    persist_evaluations: bool = True
     skip_slow_sources: bool = False
     source_include: tuple[str, ...] = field(default_factory=tuple)
     source_exclude: tuple[str, ...] = field(default_factory=tuple)
@@ -444,6 +453,7 @@ def _run_pipeline(
     persist_candidates = options.persist_candidates and not light_publish
     persist_labels = options.persist_labels and not light_publish
     persist_source_posteriors = options.persist_source_posteriors and not light_publish
+    persist_evaluations = options.persist_evaluations
 
     if not light_publish:
         with contextlib.suppress(Exception):
@@ -728,9 +738,11 @@ def _run_pipeline(
             errors.append(f"source_weight_compute: {exc}")
             logger.warning("Failed to compute next source weights: %s", exc)
 
-    hindsight_labels = []
+    hindsight_labels: list[HindsightLabel] = []
     next_source_posteriors = []
-    if persist_labels or persist_source_posteriors:
+    ranking_evaluations: list[RankingEvaluation] = []
+    rollout_status: dict[str, Any] = {}
+    if persist_labels or persist_source_posteriors or persist_evaluations:
         try:
             label_plan = _build_label_plan(target_date)
             label_dates = _collect_label_related_dates(target_date, label_plan)
@@ -775,9 +787,28 @@ def _run_pipeline(
                 labels_by_date,
                 updated_at=generated_at,
             )
+            if persist_evaluations:
+                ranking_evaluations = _build_ranking_evaluations(
+                    label_plan=label_plan,
+                    labels_by_date=labels_by_date,
+                    candidate_feature_history=candidate_feature_history,
+                    generated_at=generated_at,
+                    run_id=run_id,
+                    top_k=min(20, app_config.top_k),
+                )
+                rollout_status = _build_shadow_rollout_status(
+                    target_date=target_date,
+                    ranking_evaluations=ranking_evaluations,
+                    shadow_days=app_config.shadow_days,
+                    top_k=min(20, app_config.top_k),
+                    generated_at=generated_at,
+                )
         except Exception as exc:
             errors.append(f"source_learning: {exc}")
-            logger.warning("Failed to update hindsight labels/source posteriors: %s", exc)
+            logger.warning(
+                "Failed to update hindsight labels/source posteriors/evaluations: %s",
+                exc,
+            )
 
     ranking_items = [
         DailyRankingItem(
@@ -924,6 +955,10 @@ def _run_pipeline(
             candidate_store.save_hindsight_labels(hindsight_labels)
         if persist_source_posteriors and next_source_posteriors:
             candidate_store.save_source_posteriors(next_source_posteriors)
+        if persist_evaluations and ranking_evaluations:
+            candidate_store.save_ranking_evaluations(ranking_evaluations)
+        if persist_evaluations and rollout_status:
+            candidate_store.save_shadow_rollout_status(target_date, rollout_status)
 
         if options.publish:
             published_at = datetime.now(JST).isoformat()
@@ -1006,6 +1041,8 @@ def _run_pipeline(
         runtime_cfg_validation=runtime_cfg_validation,
         source_plan=source_plan,
         publish_health=publish_health,
+        ranking_evaluations=ranking_evaluations,
+        rollout_status=rollout_status,
     )
 
     if options.publish and not published_successfully:
@@ -1108,6 +1145,146 @@ def _merge_hindsight_label(
         ),
         created_at=computed.created_at or existing.created_at,
     )
+
+
+def _build_ranking_evaluations(
+    *,
+    label_plan: dict[str, dict[str, list[int]]],
+    labels_by_date: dict[str, dict[str, HindsightLabel]],
+    candidate_feature_history: dict[str, dict[str, DailyCandidateFeature]],
+    generated_at: str,
+    run_id: str,
+    top_k: int,
+) -> list[RankingEvaluation]:
+    evaluations: list[RankingEvaluation] = []
+    for anchor_date in sorted(label_plan):
+        labels = labels_by_date.get(anchor_date)
+        feature_by_candidate = candidate_feature_history.get(anchor_date, {})
+        if not labels or not feature_by_candidate:
+            continue
+
+        shadow_items = candidate_store.load_daily_ranking_items(
+            anchor_date,
+            collection_root="daily_rankings_v2_shadow",
+        )
+        public_items = candidate_store.load_daily_ranking_items(
+            anchor_date,
+            collection_root="daily_rankings",
+        )
+        shadow_meta = candidate_store.load_daily_ranking_meta(
+            anchor_date,
+            collection_root="daily_rankings_v2_shadow",
+        )
+        if shadow_meta is None:
+            shadow_meta = candidate_store.load_daily_ranking_meta(
+                anchor_date,
+                collection_root="daily_rankings",
+            )
+
+        variants: dict[str, RankingEvaluation] = {}
+        if shadow_items:
+            shadow_entries = build_ranked_entries_from_items(shadow_items, feature_by_candidate)
+            shadow_source = "stored_items"
+        else:
+            shadow_entries = build_ranked_entries_from_features(list(feature_by_candidate.values()))
+            shadow_source = "feature_replay"
+
+        shadow_metrics = evaluate_ranked_entries(
+            shadow_entries,
+            labels,
+            candidate_feature_history,
+            anchor_date=anchor_date,
+            top_k=top_k,
+        )
+        variants["shadow_v2"] = RankingEvaluation(
+            date=anchor_date,
+            variant="shadow_v2",
+            top_k=top_k,
+            breakout_horizon_days=7,
+            source_collection="daily_rankings_v2_shadow",
+            ranking_source=shadow_source,
+            item_count=len(shadow_entries),
+            metrics=shadow_metrics,
+            publish_health=dict(shadow_meta.publish_health if shadow_meta else {}),
+            run_id=run_id,
+            created_at=generated_at,
+        )
+
+        if public_items:
+            public_entries = build_ranked_entries_from_items(public_items, feature_by_candidate)
+            public_metrics = evaluate_ranked_entries(
+                public_entries,
+                labels,
+                candidate_feature_history,
+                anchor_date=anchor_date,
+                top_k=top_k,
+            )
+            variants["public_main"] = RankingEvaluation(
+                date=anchor_date,
+                variant="public_main",
+                top_k=top_k,
+                breakout_horizon_days=7,
+                source_collection="daily_rankings",
+                ranking_source="stored_items",
+                item_count=len(public_entries),
+                metrics=public_metrics,
+                publish_health=dict(shadow_meta.publish_health if shadow_meta else {}),
+                run_id=run_id,
+                created_at=generated_at,
+            )
+
+        if "public_main" in variants:
+            comparison = compare_variant_metrics(
+                variants["shadow_v2"].metrics,
+                variants["public_main"].metrics,
+                top_k=top_k,
+            )
+            variants["shadow_v2"].compared_variant = "public_main"
+            variants["shadow_v2"].comparison = comparison
+            variants["public_main"].compared_variant = "shadow_v2"
+            variants["public_main"].comparison = {
+                key: round(-value, 4) for key, value in comparison.items()
+            }
+
+        evaluations.extend(variants.values())
+    return evaluations
+
+
+def _build_shadow_rollout_status(
+    *,
+    target_date: str,
+    ranking_evaluations: list[RankingEvaluation],
+    shadow_days: int,
+    top_k: int,
+    generated_at: str,
+) -> dict[str, Any]:
+    if shadow_days <= 0:
+        return {}
+
+    recent_dates = [
+        (date.fromisoformat(target_date) - timedelta(days=offset)).isoformat()
+        for offset in range(1, shadow_days + 1)
+    ]
+    existing_evaluations = candidate_store.load_ranking_evaluations_by_dates(recent_dates)
+    merged: dict[str, RankingEvaluation] = {
+        evaluation.document_id: evaluation for evaluation in existing_evaluations
+    }
+    for evaluation in ranking_evaluations:
+        merged[evaluation.document_id] = evaluation
+
+    summary = evaluate_shadow_rollout(
+        list(merged.values()),
+        window_days=shadow_days,
+        top_k=top_k,
+    )
+    summary.update(
+        {
+            "targetDate": target_date,
+            "generatedAt": generated_at,
+            "runId": next((item.run_id for item in ranking_evaluations if item.run_id), ""),
+        }
+    )
+    return summary
 
 
 def _resolve_raw_candidate(
@@ -1332,6 +1509,8 @@ def _write_connector_summary(
     runtime_cfg_validation: dict[str, list[str]] | None = None,
     source_plan: list[dict[str, Any]] | None = None,
     publish_health: dict[str, Any] | None = None,
+    ranking_evaluations: list[RankingEvaluation] | None = None,
+    rollout_status: dict[str, Any] | None = None,
 ) -> None:
     result_path = os.environ.get("BATCH_RESULT_PATH", "/tmp/batch_result.json")
     source_item_count = source_item_count or {}
@@ -1361,6 +1540,8 @@ def _write_connector_summary(
         "runtimeConfigValidation": runtime_cfg_validation or {},
         "sourcePlan": source_plan or [],
         "publishHealth": publish_health or {},
+        "rankingEvaluations": [evaluation.to_dict() for evaluation in ranking_evaluations or []],
+        "rolloutStatus": rollout_status or {},
     }
     with contextlib.suppress(Exception), open(result_path, "w", encoding="utf-8") as handle:
         json.dump(summary, handle, ensure_ascii=False, indent=2)
@@ -1449,6 +1630,19 @@ if __name__ == "__main__":
         help="Do not persist learned source posterior stats",
     )
     parser.add_argument(
+        "--persist-evaluations",
+        dest="persist_evaluations",
+        action="store_true",
+        default=True,
+        help="Persist hindsight-based ranking evaluation snapshots",
+    )
+    parser.add_argument(
+        "--no-persist-evaluations",
+        dest="persist_evaluations",
+        action="store_false",
+        help="Do not persist hindsight-based ranking evaluation snapshots",
+    )
+    parser.add_argument(
         "--skip-slow-sources",
         action="store_true",
         help="Skip HTML/manual/LLM sources for faster diagnostic runs",
@@ -1476,6 +1670,7 @@ if __name__ == "__main__":
             persist_candidates=args.persist_candidates,
             persist_labels=args.persist_labels,
             persist_source_posteriors=args.persist_source_posteriors,
+            persist_evaluations=args.persist_evaluations,
             skip_slow_sources=args.skip_slow_sources,
             source_include=_parse_csv_arg(args.source_include),
             source_exclude=_parse_csv_arg(args.source_exclude),

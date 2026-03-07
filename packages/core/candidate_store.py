@@ -11,10 +11,13 @@ from packages.core.models import (
     Candidate,
     CandidateRelation,
     DailyCandidateFeature,
+    DailyRankingItem,
+    DailyRankingMeta,
     DailySourceFeature,
     HindsightLabel,
     Observation,
     RankedCandidateV2,
+    RankingEvaluation,
     SourcePosterior,
 )
 
@@ -122,6 +125,26 @@ def load_hindsight_labels(date: str) -> dict[str, HindsightLabel]:
     return {label.candidate_id: label for label in labels if label.candidate_id}
 
 
+def load_daily_ranking_items(
+    date: str,
+    *,
+    collection_root: str = "daily_rankings",
+) -> list[DailyRankingItem]:
+    docs = firestore_client.get_collection(f"{collection_root}/{date}/items", order_by="rank")
+    return [DailyRankingItem.from_dict(doc) for doc in docs]
+
+
+def load_daily_ranking_meta(
+    date: str,
+    *,
+    collection_root: str = "daily_rankings",
+) -> DailyRankingMeta | None:
+    doc = firestore_client.get_document(collection_root, date)
+    if doc is None:
+        return None
+    return DailyRankingMeta.from_dict(doc)
+
+
 def save_hindsight_labels(labels: list[HindsightLabel]) -> None:
     operations = [
         (f"hindsight_labels/{label.date}/items", label.document_id, label.to_dict())
@@ -129,6 +152,32 @@ def save_hindsight_labels(labels: list[HindsightLabel]) -> None:
     ]
     if operations:
         firestore_client.batch_write(operations)
+
+
+def load_ranking_evaluations_by_dates(dates: list[str]) -> list[RankingEvaluation]:
+    date_set = {value for value in dates if value}
+    if not date_set:
+        return []
+    docs = firestore_client.get_collection("shadow_evaluations")
+    return [
+        RankingEvaluation.from_dict(doc)
+        for doc in docs
+        if str(doc.get("date", "")) in date_set
+    ]
+
+
+def save_ranking_evaluations(evaluations: list[RankingEvaluation]) -> None:
+    operations = [
+        ("shadow_evaluations", evaluation.document_id, evaluation.to_dict())
+        for evaluation in evaluations
+    ]
+    if operations:
+        firestore_client.batch_upsert(operations)
+
+
+def save_shadow_rollout_status(target_date: str, data: dict[str, Any]) -> None:
+    firestore_client.set_document("shadow_rollout_status", target_date, data)
+    firestore_client.set_document("shadow_rollout_status", "current", data)
 
 
 def load_source_posteriors() -> dict[str, SourcePosterior]:

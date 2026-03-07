@@ -12,6 +12,7 @@ from packages.core.models import (
     DailyRankingMeta,
     Evidence,
     MusicConfig,
+    RankingEvaluation,
     RawCandidate,
     SourceDailySnapshot,
     SourceState,
@@ -70,7 +71,7 @@ class TestCandidate:
 
 
 class TestDailyRankingItem:
-    def test_to_dict(self) -> None:
+    def test_to_dict_and_from_dict(self) -> None:
         item = DailyRankingItem(
             rank=1,
             candidate_id="cand_001",
@@ -98,6 +99,10 @@ class TestDailyRankingItem:
         assert len(d["breakdownBuckets"]) == 2
         assert len(d["evidenceTop3"]) == 1
         assert d["evidenceTop3"][0]["sourceId"] == "YOUTUBE_TREND_JP"
+        restored = DailyRankingItem.from_dict(d)
+        assert restored.candidate_id == "cand_001"
+        assert restored.primary_score is None
+        assert restored.evidence_top3[0].title == "Test Video"
 
 
 class TestDailyRankingMeta:
@@ -120,6 +125,30 @@ class TestDailyRankingMeta:
         assert restored.published_at == "2026-03-06T11:16:00+09:00"
         assert restored.latest_published_run_id == "01KK1234567890"
         assert restored.publish_health == {"publicEligible": True}
+
+
+class TestRankingEvaluation:
+    def test_roundtrip(self) -> None:
+        evaluation = RankingEvaluation(
+            date="2026-03-01",
+            variant="shadow_v2",
+            top_k=20,
+            breakout_horizon_days=7,
+            source_collection="daily_rankings_v2_shadow",
+            ranking_source="stored_items",
+            item_count=20,
+            metrics={"breakoutPrecisionAt20_7d": 0.6},
+            publish_health={"metrics": {"healthyCoreSourceCount": 6}},
+            compared_variant="public_main",
+            comparison={"breakoutPrecisionDeltaAt20_7d": 0.1},
+            run_id="01KKTEST",
+            created_at="2026-03-08T07:00:00+09:00",
+        )
+
+        restored = RankingEvaluation.from_dict(evaluation.to_dict())
+        assert restored.document_id == "2026-03-01__shadow_v2"
+        assert restored.metrics["breakoutPrecisionAt20_7d"] == 0.6
+        assert restored.compared_variant == "public_main"
 
 
 class TestAppConfig:
