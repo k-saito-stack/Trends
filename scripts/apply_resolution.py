@@ -1,9 +1,22 @@
 """Apply a manual unresolved-resolution action to Firestore.
 
 Usage:
-    python scripts/apply_resolution.py --date 2026-03-07 --pair-id <pairId> --action merge --winner-candidate-id cand_1 --changed-by you@example.com
-    python scripts/apply_resolution.py --date 2026-03-07 --pair-id <pairId> --action link --changed-by you@example.com
-    python scripts/apply_resolution.py --date 2026-03-07 --pair-id <pairId> --action separate --changed-by you@example.com
+    python scripts/apply_resolution.py \
+        --date 2026-03-07 \
+        --pair-id <pairId> \
+        --action merge \
+        --winner-candidate-id cand_1 \
+        --changed-by you@example.com
+    python scripts/apply_resolution.py \
+        --date 2026-03-07 \
+        --pair-id <pairId> \
+        --action link \
+        --changed-by you@example.com
+    python scripts/apply_resolution.py \
+        --date 2026-03-07 \
+        --pair-id <pairId> \
+        --action separate \
+        --changed-by you@example.com
 """
 
 from __future__ import annotations
