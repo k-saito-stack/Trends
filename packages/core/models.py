@@ -91,6 +91,12 @@ class SourceStatus(StrEnum):
     DISABLED = "DISABLED"
 
 
+class AvailabilityTier(StrEnum):
+    CORE = "core"
+    OPTIONAL = "optional"
+    EXPERIMENTAL = "experimental"
+
+
 class AccessMode(StrEnum):
     API = "API"
     RSS = "RSS"
@@ -194,6 +200,9 @@ class Candidate:
     maturity: float = 0.0
     source_families: list[str] = field(default_factory=list)
     related_entity_ids: list[str] = field(default_factory=list)
+    related_candidate_ids: list[str] = field(default_factory=list)
+    external_ids: dict[str, str] = field(default_factory=dict)
+    manual_lock: bool = False
     source_state: dict[str, SourceState] = field(default_factory=dict)
     trend_history_7d: list[float] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -220,6 +229,9 @@ class Candidate:
             "maturity": self.maturity,
             "sourceFamilies": self.source_families,
             "relatedEntityIds": self.related_entity_ids,
+            "relatedCandidateIds": self.related_candidate_ids,
+            "externalIds": self.external_ids,
+            "manualLock": self.manual_lock,
             "sourceState": {
                 key: {
                     "m": state.m,
@@ -270,6 +282,13 @@ class Candidate:
             maturity=float(data.get("maturity", 0.0)),
             source_families=list(data.get("sourceFamilies", [])),
             related_entity_ids=list(data.get("relatedEntityIds", [])),
+            related_candidate_ids=list(data.get("relatedCandidateIds", [])),
+            external_ids={
+                str(key): str(value)
+                for key, value in dict(data.get("externalIds", {})).items()
+                if value
+            },
+            manual_lock=bool(data.get("manualLock", False)),
             source_state=source_state,
             trend_history_7d=list(data.get("trendHistory7d", [])),
             metadata=dict(data.get("metadata", {})),
@@ -582,6 +601,9 @@ class DailySourceFeature:
     momentum: float = 0.0
     extraction_confidence: ExtractionConfidence = ExtractionConfidence.MEDIUM
     domain_class: DomainClass = DomainClass.OTHER
+    posterior_reliability: float = 1.0
+    posterior_lead: float = 0.0
+    posterior_persistence: float = 0.0
     observation_ids: list[str] = field(default_factory=list)
     evidence: list[Evidence] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -606,6 +628,9 @@ class DailySourceFeature:
             "momentum": self.momentum,
             "extractionConfidence": self.extraction_confidence.value,
             "domainClass": self.domain_class.value,
+            "posteriorReliability": self.posterior_reliability,
+            "posteriorLead": self.posterior_lead,
+            "posteriorPersistence": self.posterior_persistence,
             "observationIds": self.observation_ids,
             "evidence": [
                 {
@@ -645,11 +670,17 @@ class DailyCandidateFeature:
     broad_confirmation: float = 0.0
     sustained_presence: float = 0.0
     mainstream_reach: float = 0.0
+    breakout_prob_1d: float = 0.0
+    breakout_prob_3d: float = 0.0
+    breakout_prob_7d: float = 0.0
+    mass_prob: float = 0.0
     coming_score: float = 0.0
     mass_heat: float = 0.0
     primary_score: float = 0.0
     ranking_gate_passed: bool = False
     related_entity_ids: list[str] = field(default_factory=list)
+    related_candidate_ids: list[str] = field(default_factory=list)
+    source_contrib: dict[str, float] = field(default_factory=dict)
     evidence: list[Evidence] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -678,11 +709,17 @@ class DailyCandidateFeature:
             "broadConfirmation": self.broad_confirmation,
             "sustainedPresence": self.sustained_presence,
             "mainstreamReach": self.mainstream_reach,
+            "breakoutProb1d": self.breakout_prob_1d,
+            "breakoutProb3d": self.breakout_prob_3d,
+            "breakoutProb7d": self.breakout_prob_7d,
+            "massProb": self.mass_prob,
             "comingScore": self.coming_score,
             "massHeat": self.mass_heat,
             "primaryScore": self.primary_score,
             "rankingGatePassed": self.ranking_gate_passed,
             "relatedEntityIds": self.related_entity_ids,
+            "relatedCandidateIds": self.related_candidate_ids,
+            "sourceContrib": self.source_contrib,
             "metadata": self.metadata,
         }
 

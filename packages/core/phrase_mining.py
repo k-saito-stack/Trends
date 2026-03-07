@@ -6,6 +6,7 @@ import re
 
 from packages.core.behavior_patterns import extract_behavior_phrases
 from packages.core.models import CandidateType, ExtractionConfidence, RawCandidate
+from packages.core.topic_extract import extract_topic_candidates
 from packages.core.topic_normalize import normalize_topic_text, should_keep_topic
 
 HASHTAG_RE = re.compile(r"(#[\wぁ-んァ-ン一-龥ー]+)")
@@ -53,6 +54,15 @@ def extract_topic_raw_candidates(
     source_id: str,
     metric_value: float = 1.0,
 ) -> list[RawCandidate]:
+    extracted = extract_topic_candidates(
+        text,
+        source_id,
+        metric_value=metric_value,
+        max_candidates=8,
+    )
+    if extracted:
+        return extracted
+
     candidates: list[RawCandidate] = []
     for phrase in extract_topic_phrases(text):
         candidate_type = CandidateType.HASHTAG if phrase.startswith("#") else CandidateType.PHRASE

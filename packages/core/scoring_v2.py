@@ -288,7 +288,7 @@ def _ungated_primary_multiplier(
 def _has_priority_regional_tiktok_signal(features: list[DailySourceFeature]) -> bool:
     for feature in features:
         if (
-            feature.source_id != "TIKTOK_CREATIVE_CENTER"
+            not _is_tiktok_discovery_source(feature.source_id)
             or feature.source_role != SourceRole.DISCOVERY
             or feature.extraction_confidence != ExtractionConfidence.HIGH
         ):
@@ -308,6 +308,12 @@ def _has_priority_regional_tiktok_signal(features: list[DailySourceFeature]) -> 
         if jp_present or multi_market_overlap:
             return True
     return False
+
+
+def _is_tiktok_discovery_source(source_id: str) -> bool:
+    return source_id == "TIKTOK_CREATIVE_CENTER" or source_id.startswith(
+        "TIKTOK_CREATIVE_CENTER_"
+    )
 
 
 def _compute_novelty(candidate: Candidate) -> float:

@@ -13,9 +13,21 @@ from packages.core.domain_classifier import classify_domain
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
 
 ZOZO_URL = "https://zozo.jp/ranking/"
+ZOZO_SP_URL = "https://zozo.jp/sp/ranking/"
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+}
 ITEM_RE = re.compile(
     r"<li[^>]*data-item-name=[\"']([^\"']+)[\"'][^>]*data-brand=[\"']([^\"']*)[\"'][^>]*>",
     re.IGNORECASE,
+)
+SCRIPT_ITEM_RE = re.compile(
+    r'"itemName"\s*:\s*"([^"]+)".*?"brandName"\s*:\s*"([^"]*)"',
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -24,17 +36,30 @@ class ZozoConnector(BaseConnector):
         super().__init__(source_id="ZOZO_RANKING", stability="A", **kwargs)
 
     def fetch(self) -> FetchResult:
-        try:
-            response = requests.get(ZOZO_URL, timeout=30)
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            return FetchResult(error=str(exc))
-        items = self.parse_items(response.text)
-        return FetchResult(items=items, item_count=len(items))
+        errors: list[str] = []
+        for url, fallback_name in ((ZOZO_URL, ""), (ZOZO_SP_URL, "mobile_ranking")):
+            try:
+                response = requests.get(url, headers=REQUEST_HEADERS, timeout=30)
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                errors.append(f"{url}: {exc}")
+                continue
+            items = self.parse_items(response.text)
+            if items:
+                return FetchResult(
+                    items=items,
+                    item_count=len(items),
+                    fallback_used=fallback_name,
+                )
+        return FetchResult(error=" | ".join(errors[-2:]) if errors else "no zozo data")
 
     def parse_items(self, html: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for rank, match in enumerate(ITEM_RE.findall(html), start=1):
+            items.append({"item_name": match[0].strip(), "brand": match[1].strip(), "rank": rank})
+        if items:
+            return items
+        for rank, match in enumerate(SCRIPT_ITEM_RE.findall(html), start=1):
             items.append({"item_name": match[0].strip(), "brand": match[1].strip(), "rank": rank})
         return items
 

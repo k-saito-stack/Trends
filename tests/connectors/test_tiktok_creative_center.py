@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from packages.connectors.tiktok_creative_center import TikTokCreativeCenterConnector
+from packages.connectors.tiktok_creative_center import (
+    TikTokCreativeCenterConnector,
+    TikTokCreativeCenterCreatorsConnector,
+    TikTokCreativeCenterSongsConnector,
+    TikTokCreativeCenterVideosConnector,
+)
 from packages.core.models import CandidateType
 
 
@@ -143,3 +148,59 @@ def test_extract_candidates_preserves_regional_metadata() -> None:
     assert candidates[0].extra["countries"] == ["JP", "KR"]
     assert candidates[0].extra["countryRanks"] == {"JP": 1, "KR": 3}
     assert candidates[0].extra["regionalScore"] == 0.82
+
+
+def test_parse_tiktok_song_surface_payload_and_extract_entities() -> None:
+    connector = TikTokCreativeCenterSongsConnector(country_codes=["JP"])
+
+    items = connector.parse_api_items(
+        {
+            "data": {
+                "list": [
+                    {"song_name": "ダーリン", "artist_name": "Mrs. GREEN APPLE", "rank": 1},
+                ]
+            }
+        },
+        "JP",
+    )
+    candidates = connector.extract_candidates(items)
+
+    assert items[0]["name"] == "ダーリン"
+    assert any(candidate.type == CandidateType.MUSIC_TRACK for candidate in candidates)
+    assert any(candidate.name == "Mrs. GREEN APPLE" for candidate in candidates)
+
+
+def test_parse_tiktok_creator_surface_payload_and_extract_person() -> None:
+    connector = TikTokCreativeCenterCreatorsConnector(country_codes=["JP"])
+
+    items = connector.parse_api_items(
+        {"data": {"list": [{"creator_name": "しなこ", "rank": 1}]}},
+        "JP",
+    )
+    candidates = connector.extract_candidates(items)
+
+    assert items[0]["name"] == "しなこ"
+    assert candidates[0].type == CandidateType.PERSON
+
+
+def test_parse_tiktok_video_surface_payload_emits_behavior_topics() -> None:
+    connector = TikTokCreativeCenterVideosConnector(country_codes=["JP"])
+
+    items = connector.parse_api_items(
+        {
+            "data": {
+                "list": [
+                    {
+                        "video_desc": "ラブブをバッグにつける",
+                        "hashtags": ["ラブブ", "バッグコーデ"],
+                        "rank": 1,
+                    }
+                ]
+            }
+        },
+        "JP",
+    )
+    candidates = connector.extract_candidates(items)
+
+    assert items[0]["name"] == "ラブブをバッグにつける"
+    assert any(candidate.type == CandidateType.BEHAVIOR for candidate in candidates)

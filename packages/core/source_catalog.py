@@ -8,7 +8,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from packages.core.models import AccessMode, DomainClass, SourceFamily, SourceRole, SourceStatus
+from packages.core.models import (
+    AccessMode,
+    AvailabilityTier,
+    DomainClass,
+    SourceFamily,
+    SourceRole,
+    SourceStatus,
+)
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
 SOURCE_CATALOG_PATH = CONFIG_DIR / "source_catalog.yaml"
@@ -23,6 +30,9 @@ class SourceCatalogEntry:
     family_secondary: SourceFamily | None
     status: SourceStatus
     access_mode: AccessMode
+    availability_tier: AvailabilityTier
+    region_group: str
+    fallback_chain: tuple[str, ...]
     requires_credentials: bool
     requires_manual_approval: bool
     supports_phrase_candidates: bool
@@ -33,6 +43,13 @@ class SourceCatalogEntry:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SourceCatalogEntry:
         secondary = data.get("family_secondary") or data.get("familySecondary")
+        availability = data.get("availability_tier") or data.get("availabilityTier")
+        region_group = str(data.get("region_group") or data.get("regionGroup") or "GLOBAL")
+        fallback_chain = tuple(
+            str(item)
+            for item in (data.get("fallback_chain") or data.get("fallbackChain") or [])
+            if item
+        )
         return cls(
             source_id=str(data["source_id"]),
             display_name=str(data["display_name"]),
@@ -41,6 +58,12 @@ class SourceCatalogEntry:
             family_secondary=SourceFamily(str(secondary)) if secondary else None,
             status=SourceStatus(str(data["status"])),
             access_mode=AccessMode(str(data["access_mode"])),
+            availability_tier=_derive_availability_tier(
+                status=SourceStatus(str(data["status"])),
+                explicit_value=str(availability) if availability else "",
+            ),
+            region_group=region_group,
+            fallback_chain=fallback_chain,
             requires_credentials=bool(data.get("requires_credentials", False)),
             requires_manual_approval=bool(data.get("requires_manual_approval", False)),
             supports_phrase_candidates=bool(data.get("supports_phrase_candidates", False)),
@@ -61,6 +84,9 @@ class SourceCatalogEntry:
             "family_secondary": self.family_secondary.value if self.family_secondary else "",
             "status": self.status.value,
             "access_mode": self.access_mode.value,
+            "availability_tier": self.availability_tier.value,
+            "region_group": self.region_group,
+            "fallback_chain": list(self.fallback_chain),
             "requires_credentials": self.requires_credentials,
             "requires_manual_approval": self.requires_manual_approval,
             "supports_phrase_candidates": self.supports_phrase_candidates,
@@ -95,3 +121,15 @@ def iter_active_catalog(
 ) -> tuple[SourceCatalogEntry, ...]:
     allowed = statuses or (SourceStatus.CORE, SourceStatus.EXPERIMENTAL)
     return tuple(entry for entry in load_source_catalog() if entry.status in allowed)
+
+
+def _derive_availability_tier(
+    *,
+    status: SourceStatus,
+    explicit_value: str,
+) -> AvailabilityTier:
+    if explicit_value:
+        return AvailabilityTier(explicit_value)
+    if status == SourceStatus.CORE:
+        return AvailabilityTier.CORE
+    return AvailabilityTier.EXPERIMENTAL

@@ -15,17 +15,22 @@ import requests
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
 from packages.core.domain_classifier import classify_domain
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
+from packages.core.topic_extract import extract_topic_candidates
 from packages.core.topic_normalize import should_keep_topic
 
-TIKTOK_CREATIVE_CENTER_URL = (
-    "https://ads.tiktok.com/business/creativecenter/inspiration/popular/hashtag/pc/en"
-)
-TIKTOK_CREATIVE_CENTER_BROWSER_URL = (
-    "https://ads.tiktok.com/business/creativecenter/inspiration/popular/hashtag/pad/en"
-)
-TIKTOK_CREATIVE_CENTER_API_URL = (
-    "https://ads.tiktok.com/creative_radar_api/v1/popular_trend/hashtag/list"
-)
+TIKTOK_SURFACE_PATHS = {
+    "hashtag": "hashtag",
+    "song": "song",
+    "creator": "creator",
+    "video": "video",
+}
+TIKTOK_SURFACE_SOURCE_IDS = {
+    "hashtag": "TIKTOK_CREATIVE_CENTER_HASHTAGS",
+    "song": "TIKTOK_CREATIVE_CENTER_SONGS",
+    "creator": "TIKTOK_CREATIVE_CENTER_CREATORS",
+    "video": "TIKTOK_CREATIVE_CENTER_VIDEOS",
+}
+LEGACY_TIKTOK_SOURCE_ID = "TIKTOK_CREATIVE_CENTER"
 DEFAULT_COUNTRY_CODES = ("JP", "KR", "TW", "HK", "TH", "VN", "ID", "PH", "MY", "SG")
 PRIMARY_COUNTRY_CODE = "JP"
 PRIMARY_COUNTRY_WEIGHT = 1.0
@@ -53,10 +58,19 @@ class TikTokCreativeCenterConnector(BaseConnector):
         self,
         max_results: int = 20,
         country_codes: Sequence[str] | str | None = None,
+        surface: str = "hashtag",
+        source_id: str | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(source_id="TIKTOK_CREATIVE_CENTER", stability="A", **kwargs)
+        normalized_surface = surface if surface in TIKTOK_SURFACE_PATHS else "hashtag"
+        resolved_source_id = source_id or (
+            LEGACY_TIKTOK_SOURCE_ID
+            if normalized_surface == "hashtag"
+            else TIKTOK_SURFACE_SOURCE_IDS[normalized_surface]
+        )
+        super().__init__(source_id=resolved_source_id, stability="A", **kwargs)
         self.max_results = max_results
+        self.surface = normalized_surface
         self.country_codes = _normalize_country_codes(country_codes)
         self.allow_global_fallback = (
             os.environ.get("TIKTOK_CREATIVE_CENTER_ALLOW_GLOBAL_FALLBACK", "").strip().lower()
@@ -74,7 +88,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
                 return FetchResult(items=items, item_count=len(items))
 
         try:
-            response = requests.get(TIKTOK_CREATIVE_CENTER_URL, timeout=30)
+            response = requests.get(_public_page_url(self.surface), timeout=30)
             response.raise_for_status()
         except requests.RequestException as exc:
             return FetchResult(error=str(exc))
@@ -88,7 +102,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
         browser_headers = self.capture_browser_api_headers()
         session = requests.Session()
         try:
-            session.get(TIKTOK_CREATIVE_CENTER_BROWSER_URL, timeout=30)
+            session.get(_browser_page_url(self.surface), timeout=30)
         except requests.RequestException as exc:
             raise RuntimeError(f"tiktok regional bootstrap failed: {exc}") from exc
 
@@ -96,8 +110,12 @@ class TikTokCreativeCenterConnector(BaseConnector):
         for country_code in self.country_codes:
             try:
                 response = session.get(
-                    _build_api_url(country_code, self.max_results),
-                    headers=_build_browser_api_headers(browser_headers, country_code),
+                    _build_api_url(self.surface, country_code, self.max_results),
+                    headers=_build_browser_api_headers(
+                        self.surface,
+                        browser_headers,
+                        country_code,
+                    ),
                     timeout=30,
                 )
                 response.raise_for_status()
@@ -130,7 +148,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
                 nonlocal captured_headers
                 if captured_headers:
                     return
-                if TIKTOK_CREATIVE_CENTER_API_URL not in str(request.url):
+                if _api_url_prefix(self.surface) not in str(request.url):
                     return
                 headers = getattr(request, "headers", None)
                 if not isinstance(headers, dict):
@@ -143,7 +161,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
 
             page.on("request", handle_request)
             page.goto(
-                TIKTOK_CREATIVE_CENTER_BROWSER_URL,
+                _browser_page_url(self.surface),
                 wait_until="domcontentloaded",
                 timeout=60_000,
             )
@@ -158,6 +176,11 @@ class TikTokCreativeCenterConnector(BaseConnector):
         return captured_headers
 
     def parse_items(self, html: str) -> list[dict[str, Any]]:
+        if self.surface == "hashtag":
+            return self._parse_hashtag_items(html)
+        return self._parse_generic_surface_items(html)
+
+    def _parse_hashtag_items(self, html: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         seen: set[str] = set()
         row_matches = ROW_RE.findall(html)
@@ -179,6 +202,20 @@ class TikTokCreativeCenterConnector(BaseConnector):
             items.append({"keyword": keyword, "rank": rank})
         return items
 
+    def _parse_generic_surface_items(self, html_text: str) -> list[dict[str, Any]]:
+        row_matches = ROW_RE.findall(html_text)
+        items: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for rank, (href, body) in enumerate(row_matches, start=1):
+            title = _extract_ranked_keyword(href, body)
+            if not title:
+                title = _extract_generic_title(body)
+            if not title or title in seen:
+                continue
+            seen.add(title)
+            items.append({"name": title, "rank": rank})
+        return items
+
     def parse_api_items(
         self,
         payload: dict[str, Any],
@@ -192,19 +229,17 @@ class TikTokCreativeCenterConnector(BaseConnector):
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            keyword = _clean_keyword(f"#{row.get('hashtag_name', '')}")
             rank = int(row.get("rank", 0) or 0)
-            if not keyword or rank <= 0 or not should_keep_topic(keyword):
+            if rank <= 0:
                 continue
-            items.append(
-                {
-                    "keyword": keyword,
-                    "rank": rank,
-                    "countryCode": country_code,
-                    "publishCount": int(row.get("publish_cnt", 0) or 0),
-                    "videoViews": int(row.get("video_views", 0) or 0),
-                }
-            )
+            parsed = _parse_surface_row(self.surface, row)
+            if parsed is None:
+                continue
+            parsed["rank"] = rank
+            parsed["countryCode"] = country_code
+            parsed["publishCount"] = int(row.get("publish_cnt", 0) or 0)
+            parsed["videoViews"] = int(row.get("video_views", 0) or 0)
+            items.append(parsed)
         return items
 
     def merge_regional_items(
@@ -214,7 +249,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
         merged: dict[str, dict[str, Any]] = {}
         for country_code, items in items_by_country.items():
             for item in items:
-                keyword = str(item.get("keyword", "")).strip()
+                keyword = _surface_item_key(item)
                 rank = int(item.get("rank", 0) or 0)
                 if not keyword or rank <= 0:
                     continue
@@ -228,6 +263,9 @@ class TikTokCreativeCenterConnector(BaseConnector):
                         "bestRank": rank,
                     },
                 )
+                for key, value in item.items():
+                    if key not in {"rank", "countryCode"} and key not in entry:
+                        entry[key] = value
                 entry["countryRanks"][country_code] = rank
                 if country_code not in entry["countries"]:
                     entry["countries"].append(country_code)
@@ -259,6 +297,13 @@ class TikTokCreativeCenterConnector(BaseConnector):
         return ranked[: self.max_results]
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
+        if self.surface == "song":
+            return self._extract_song_candidates(items)
+        if self.surface == "creator":
+            return self._extract_creator_candidates(items)
+        if self.surface == "video":
+            return self._extract_video_candidates(items)
+
         candidates: list[RawCandidate] = []
         for item in items:
             keyword = str(item.get("keyword", "")).strip()
@@ -288,6 +333,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
                 extra["countryCode"] = str(item["countryCode"])
             if item.get("regionalScore") is not None:
                 extra["regionalScore"] = metric_value
+            extra["surface"] = self.surface
             candidates.append(
                 RawCandidate(
                     name=keyword,
@@ -298,7 +344,7 @@ class TikTokCreativeCenterConnector(BaseConnector):
                     evidence=Evidence(
                         source_id=self.source_id,
                         title=keyword,
-                        url=_evidence_url(countries),
+                        url=_evidence_url(self.surface, countries),
                         metric=_evidence_metric(rank, country_ranks),
                     ),
                     extraction_confidence=ExtractionConfidence.HIGH,
@@ -306,6 +352,121 @@ class TikTokCreativeCenterConnector(BaseConnector):
                     extra=extra,
                 )
             )
+        return candidates
+
+    def _extract_song_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
+        candidates: list[RawCandidate] = []
+        for item in items:
+            rank = int(item.get("rank", 0) or 0)
+            track = str(item.get("name", "")).strip()
+            artist = str(item.get("artist", "")).strip()
+            metric_value = float(item.get("regionalScore") or _rank_exposure(rank))
+            extra = _surface_extra(item, self.surface, metric_value)
+            if track:
+                candidates.append(
+                    RawCandidate(
+                        name=track,
+                        type=CandidateType.MUSIC_TRACK,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=metric_value,
+                        evidence=Evidence(
+                            source_id=self.source_id,
+                            title=f"{track} - {artist}",
+                            url=_evidence_url(self.surface, extra.get("countries", [])),
+                            metric=_evidence_metric(rank, extra.get("countryRanks", {})),
+                        ),
+                        extraction_confidence=ExtractionConfidence.HIGH,
+                        domain_class=classify_domain(
+                            CandidateType.MUSIC_TRACK,
+                            self.source_id,
+                            text=track,
+                        ),
+                        extra=dict(extra, artist=artist),
+                    )
+                )
+            if artist:
+                candidates.append(
+                    RawCandidate(
+                        name=artist,
+                        type=CandidateType.MUSIC_ARTIST,
+                        source_id=self.source_id,
+                        rank=rank,
+                        metric_value=metric_value * 0.75,
+                        evidence=Evidence(
+                            source_id=self.source_id,
+                            title=f"{artist} / {track}",
+                            url=_evidence_url(self.surface, extra.get("countries", [])),
+                            metric=_evidence_metric(rank, extra.get("countryRanks", {})),
+                        ),
+                        extraction_confidence=ExtractionConfidence.MEDIUM,
+                        domain_class=classify_domain(
+                            CandidateType.MUSIC_ARTIST,
+                            self.source_id,
+                            text=artist,
+                        ),
+                        extra=dict(extra, track=track),
+                    )
+                )
+        return candidates
+
+    def _extract_creator_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
+        candidates: list[RawCandidate] = []
+        for item in items:
+            rank = int(item.get("rank", 0) or 0)
+            name = str(item.get("name", "")).strip()
+            if not name:
+                continue
+            metric_value = float(item.get("regionalScore") or _rank_exposure(rank))
+            extra = _surface_extra(item, self.surface, metric_value)
+            candidates.append(
+                RawCandidate(
+                    name=name,
+                    type=CandidateType.PERSON,
+                    source_id=self.source_id,
+                    rank=rank,
+                    metric_value=metric_value,
+                    evidence=Evidence(
+                        source_id=self.source_id,
+                        title=name,
+                        url=_evidence_url(self.surface, extra.get("countries", [])),
+                        metric=_evidence_metric(rank, extra.get("countryRanks", {})),
+                    ),
+                    extraction_confidence=ExtractionConfidence.MEDIUM,
+                    domain_class=classify_domain(CandidateType.PERSON, self.source_id, text=name),
+                    extra=extra,
+                )
+            )
+        return candidates
+
+    def _extract_video_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
+        candidates: list[RawCandidate] = []
+        for item in items:
+            rank = int(item.get("rank", 0) or 0)
+            name = str(item.get("name", "")).strip()
+            metric_value = float(item.get("regionalScore") or _rank_exposure(rank))
+            extra = _surface_extra(item, self.surface, metric_value)
+            hashtag_text = " ".join(
+                str(tag) for tag in item.get("hashtags", []) if isinstance(tag, str)
+            )
+            text = " ".join([name, hashtag_text]).strip()
+            evidence = Evidence(
+                source_id=self.source_id,
+                title=name[:120] if name else "TikTok video theme",
+                url=_evidence_url(self.surface, extra.get("countries", [])),
+                metric=_evidence_metric(rank, extra.get("countryRanks", {})),
+            )
+            extracted = extract_topic_candidates(
+                text,
+                self.source_id,
+                dict(extra),
+                metric_value=metric_value,
+                evidence=evidence,
+                max_candidates=5,
+            )
+            for candidate in extracted:
+                candidate.rank = rank
+                candidates.append(candidate)
         return candidates
 
     def compute_signals(
@@ -344,6 +505,13 @@ def _clean_keyword(text: str) -> str:
     return HASHTAG_SPACE_RE.sub("#", normalized)
 
 
+def _extract_generic_title(body: str) -> str:
+    title_match = TITLE_RE.search(body)
+    if not title_match:
+        return ""
+    return _clean_keyword(title_match.group(1))
+
+
 def _normalize_country_codes(country_codes: Sequence[str] | str | None) -> tuple[str, ...]:
     if country_codes is None:
         raw = os.environ.get("TIKTOK_CREATIVE_CENTER_COUNTRY_CODES", "")
@@ -360,19 +528,20 @@ def _normalize_country_codes(country_codes: Sequence[str] | str | None) -> tuple
     return tuple(dict.fromkeys(normalized)) or DEFAULT_COUNTRY_CODES
 
 
-def _build_api_url(country_code: str, limit: int) -> str:
+def _build_api_url(surface: str, country_code: str, limit: int) -> str:
     return (
-        f"{TIKTOK_CREATIVE_CENTER_API_URL}?page=1&limit={limit}&period=7"
+        f"{_api_url_prefix(surface)}?page=1&limit={limit}&period=7"
         f"&country_code={country_code}&sort_by=popular"
     )
 
 
 def _build_browser_api_headers(
+    surface: str,
     captured_headers: dict[str, str],
     country_code: str,
 ) -> dict[str, str]:
     headers = dict(captured_headers)
-    headers["referer"] = f"{TIKTOK_CREATIVE_CENTER_BROWSER_URL}?countryCode={country_code}&period=7"
+    headers["referer"] = f"{_browser_page_url(surface)}?countryCode={country_code}&period=7"
     return headers
 
 
@@ -395,7 +564,7 @@ def _evidence_metric(rank: int, country_ranks: dict[str, int]) -> str:
     return f"rank:{rank}|regions:{','.join(parts)}"
 
 
-def _evidence_url(countries: Sequence[str]) -> str:
+def _evidence_url(surface: str, countries: Sequence[str]) -> str:
     country_code = PRIMARY_COUNTRY_CODE
     for country in countries:
         if country == PRIMARY_COUNTRY_CODE:
@@ -403,4 +572,143 @@ def _evidence_url(countries: Sequence[str]) -> str:
             break
         if country:
             country_code = country
-    return f"{TIKTOK_CREATIVE_CENTER_BROWSER_URL}?countryCode={country_code}&period=7"
+    return f"{_browser_page_url(surface)}?countryCode={country_code}&period=7"
+
+
+def _surface_extra(item: dict[str, Any], surface: str, metric_value: float) -> dict[str, Any]:
+    countries = [
+        str(country)
+        for country in item.get("countries", [])
+        if isinstance(country, str) and country
+    ]
+    country_ranks = {
+        str(country): int(country_rank)
+        for country, country_rank in item.get("countryRanks", {}).items()
+        if country and country_rank
+    }
+    extra: dict[str, Any] = {"surface": surface}
+    if countries:
+        extra["countries"] = countries
+    if country_ranks:
+        extra["countryRanks"] = country_ranks
+    if item.get("countryCode"):
+        extra["countryCode"] = str(item["countryCode"])
+    if item.get("regionalScore") is not None:
+        extra["regionalScore"] = metric_value
+    return extra
+
+
+def _public_page_url(surface: str) -> str:
+    path = TIKTOK_SURFACE_PATHS.get(surface, "hashtag")
+    return f"https://ads.tiktok.com/business/creativecenter/inspiration/popular/{path}/pc/en"
+
+
+def _browser_page_url(surface: str) -> str:
+    path = TIKTOK_SURFACE_PATHS.get(surface, "hashtag")
+    return f"https://ads.tiktok.com/business/creativecenter/inspiration/popular/{path}/pad/en"
+
+
+def _api_url_prefix(surface: str) -> str:
+    path = TIKTOK_SURFACE_PATHS.get(surface, "hashtag")
+    return f"https://ads.tiktok.com/creative_radar_api/v1/popular_trend/{path}/list"
+
+
+def _parse_surface_row(surface: str, row: dict[str, Any]) -> dict[str, Any] | None:
+    if surface == "hashtag":
+        keyword = _clean_keyword(f"#{row.get('hashtag_name', '')}")
+        if not keyword or not should_keep_topic(keyword):
+            return None
+        return {"keyword": keyword}
+    if surface == "song":
+        track = _clean_keyword(
+            str(
+                row.get("song_name")
+                or row.get("music_name")
+                or row.get("title")
+                or row.get("name")
+                or ""
+            )
+        )
+        artist = _clean_keyword(
+            str(row.get("artist_name") or row.get("author_name") or row.get("creator_name") or "")
+        )
+        if not track:
+            return None
+        return {"name": track, "artist": artist}
+    if surface == "creator":
+        name = _clean_keyword(
+            str(
+                row.get("creator_name")
+                or row.get("author_name")
+                or row.get("nickname")
+                or row.get("title")
+                or row.get("name")
+                or ""
+            )
+        )
+        if not name:
+            return None
+        return {"name": name}
+
+    title = _clean_keyword(
+        str(
+            row.get("video_desc")
+            or row.get("video_name")
+            or row.get("title")
+            or row.get("name")
+            or ""
+        )
+    )
+    hashtags = row.get("hashtags") or row.get("hashtag_names") or []
+    if isinstance(hashtags, str):
+        hashtags = [hashtags]
+    normalized_tags = [
+        _clean_keyword(f"#{tag}" if not str(tag).strip().startswith("#") else str(tag))
+        for tag in hashtags
+        if str(tag).strip()
+    ]
+    if not title and not normalized_tags:
+        return None
+    return {"name": title, "hashtags": normalized_tags}
+
+
+def _surface_item_key(item: dict[str, Any]) -> str:
+    if item.get("keyword"):
+        return str(item.get("keyword", "")).strip()
+    return str(item.get("name", "")).strip()
+
+
+class TikTokCreativeCenterHashtagConnector(TikTokCreativeCenterConnector):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            surface="hashtag",
+            source_id=TIKTOK_SURFACE_SOURCE_IDS["hashtag"],
+            **kwargs,
+        )
+
+
+class TikTokCreativeCenterSongsConnector(TikTokCreativeCenterConnector):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            surface="song",
+            source_id=TIKTOK_SURFACE_SOURCE_IDS["song"],
+            **kwargs,
+        )
+
+
+class TikTokCreativeCenterCreatorsConnector(TikTokCreativeCenterConnector):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            surface="creator",
+            source_id=TIKTOK_SURFACE_SOURCE_IDS["creator"],
+            **kwargs,
+        )
+
+
+class TikTokCreativeCenterVideosConnector(TikTokCreativeCenterConnector):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            surface="video",
+            source_id=TIKTOK_SURFACE_SOURCE_IDS["video"],
+            **kwargs,
+        )

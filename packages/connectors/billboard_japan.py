@@ -12,10 +12,20 @@ from packages.connectors.base import BaseConnector, FetchResult, SignalResult
 from packages.core.domain_classifier import classify_domain
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
 
-BILLBOARD_JAPAN_URL = "https://www.billboard-japan.com/charts/"
+BILLBOARD_JAPAN_URL = "https://www.billboard-japan.com/charts/detail?a=hot100"
+BILLBOARD_JAPAN_ARTIST_URL = "https://www.billboard-japan.com/charts/detail?a=artist"
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+}
 TRACK_RE = re.compile(
-    r"<li[^>]*data-track=[\"']([^\"']+)[\"'][^>]*data-artist=[\"']([^\"']+)[\"'][^>]*>",
-    re.IGNORECASE,
+    r"<li[^>]*data-track=[\"']([^\"']+)[\"'][^>]*data-artist=[\"']([^\"']+)[\"'][^>]*>"
+    r"|<p[^>]*class=[\"'][^\"']*(?:music-title|title)[^\"']*[\"'][^>]*>([^<]+)</p>\s*"
+    r"(?:.*?<p[^>]*class=[\"'][^\"']*(?:artist-name|artist)[^\"']*[\"'][^>]*>([^<]+)</p>)?",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -24,18 +34,39 @@ class BillboardJapanConnector(BaseConnector):
         super().__init__(source_id="BILLBOARD_JAPAN", stability="A", **kwargs)
 
     def fetch(self) -> FetchResult:
-        try:
-            response = requests.get(BILLBOARD_JAPAN_URL, timeout=30)
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            return FetchResult(error=str(exc))
-        items = self.parse_items(response.text)
-        return FetchResult(items=items, item_count=len(items))
+        errors: list[str] = []
+        merged_items: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for url, chart_type in (
+            (BILLBOARD_JAPAN_URL, "hot100"),
+            (BILLBOARD_JAPAN_ARTIST_URL, "artist"),
+        ):
+            try:
+                response = requests.get(url, headers=REQUEST_HEADERS, timeout=30)
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                errors.append(f"{url}: {exc}")
+                continue
+            items = self.parse_items(response.text)
+            for item in items:
+                key = (str(item.get("track", "")), str(item.get("artist", "")))
+                if key in seen:
+                    continue
+                seen.add(key)
+                item["chartType"] = chart_type
+                merged_items.append(item)
+        if merged_items:
+            return FetchResult(items=merged_items, item_count=len(merged_items))
+        return FetchResult(error=" | ".join(errors[-2:]) if errors else "no billboard data")
 
     def parse_items(self, html: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for rank, match in enumerate(TRACK_RE.findall(html), start=1):
-            items.append({"track": match[0].strip(), "artist": match[1].strip(), "rank": rank})
+            track = next((group.strip() for group in match[:3] if group and group.strip()), "")
+            artist = next((group.strip() for group in match[1:] if group and group.strip()), "")
+            if not track:
+                continue
+            items.append({"track": track, "artist": artist, "rank": rank})
         return items
 
     def extract_candidates(self, items: list[dict[str, Any]]) -> list[RawCandidate]:
@@ -62,6 +93,7 @@ class BillboardJapanConnector(BaseConnector):
                         domain_class=classify_domain(
                             CandidateType.MUSIC_TRACK, self.source_id, text=track
                         ),
+                        extra={"chartType": item.get("chartType", "hot100")},
                     )
                 )
             if artist:
@@ -82,6 +114,7 @@ class BillboardJapanConnector(BaseConnector):
                         domain_class=classify_domain(
                             CandidateType.MUSIC_ARTIST, self.source_id, text=artist
                         ),
+                        extra={"chartType": item.get("chartType", "hot100")},
                     )
                 )
         return candidates

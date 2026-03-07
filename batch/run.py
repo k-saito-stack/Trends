@@ -16,6 +16,7 @@ from ulid import ULID
 from batch.cost_tracker import estimate_run_cost, record_run_cost
 from batch.degrade import DegradeState, compute_degrade_state
 from packages.connectors.base import BaseConnector, ConnectorRunResult
+from packages.connectors.registry import build_source_plan_from_catalog
 from packages.core import candidate_store
 from packages.core.alias_registry import load_alias_index
 from packages.core.config import (
@@ -261,6 +262,12 @@ def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[
     return build_connectors(source_cfgs or [])
 
 
+def _validate_runtime_source_cfgs(source_cfgs: list[dict[str, Any]]) -> dict[str, list[str]]:
+    from packages.connectors.registry import validate_runtime_source_cfgs
+
+    return validate_runtime_source_cfgs(source_cfgs)
+
+
 def _apply_runtime_feature_flags(
     degrade: DegradeState, source_cfgs: list[dict[str, Any]]
 ) -> DegradeState:
@@ -322,6 +329,9 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     algo_config = _safe_load(load_algorithm_config)
     source_weighting_config = _safe_load(load_source_weighting_config)
     source_cfg_list = _safe_load(load_all_source_configs, fallback=[])
+    runtime_cfg_validation = _validate_runtime_source_cfgs(source_cfg_list)
+    if any(runtime_cfg_validation.values()):
+        logger.warning("Runtime source config drift detected: %s", runtime_cfg_validation)
 
     degrade = DegradeState()
     try:
@@ -372,7 +382,11 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     raw_by_candidate_source: dict[tuple[str, str], list[RawCandidate]] = defaultdict(list)
     source_ok: dict[str, bool] = {}
     source_item_count: dict[str, int] = {}
+    source_kept_count: dict[str, int] = {}
     source_errors: dict[str, str] = {}
+    source_fallback_used: dict[str, str] = {}
+    source_availability_tier: dict[str, str] = {}
+    source_response_ms: dict[str, int] = {}
     sources_used: list[str] = []
 
     logger.info("Step 1-4: Fetch, parse, extract, resolve...")
@@ -390,6 +404,13 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
         source_ok[source_id] = run_result.ok
         source_item_count[source_id] = run_result.item_count
+        source_kept_count[source_id] = run_result.kept_item_count
+        if run_result.fallback_used:
+            source_fallback_used[source_id] = run_result.fallback_used
+        if run_result.response_ms is not None:
+            source_response_ms[source_id] = run_result.response_ms
+        if entry is not None:
+            source_availability_tier[source_id] = entry.availability_tier.value
         if run_result.error:
             source_errors[source_id] = run_result.error
             errors.append(f"{source_id}: {run_result.error}")
@@ -656,7 +677,14 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             source_health_ops = [
                 ("source_health", record.document_id, record.to_dict())
                 for record in build_source_health_records(
-                    target_date, source_ok, source_item_count, errors=source_errors
+                    target_date,
+                    source_ok,
+                    source_item_count,
+                    source_kept_count=source_kept_count,
+                    errors=source_errors,
+                    availability_tiers=source_availability_tier,
+                    fallback_used=source_fallback_used,
+                    response_ms=source_response_ms,
                 )
             ]
             if source_health_ops:
@@ -739,7 +767,16 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             target_date, run_id, status="COMPLETED" if published_successfully else "FAILED"
         )
 
-    _write_connector_summary(source_ok, errors)
+    _write_connector_summary(
+        source_ok,
+        errors,
+        source_item_count=source_item_count,
+        source_kept_count=source_kept_count,
+        source_fallback_used=source_fallback_used,
+        source_response_ms=source_response_ms,
+        runtime_cfg_validation=runtime_cfg_validation,
+        source_plan=build_source_plan_from_catalog(source_cfg_list),
+    )
 
     if not published_successfully:
         raise RuntimeError(f"Daily ranking publish failed for {target_date}")
@@ -978,8 +1015,22 @@ def _to_sparkline(history: list[float]) -> list[float | None]:
     return [float(score) for score in history]
 
 
-def _write_connector_summary(source_ok: dict[str, bool], errors: list[str]) -> None:
+def _write_connector_summary(
+    source_ok: dict[str, bool],
+    errors: list[str],
+    *,
+    source_item_count: dict[str, int] | None = None,
+    source_kept_count: dict[str, int] | None = None,
+    source_fallback_used: dict[str, str] | None = None,
+    source_response_ms: dict[str, int] | None = None,
+    runtime_cfg_validation: dict[str, list[str]] | None = None,
+    source_plan: list[dict[str, Any]] | None = None,
+) -> None:
     result_path = os.environ.get("BATCH_RESULT_PATH", "/tmp/batch_result.json")
+    source_item_count = source_item_count or {}
+    source_kept_count = source_kept_count or {}
+    source_fallback_used = source_fallback_used or {}
+    source_response_ms = source_response_ms or {}
     failed = {sid: False for sid, ok in source_ok.items() if not ok}
     error_map: dict[str, str] = {}
     for err in errors:
@@ -989,9 +1040,19 @@ def _write_connector_summary(source_ok: dict[str, bool], errors: list[str]) -> N
                 error_map[sid.strip()] = msg.strip()
     summary = {
         "sources": {
-            sid: {"ok": ok, "error": error_map.get(sid, "")} for sid, ok in source_ok.items()
+            sid: {
+                "ok": ok,
+                "error": error_map.get(sid, ""),
+                "rawItemCount": source_item_count.get(sid, 0),
+                "keptItemCount": source_kept_count.get(sid, 0),
+                "fallbackUsed": source_fallback_used.get(sid, ""),
+                "responseMs": source_response_ms.get(sid),
+            }
+            for sid, ok in source_ok.items()
         },
         "failed_sources": list(failed.keys()),
+        "runtimeConfigValidation": runtime_cfg_validation or {},
+        "sourcePlan": source_plan or [],
     }
     with contextlib.suppress(Exception), open(result_path, "w", encoding="utf-8") as handle:
         json.dump(summary, handle, ensure_ascii=False, indent=2)

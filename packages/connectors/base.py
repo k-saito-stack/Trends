@@ -11,6 +11,7 @@ Spec reference: Section 8 (Discover rules)
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,6 +28,9 @@ class FetchResult:
     items: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
     item_count: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
+    fallback_used: str = ""
+    response_ms: int | None = None
 
 
 @dataclass
@@ -48,6 +52,10 @@ class ConnectorRunResult:
     candidates: list[RawCandidate] = field(default_factory=list)
     signals: list[SignalResult] = field(default_factory=list)
     error: str | None = None
+    kept_item_count: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
+    fallback_used: str = ""
+    response_ms: int | None = None
 
 
 class BaseConnector(ABC):
@@ -106,6 +114,7 @@ class BaseConnector(ABC):
                 ok=False,
                 item_count=0,
                 error="disabled",
+                kept_item_count=0,
             )
 
         # Kill switch check
@@ -120,9 +129,11 @@ class BaseConnector(ABC):
                 ok=False,
                 item_count=0,
                 error="kill_switch",
+                kept_item_count=0,
             )
 
         # Fetch
+        started_at = time.monotonic()
         try:
             result = self.fetch()
         except Exception as e:
@@ -133,9 +144,11 @@ class BaseConnector(ABC):
                 ok=False,
                 item_count=0,
                 error=str(e),
+                kept_item_count=0,
             )
 
         if result.error:
+            response_ms = result.response_ms or int((time.monotonic() - started_at) * 1000)
             self.consecutive_failures += 1
             logger.error("[%s] Fetch error: %s", self.source_id, result.error)
             return ConnectorRunResult(
@@ -143,15 +156,24 @@ class BaseConnector(ABC):
                 ok=False,
                 item_count=0,
                 error=result.error,
+                kept_item_count=0,
+                metadata=result.metadata,
+                fallback_used=result.fallback_used,
+                response_ms=response_ms,
             )
 
         if not result.items:
+            response_ms = result.response_ms or int((time.monotonic() - started_at) * 1000)
             logger.info("[%s] No items returned", self.source_id)
             # ok=True: fetch succeeded but 0 items (valid 0-observation)
             return ConnectorRunResult(
                 source_id=self.source_id,
                 ok=True,
                 item_count=0,
+                kept_item_count=0,
+                metadata=result.metadata,
+                fallback_used=result.fallback_used,
+                response_ms=response_ms,
             )
 
         # Reset failure counter on success
@@ -161,18 +183,24 @@ class BaseConnector(ABC):
         try:
             candidates = self.extract_candidates(result.items)
         except Exception as e:
+            response_ms = result.response_ms or int((time.monotonic() - started_at) * 1000)
             logger.error("[%s] Extract error: %s", self.source_id, e)
             return ConnectorRunResult(
                 source_id=self.source_id,
                 ok=False,
                 item_count=len(result.items),
                 error=f"extract: {e}",
+                kept_item_count=0,
+                metadata=result.metadata,
+                fallback_used=result.fallback_used,
+                response_ms=response_ms,
             )
 
         # Compute signals
         try:
             signals = self.compute_signals(result.items, candidates)
         except Exception as e:
+            response_ms = result.response_ms or int((time.monotonic() - started_at) * 1000)
             logger.error("[%s] Signal error: %s", self.source_id, e)
             return ConnectorRunResult(
                 source_id=self.source_id,
@@ -180,8 +208,13 @@ class BaseConnector(ABC):
                 item_count=len(result.items),
                 candidates=candidates,
                 error=f"signal: {e}",
+                kept_item_count=len(candidates),
+                metadata=result.metadata,
+                fallback_used=result.fallback_used,
+                response_ms=response_ms,
             )
 
+        response_ms = result.response_ms or int((time.monotonic() - started_at) * 1000)
         logger.info(
             "[%s] OK: %d items -> %d candidates, %d signals",
             self.source_id,
@@ -195,4 +228,8 @@ class BaseConnector(ABC):
             item_count=len(result.items),
             candidates=candidates,
             signals=signals,
+            kept_item_count=len(candidates),
+            metadata=result.metadata,
+            fallback_used=result.fallback_used,
+            response_ms=response_ms,
         )
