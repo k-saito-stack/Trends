@@ -31,7 +31,9 @@ def test_judge_merge_or_link_uses_cache_first(monkeypatch) -> None:
 
     result = resolution_llm.judge_merge_or_link({"name": "Ado"}, {"name": "adoメイク"})
 
-    assert result == cached
+    assert result["decision"] == "link"
+    assert result["confidence"] == 0.7
+    assert result["cacheHit"] is True
     assert set_calls == []
 
 
@@ -55,6 +57,7 @@ def test_judge_merge_or_link_writes_llm_decision_to_cache(monkeypatch) -> None:
     )
 
     assert result["decision"] == "merge"
+    assert result["cacheHit"] is False
     assert writes[0]["decision"] == "merge"
     assert writes[0]["provider"] == "stub"
 
@@ -77,4 +80,5 @@ def test_judge_merge_or_link_returns_unknown_when_llm_unavailable(monkeypatch) -
     )
 
     assert result["decision"] == "unknown"
+    assert result["cacheHit"] is False
     assert writes[0]["reason"] == "llm_unavailable"

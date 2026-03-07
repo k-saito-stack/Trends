@@ -180,6 +180,16 @@ def save_shadow_rollout_status(target_date: str, data: dict[str, Any]) -> None:
     firestore_client.set_document("shadow_rollout_status", "current", data)
 
 
+def save_unresolved_resolution_items(target_date: str, items: list[dict[str, Any]]) -> None:
+    operations = [
+        (f"unresolved_resolution_queue/{target_date}/items", str(item["pairId"]), item)
+        for item in items
+        if item.get("pairId")
+    ]
+    if operations:
+        firestore_client.batch_upsert(operations)
+
+
 def load_source_posteriors() -> dict[str, SourcePosterior]:
     docs = firestore_client.get_collection("source_posteriors")
     posteriors = [SourcePosterior.from_dict(doc) for doc in docs]

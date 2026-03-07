@@ -25,9 +25,10 @@ class TestEstimateRunCost:
             ["YOUTUBE_TREND_JP"],
             x_search_calls=2,
             llm_summary_calls=3,
+            llm_resolution_calls=2,
         )
-        # 0 (youtube) + 2*5 (x_search) + 3*3 (llm) = 19.0
-        assert cost == 19.0
+        # 0 (youtube) + 2*5 (x_search) + 3*3 (summary) + 2*2 (resolution) = 23.0
+        assert cost == 23.0
 
     def test_empty_run(self) -> None:
         cost = estimate_run_cost([])

@@ -52,7 +52,7 @@ def judge_merge_or_link(
     cache_key = _build_cache_key(left, right, prompt_version)
     cached = firestore_client.get_document("llm_resolution_cache", cache_key)
     if cached is not None:
-        return dict(cached)
+        return dict(cached, cacheHit=True)
 
     client = llm_client
     if client is None:
@@ -64,7 +64,7 @@ def judge_merge_or_link(
     if not client.available:
         result = _default_resolution_result(left, right, prompt_version)
         firestore_client.upsert_document("llm_resolution_cache", cache_key, result)
-        return result
+        return dict(result, cacheHit=False)
 
     response = client.chat_json(_build_messages(left, right))
     result = _normalize_llm_result(
@@ -76,7 +76,7 @@ def judge_merge_or_link(
         model=client.model,
     )
     firestore_client.upsert_document("llm_resolution_cache", cache_key, result)
-    return result
+    return dict(result, cacheHit=False)
 
 
 def _build_messages(left: dict[str, Any], right: dict[str, Any]) -> list[dict[str, str]]:

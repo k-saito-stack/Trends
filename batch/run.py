@@ -19,7 +19,7 @@ from batch.degrade import DegradeState, compute_degrade_state
 from packages.connectors.base import BaseConnector, ConnectorRunResult
 from packages.connectors.registry import build_source_plan_from_catalog
 from packages.core import candidate_store
-from packages.core.alias_registry import load_alias_index
+from packages.core.alias_registry import build_alias_records, load_alias_index
 from packages.core.config import (
     load_algorithm_config,
     load_all_source_configs,
@@ -55,6 +55,7 @@ from packages.core.models import (
 from packages.core.publish_health import evaluate_publish_health
 from packages.core.ranking import build_ranked_candidates_v2
 from packages.core.relation_building import apply_candidate_relations, build_candidate_relations
+from packages.core.resolution_llm import resolve_uncertain_pairs
 from packages.core.resolve import (
     build_alias_index,
     build_key_index,
@@ -79,6 +80,11 @@ from packages.core.source_weighting import (
     load_source_daily,
 )
 from packages.core.summary import MODE_LLM, generate_summary
+from packages.core.unresolved_resolution import (
+    apply_resolution_results,
+    build_unresolved_pairs,
+    max_llm_judgments_for_date,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -671,12 +677,54 @@ def _run_pipeline(
     logger.info("Selected %d ranked candidates", len(ranked_candidates))
 
     llm_summary_calls = 0
+    llm_resolution_calls = 0
+    unresolved_pairs: list[dict[str, Any]] = []
+    unresolved_queue_items: list[dict[str, Any]] = []
     llm_client = None
     if degrade.summary_mode == MODE_LLM:
         with contextlib.suppress(Exception):
             from packages.core.llm_client import LLMClient
 
             llm_client = LLMClient()
+
+    resolution_client = None
+    with contextlib.suppress(Exception):
+        from packages.core.llm_client import LLMClient
+
+        resolution_client = LLMClient()
+
+    resolution_limit = max_llm_judgments_for_date(
+        target_date,
+        datetime.now(JST).date().isoformat(),
+    )
+    unresolved_pairs = build_unresolved_pairs(
+        candidate_feature_list,
+        touched_candidates,
+        top_window=max(200, app_config.top_k),
+        max_pairs=resolution_limit,
+    )
+    if unresolved_pairs:
+        resolution_results = resolve_uncertain_pairs(
+            unresolved_pairs,
+            llm_client=resolution_client,
+        )
+        llm_resolution_calls = sum(
+            1
+            for result in resolution_results
+            if not bool(result.get("cacheHit", False))
+            and str(result.get("provider", "")) not in {"", "none"}
+        )
+        unresolved_queue_items, unresolved_relations = apply_resolution_results(
+            unresolved_pairs,
+            resolution_results,
+            created_at=datetime.now(JST).isoformat(),
+        )
+        if unresolved_relations:
+            relation_map = {relation.document_id: relation for relation in candidate_relations}
+            for relation in unresolved_relations:
+                relation_map[relation.document_id] = relation
+            candidate_relations = sorted(relation_map.values(), key=lambda item: item.document_id)
+            apply_candidate_relations(touched_candidates, unresolved_relations)
 
     for ranked_item in ranked_candidates:
         matched_feature = next(
@@ -742,6 +790,7 @@ def _run_pipeline(
     next_source_posteriors = []
     ranking_evaluations: list[RankingEvaluation] = []
     rollout_status: dict[str, Any] = {}
+    write_ops_estimate = 0
     if persist_labels or persist_source_posteriors or persist_evaluations:
         try:
             label_plan = _build_label_plan(target_date)
@@ -795,13 +844,6 @@ def _run_pipeline(
                     generated_at=generated_at,
                     run_id=run_id,
                     top_k=min(20, app_config.top_k),
-                )
-                rollout_status = _build_shadow_rollout_status(
-                    target_date=target_date,
-                    ranking_evaluations=ranking_evaluations,
-                    shadow_days=app_config.shadow_days,
-                    top_k=min(20, app_config.top_k),
-                    generated_at=generated_at,
                 )
         except Exception as exc:
             errors.append(f"source_learning: {exc}")
@@ -859,6 +901,47 @@ def _run_pipeline(
         top_window=min(20, app_config.top_k),
     )
     effective_shadow_only = options.shadow_only or bool(publish_health.get("shadowOnly"))
+    write_ops_estimate = _estimate_write_operations(
+        light_publish=light_publish,
+        publish_enabled=options.publish,
+        effective_shadow_only=effective_shadow_only,
+        connector_count=len(connectors),
+        ranking_item_count=len(ranking_items),
+        observations_count=len(observations),
+        source_feature_count=len(source_features),
+        candidate_feature_count=len(candidate_feature_list),
+        touched_candidate_count=len(touched_candidates),
+        alias_record_count=len(build_alias_records(touched_candidates.values())),
+        candidate_relation_count=len(candidate_relations),
+        unresolved_queue_count=len(unresolved_queue_items),
+        source_health_count=len(source_health_records),
+        source_daily_count=len(source_daily_snapshots),
+        has_weight_snapshot=next_weight_snapshot is not None,
+        hindsight_label_count=len(hindsight_labels),
+        source_posterior_count=len(next_source_posteriors),
+        ranking_evaluation_count=len(ranking_evaluations),
+        has_rollout_status=bool(ranking_evaluations),
+        persist_observations=persist_observations,
+        persist_features=persist_features,
+        persist_candidates=persist_candidates,
+        persist_labels=persist_labels,
+        persist_source_posteriors=persist_source_posteriors,
+        persist_evaluations=persist_evaluations,
+        existing_published_meta=existing_published_meta,
+        target_date=target_date,
+        run_id=run_id,
+    )
+    for evaluation in ranking_evaluations:
+        evaluation.metadata["writeOpsEstimate"] = write_ops_estimate
+    if persist_evaluations and ranking_evaluations:
+        rollout_status = _build_shadow_rollout_status(
+            target_date=target_date,
+            ranking_evaluations=ranking_evaluations,
+            shadow_days=app_config.shadow_days,
+            top_k=min(20, app_config.top_k),
+            generated_at=generated_at,
+        )
+        rollout_status["writeOpsEstimate"] = write_ops_estimate
     if effective_shadow_only and options.publish:
         logger.warning("Public publish gated; shadow-only mode engaged: %s", publish_health)
 
@@ -926,6 +1009,11 @@ def _run_pipeline(
         if persist_candidates:
             candidate_store.upsert_touched_candidates(touched_candidates)
             candidate_store.save_candidate_relations(candidate_relations)
+            if unresolved_queue_items:
+                candidate_store.save_unresolved_resolution_items(
+                    target_date,
+                    unresolved_queue_items,
+                )
         if persist_features and not effective_shadow_only:
             candidate_store.save_daily_rankings_v2(target_date, ranked_candidates)
 
@@ -998,14 +1086,25 @@ def _run_pipeline(
         logger.error("Publish failed: %s", exc)
 
     logger.info("Step 10: Finalize run...")
-    cost_jpy = estimate_run_cost(sources_used, 0, llm_summary_calls)
+    cost_jpy = estimate_run_cost(
+        sources_used,
+        0,
+        llm_summary_calls,
+        llm_resolution_calls,
+    )
     if not light_publish:
         with contextlib.suppress(Exception):
             record_run_cost(
                 run_id,
                 target_date,
                 cost_jpy,
-                {"sources": sources_used, "xSearchCalls": 0, "llmSummaryCalls": llm_summary_calls},
+                {
+                    "sources": sources_used,
+                    "xSearchCalls": 0,
+                    "llmSummaryCalls": llm_summary_calls,
+                    "llmResolutionCalls": llm_resolution_calls,
+                    "writeOpsEstimate": write_ops_estimate,
+                },
             )
 
     run_status = (
@@ -1024,6 +1123,8 @@ def _run_pipeline(
                 top_k=len(top_candidates),
                 errors=errors or None,
                 cost_jpy=cost_jpy,
+                write_ops_estimate=write_ops_estimate,
+                llm_resolution_calls=llm_resolution_calls,
             )
 
     with contextlib.suppress(Exception):
@@ -1043,6 +1144,9 @@ def _run_pipeline(
         publish_health=publish_health,
         ranking_evaluations=ranking_evaluations,
         rollout_status=rollout_status,
+        unresolved_queue_items=unresolved_queue_items,
+        llm_resolution_calls=llm_resolution_calls,
+        write_ops_estimate=write_ops_estimate,
     )
 
     if options.publish and not published_successfully:
@@ -1180,6 +1284,10 @@ def _build_ranking_evaluations(
                 anchor_date,
                 collection_root="daily_rankings",
             )
+        public_meta = candidate_store.load_daily_ranking_meta(
+            anchor_date,
+            collection_root="daily_rankings",
+        )
 
         variants: dict[str, RankingEvaluation] = {}
         if shadow_items:
@@ -1228,7 +1336,7 @@ def _build_ranking_evaluations(
                 ranking_source="stored_items",
                 item_count=len(public_entries),
                 metrics=public_metrics,
-                publish_health=dict(shadow_meta.publish_health if shadow_meta else {}),
+                publish_health=dict(public_meta.publish_health if public_meta else {}),
                 run_id=run_id,
                 created_at=generated_at,
             )
@@ -1285,6 +1393,87 @@ def _build_shadow_rollout_status(
         }
     )
     return summary
+
+
+def _estimate_write_operations(
+    *,
+    light_publish: bool,
+    publish_enabled: bool,
+    effective_shadow_only: bool,
+    connector_count: int,
+    ranking_item_count: int,
+    observations_count: int,
+    source_feature_count: int,
+    candidate_feature_count: int,
+    touched_candidate_count: int,
+    alias_record_count: int,
+    candidate_relation_count: int,
+    unresolved_queue_count: int,
+    source_health_count: int,
+    source_daily_count: int,
+    has_weight_snapshot: bool,
+    hindsight_label_count: int,
+    source_posterior_count: int,
+    ranking_evaluation_count: int,
+    has_rollout_status: bool,
+    persist_observations: bool,
+    persist_features: bool,
+    persist_candidates: bool,
+    persist_labels: bool,
+    persist_source_posteriors: bool,
+    persist_evaluations: bool,
+    existing_published_meta: DailyRankingMeta | None,
+    target_date: str,
+    run_id: str,
+) -> int:
+    total = 0
+
+    if not light_publish:
+        total += 1  # start_run
+        total += connector_count  # update_run_source
+        total += 2  # cost log run + monthly total
+        total += 1  # end_run
+    total += 1  # lock release
+
+    if publish_enabled:
+        prepublish_collections = _build_publish_collections(
+            light_publish=light_publish,
+            shadow_only=effective_shadow_only,
+        )
+        item_collection_paths = _build_item_collection_paths(
+            target_date,
+            run_id,
+            light_publish,
+            shadow_only=effective_shadow_only,
+        )
+        total += 1  # daily_rankings/{date}/runs/{run_id}
+        if existing_published_meta is None:
+            total += len(prepublish_collections)
+        total += ranking_item_count * len(item_collection_paths)
+        total += len(prepublish_collections) + 1  # final publish docs + run status update
+
+    if persist_observations:
+        total += observations_count
+    if persist_features:
+        total += source_feature_count + candidate_feature_count
+        total += source_health_count + source_daily_count
+        if has_weight_snapshot:
+            total += 2
+        if not effective_shadow_only:
+            total += ranking_item_count
+    if persist_candidates:
+        total += touched_candidate_count + alias_record_count
+        total += candidate_relation_count + unresolved_queue_count
+    if persist_labels:
+        total += hindsight_label_count
+    if persist_source_posteriors:
+        total += source_posterior_count
+    if persist_evaluations:
+        total += ranking_evaluation_count
+        if has_rollout_status:
+            total += 2
+
+    return total
 
 
 def _resolve_raw_candidate(
@@ -1511,6 +1700,9 @@ def _write_connector_summary(
     publish_health: dict[str, Any] | None = None,
     ranking_evaluations: list[RankingEvaluation] | None = None,
     rollout_status: dict[str, Any] | None = None,
+    unresolved_queue_items: list[dict[str, Any]] | None = None,
+    llm_resolution_calls: int = 0,
+    write_ops_estimate: int = 0,
 ) -> None:
     result_path = os.environ.get("BATCH_RESULT_PATH", "/tmp/batch_result.json")
     source_item_count = source_item_count or {}
@@ -1542,6 +1734,21 @@ def _write_connector_summary(
         "publishHealth": publish_health or {},
         "rankingEvaluations": [evaluation.to_dict() for evaluation in ranking_evaluations or []],
         "rolloutStatus": rollout_status or {},
+        "unresolvedResolution": {
+            "pairCount": len(unresolved_queue_items or []),
+            "mergeRecommendedCount": sum(
+                1
+                for item in unresolved_queue_items or []
+                if item.get("finalAction") == "MERGE_RECOMMENDED"
+            ),
+            "linkOnlyCount": sum(
+                1
+                for item in unresolved_queue_items or []
+                if item.get("finalAction") == "LINK_ONLY"
+            ),
+            "llmResolutionCalls": llm_resolution_calls,
+        },
+        "writeOpsEstimate": write_ops_estimate,
     }
     with contextlib.suppress(Exception), open(result_path, "w", encoding="utf-8") as handle:
         json.dump(summary, handle, ensure_ascii=False, indent=2)

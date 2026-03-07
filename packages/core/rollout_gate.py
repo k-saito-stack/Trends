@@ -11,6 +11,7 @@ PUBLIC_CORE_HEALTHY_MIN = 6
 PUBLIC_DISCOVERY_FAMILY_MIN = 2
 PUBLIC_CONFIRMATION_FAMILY_MIN = 2
 PUBLIC_WORDS_BEHAVIORS_MIN = 3
+MAX_ACCEPTABLE_WRITE_OPS_PER_RUN = 5000
 
 
 def evaluate_shadow_rollout(
@@ -57,6 +58,9 @@ def evaluate_shadow_rollout(
     words_behaviors_counts = [
         _publish_metric(report, "wordsBehaviorsTop20Count") for report in shadow_reports
     ]
+    write_ops_estimates = [
+        _metadata_metric(report, "writeOpsEstimate") for report in shadow_reports
+    ]
 
     if shadow_reports and min(healthy_core_counts) < PUBLIC_CORE_HEALTHY_MIN:
         reasons.append(
@@ -74,6 +78,10 @@ def evaluate_shadow_rollout(
     if shadow_reports and min(words_behaviors_counts) < PUBLIC_WORDS_BEHAVIORS_MIN:
         reasons.append(
             f"words_behaviors_top{top_k}<{PUBLIC_WORDS_BEHAVIORS_MIN}:{min(words_behaviors_counts)}"
+        )
+    if shadow_reports and max(write_ops_estimates) > MAX_ACCEPTABLE_WRITE_OPS_PER_RUN:
+        reasons.append(
+            f"write_ops>{MAX_ACCEPTABLE_WRITE_OPS_PER_RUN}:{max(write_ops_estimates)}"
         )
 
     avg_shadow_breakout = _average_metric(
@@ -130,7 +138,9 @@ def evaluate_shadow_rollout(
             "minWordsBehaviorsTop20Count": min(words_behaviors_counts)
             if words_behaviors_counts
             else 0,
-            "writeVolumeStatus": "not_modeled",
+            "avgWriteOpsEstimate": round(_average_values(write_ops_estimates), 2),
+            "maxWriteOpsEstimate": max(write_ops_estimates) if write_ops_estimates else 0,
+            "writeVolumeThreshold": MAX_ACCEPTABLE_WRITE_OPS_PER_RUN,
         },
     }
 
@@ -147,6 +157,17 @@ def _average_metric(reports: list[RankingEvaluation], key: str) -> float:
         value = report.metrics.get(key, 0.0)
         if isinstance(value, (int, float)):
             values.append(float(value))
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+
+def _metadata_metric(report: RankingEvaluation, key: str) -> int:
+    value = report.metadata.get(key, 0)
+    return int(value) if isinstance(value, (int, float)) else 0
+
+
+def _average_values(values: list[int]) -> float:
     if not values:
         return 0.0
     return sum(values) / len(values)

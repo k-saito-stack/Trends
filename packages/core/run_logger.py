@@ -37,6 +37,8 @@ def start_run(
         "sourceResults": {},
         "candidateCount": 0,
         "topK": 0,
+        "writeOpsEstimate": 0,
+        "llmResolutionCalls": 0,
     }
     firestore_client.set_document("runs", run_id, data)
     logger.info("Run started: %s (target: %s)", run_id, target_date)
@@ -65,6 +67,8 @@ def end_run(
     top_k: int = 0,
     errors: list[str] | None = None,
     cost_jpy: float = 0.0,
+    write_ops_estimate: int = 0,
+    llm_resolution_calls: int = 0,
 ) -> None:
     """Record the end of a batch run."""
     now = datetime.now(JST).isoformat()
@@ -74,6 +78,8 @@ def end_run(
         "candidateCount": candidate_count,
         "topK": top_k,
         "costJPY": cost_jpy,
+        "writeOpsEstimate": write_ops_estimate,
+        "llmResolutionCalls": llm_resolution_calls,
     }
     if errors:
         data["errors"] = errors

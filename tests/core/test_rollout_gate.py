@@ -11,6 +11,7 @@ def _report(
     breakout_precision: float,
     future_spread: float,
     mature_ratio: float,
+    write_ops: int = 3200,
     healthy_core_sources: int = 6,
     discovery_families: int = 2,
     confirmation_families: int = 2,
@@ -34,6 +35,7 @@ def _report(
                 "wordsBehaviorsTop20Count": words_behaviors,
             }
         },
+        metadata={"writeOpsEstimate": write_ops},
     )
 
 
@@ -86,3 +88,35 @@ def test_evaluate_shadow_rollout_requires_enough_history_and_public_baseline() -
     assert "insufficient_shadow_history:1/14" in summary["reasons"]
     assert "missing_public_baseline:0/1" in summary["reasons"]
     assert "healthy_core_sources<6:5" in summary["reasons"]
+
+
+def test_evaluate_shadow_rollout_fails_when_write_ops_are_too_high() -> None:
+    reports = []
+    for day in range(1, 15):
+        date = f"2026-03-{day:02d}"
+        reports.append(
+            _report(
+                date,
+                "shadow_v2",
+                breakout_precision=0.7,
+                future_spread=1.1,
+                mature_ratio=0.2,
+                write_ops=6200,
+            )
+        )
+        reports.append(
+            _report(
+                date,
+                "public_main",
+                breakout_precision=0.5,
+                future_spread=0.9,
+                mature_ratio=0.35,
+                write_ops=2800,
+            )
+        )
+
+    summary = evaluate_shadow_rollout(reports, window_days=14, top_k=20)
+
+    assert summary["ready"] is False
+    assert "write_ops>5000:6200" in summary["reasons"]
+    assert summary["metrics"]["maxWriteOpsEstimate"] == 6200

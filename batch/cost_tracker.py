@@ -30,6 +30,7 @@ COST_TABLE: dict[str, float] = {
     "WIKIPEDIA": 0.0,              # Wikipedia API is free
     "X_SEARCH": 5.0,               # xAI API per call estimate
     "LLM_SUMMARY": 3.0,            # xAI API per summary estimate
+    "LLM_RESOLUTION": 2.0,         # xAI/Kimi resolution judgment estimate
 }
 
 
@@ -37,6 +38,7 @@ def estimate_run_cost(
     sources_used: list[str],
     x_search_calls: int = 0,
     llm_summary_calls: int = 0,
+    llm_resolution_calls: int = 0,
 ) -> float:
     """Estimate the cost of a single run in JPY."""
     total = 0.0
@@ -44,6 +46,7 @@ def estimate_run_cost(
         total += COST_TABLE.get(source, 0.0)
     total += x_search_calls * COST_TABLE.get("X_SEARCH", 0.0)
     total += llm_summary_calls * COST_TABLE.get("LLM_SUMMARY", 0.0)
+    total += llm_resolution_calls * COST_TABLE.get("LLM_RESOLUTION", 0.0)
     return total
 
 
