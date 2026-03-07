@@ -6,6 +6,7 @@ import math
 from collections import defaultdict
 from collections.abc import Iterable
 
+from packages.core.evidence import dedupe_evidence
 from packages.core.family_features import FamilyAggregateMetrics, aggregate_family_metrics
 from packages.core.fusion_model import (
     build_candidate_feature_vector,
@@ -279,14 +280,10 @@ def compute_candidate_feature(
         primary_score *= _ungated_primary_multiplier(candidate, aggregate)
 
     evidence = []
-    seen_titles: set[tuple[str, str]] = set()
     for item in feature_list:
         for ev in item.evidence:
-            key = (ev.source_id, ev.title)
-            if key in seen_titles:
-                continue
-            seen_titles.add(key)
             evidence.append(ev)
+    evidence = dedupe_evidence(evidence)
 
     return DailyCandidateFeature(
         date=date,

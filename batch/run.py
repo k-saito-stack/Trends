@@ -34,6 +34,7 @@ from packages.core.evaluation import (
     compare_variant_metrics,
     evaluate_ranked_entries,
 )
+from packages.core.evidence import dedupe_evidence, select_evidence_top3
 from packages.core.labels import build_hindsight_labels
 from packages.core.models import (
     BucketScore,
@@ -877,7 +878,7 @@ def _run_pipeline(
             sparkline_7d=_to_sparkline(
                 touched_candidates[item.candidate_id].trend_history_7d[-7:]
             ),
-            evidence_top3=item.evidence[:3],
+            evidence_top3=select_evidence_top3(item.evidence, max_items=3),
             summary=item.summary,
             coming_score=item.coming_score,
             mass_heat=item.mass_heat,
@@ -1562,16 +1563,11 @@ def _build_observation(
 
 def _dedupe_evidence(evidence_items: Any) -> list[Evidence]:
     result: list[Evidence] = []
-    seen: set[tuple[str, str]] = set()
     for item in evidence_items:
         if item is None:
             continue
-        key = (item.source_id, item.title)
-        if key in seen:
-            continue
-        seen.add(key)
         result.append(item)
-    return result
+    return dedupe_evidence(result)
 
 
 def _build_source_feature_metadata(

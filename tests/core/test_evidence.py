@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from packages.core.evidence import build_evidence_pool, select_evidence_top3
+from packages.core.evidence import build_evidence_pool, dedupe_evidence, select_evidence_top3
 from packages.core.models import Evidence
 
 
@@ -56,3 +56,26 @@ class TestBuildEvidencePool:
         assert pool[0].published_at == ""
         assert pool[0].metric == ""
         assert pool[0].snippet == ""
+
+
+class TestDedupeEvidence:
+    def test_dedupes_same_source_item_with_different_titles(self) -> None:
+        pool = [
+            Evidence(
+                source_id="BILLBOARD_JAPAN",
+                title="breakfast - breakfast",
+                url="https://www.billboard-japan.com/charts/detail?a=hot100",
+                metric="rank:5",
+            ),
+            Evidence(
+                source_id="BILLBOARD_JAPAN",
+                title="breakfast / breakfast",
+                url="https://www.billboard-japan.com/charts/detail?a=hot100",
+                metric="rank:5",
+            ),
+        ]
+
+        result = dedupe_evidence(pool)
+
+        assert len(result) == 1
+        assert result[0].title == "breakfast - breakfast"

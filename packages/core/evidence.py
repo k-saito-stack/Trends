@@ -13,6 +13,35 @@ from typing import Any
 from packages.core.models import Evidence
 
 
+def evidence_identity_key(evidence: Evidence) -> tuple[str, str, str]:
+    """Return a stable key for a single source item."""
+
+    source_id = evidence.source_id.strip()
+    url = evidence.url.strip()
+    metric = evidence.metric.strip()
+    title = evidence.title.strip()
+
+    if url and metric:
+        return source_id, url, metric
+    if url:
+        return source_id, url, ""
+    return source_id, title, metric
+
+
+def dedupe_evidence(evidence_pool: list[Evidence]) -> list[Evidence]:
+    """Drop duplicates that point to the same underlying source item."""
+
+    deduped: list[Evidence] = []
+    seen: set[tuple[str, str, str]] = set()
+    for evidence in evidence_pool:
+        key = evidence_identity_key(evidence)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(evidence)
+    return deduped
+
+
 def select_evidence_top3(
     evidence_pool: list[Evidence],
     max_items: int = 3,
@@ -34,6 +63,7 @@ def select_evidence_top3(
     if not evidence_pool:
         return []
 
+    evidence_pool = dedupe_evidence(evidence_pool)
     seen_sources: set[str] = set()
     selected: list[Evidence] = []
 
