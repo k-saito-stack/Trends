@@ -7,6 +7,12 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from packages.core.family_features import FamilyAggregateMetrics, aggregate_family_metrics
+from packages.core.fusion_model import (
+    build_candidate_feature_vector,
+    compute_primary_score,
+    predict_breakout_prob,
+    predict_mass_prob,
+)
 from packages.core.models import (
     AlgorithmConfig,
     Candidate,
@@ -143,7 +149,7 @@ def compute_candidate_feature(
     domain_fit = _compute_domain_fit(candidate.type, feature_list)
     extraction_confidence = _confidence_score(feature_list)
     maturity_penalty = candidate.maturity * 0.6 + (0.25 if not aggregate["has_discovery"] else 0.0)
-    coming_score = max(
+    heuristic_coming_score = max(
         0.0,
         float(aggregate["discovery_rise"])
         + float(aggregate["cross_family_confirm"])
@@ -155,7 +161,7 @@ def compute_candidate_feature(
         - float(aggregate["redundancy_penalty"]),
     )
 
-    mass_heat = max(
+    heuristic_mass_heat = max(
         0.0,
         float(aggregate["broad_confirmation"])
         + float(aggregate["editorial_support"]) * 0.5
@@ -164,15 +170,39 @@ def compute_candidate_feature(
         + (0.35 if candidate.maturity > 0.8 else 0.0),
     )
 
+    sustained_presence = _sustained_presence(candidate)
+    fusion_vector = build_candidate_feature_vector(
+        candidate,
+        aggregate,
+        feature_list,
+        novelty=novelty,
+        domain_fit=domain_fit,
+        extraction_confidence=extraction_confidence,
+        maturity_penalty=maturity_penalty,
+        sustained_presence=sustained_presence,
+    )
+    breakout_prob_1d = predict_breakout_prob(fusion_vector, horizon_days=1)
+    breakout_prob_3d = predict_breakout_prob(fusion_vector, horizon_days=3)
+    breakout_prob_7d = predict_breakout_prob(fusion_vector, horizon_days=7)
+    mass_prob = predict_mass_prob(fusion_vector)
+    coming_score = breakout_prob_7d * 4.0
+    mass_heat = mass_prob * 4.0
+
     ranking_gate_passed = passes_ranking_gate(
         candidate,
         feature_list,
         aggregate,
-        coming_score,
+        breakout_prob_7d,
         novelty,
         algo_config,
     )
 
+    model_primary_score = compute_primary_score(
+        candidate.type,
+        domain_class,
+        breakout_prob_7d,
+        mass_prob,
+    )
     primary_score = coming_score + algo_config.mass_heat_weight * mass_heat
     if not ranking_gate_passed:
         primary_score *= _ungated_primary_multiplier(candidate, aggregate)
@@ -205,13 +235,13 @@ def compute_candidate_feature(
         maturity_penalty=maturity_penalty,
         redundancy_penalty=float(aggregate["redundancy_penalty"]),
         broad_confirmation=float(aggregate["broad_confirmation"]),
-        sustained_presence=_sustained_presence(candidate),
+        sustained_presence=sustained_presence,
         mainstream_reach=float(aggregate["music_confirmation"])
         + float(aggregate["show_confirmation"]),
-        breakout_prob_1d=_probability_from_score(coming_score, 1.7),
-        breakout_prob_3d=_probability_from_score(coming_score, 1.25),
-        breakout_prob_7d=_probability_from_score(coming_score, 0.9),
-        mass_prob=_probability_from_score(mass_heat, 0.8),
+        breakout_prob_1d=breakout_prob_1d,
+        breakout_prob_3d=breakout_prob_3d,
+        breakout_prob_7d=breakout_prob_7d,
+        mass_prob=mass_prob,
         coming_score=coming_score,
         mass_heat=mass_heat,
         primary_score=primary_score,
@@ -225,6 +255,16 @@ def compute_candidate_feature(
         metadata={
             "familyScores": aggregate["family_scores"],
             "roleScores": aggregate["role_scores"],
+            "fusionModel": {
+                "vector": {key: round(value, 4) for key, value in fusion_vector.items()},
+                "heuristicComing": round(heuristic_coming_score, 4),
+                "heuristicMass": round(heuristic_mass_heat, 4),
+                "breakoutProb1d": round(breakout_prob_1d, 4),
+                "breakoutProb3d": round(breakout_prob_3d, 4),
+                "breakoutProb7d": round(breakout_prob_7d, 4),
+                "massProb": round(mass_prob, 4),
+                "modelPrimaryScore": round(model_primary_score, 4),
+            },
         },
     )
 
@@ -233,7 +273,7 @@ def passes_ranking_gate(
     candidate: Candidate,
     feature_list: list[DailySourceFeature],
     aggregate: FamilyAggregateMetrics,
-    coming_score: float,
+    breakout_prob_7d: float,
     novelty: float,
     algo_config: AlgorithmConfig,
 ) -> bool:
@@ -242,17 +282,20 @@ def passes_ranking_gate(
 
     candidate_kind = candidate.kind or candidate.type.default_kind
 
-    if candidate_kind == CandidateKind.TOPIC and has_discovery and support_families >= 2:
+    if candidate_kind == CandidateKind.TOPIC and has_discovery and support_families >= 3:
         return True
+
+    if candidate_kind == CandidateKind.TOPIC and has_discovery and support_families >= 2:
+        return breakout_prob_7d >= 0.45
 
     if has_discovery:
         if candidate_kind == CandidateKind.TOPIC and support_families == 1:
-            min_threshold = 0.75 if _has_priority_regional_tiktok_signal(feature_list) else 0.9
-            return float(aggregate["discovery_rise"]) >= max(
+            min_threshold = 0.74 if _has_priority_regional_tiktok_signal(feature_list) else 0.93
+            return breakout_prob_7d >= max(
                 algo_config.ranking_gate_discovery_threshold,
                 min_threshold,
             )
-        if coming_score >= algo_config.ranking_gate_discovery_threshold:
+        if breakout_prob_7d >= algo_config.ranking_gate_discovery_threshold:
             return True
 
     return candidate.type in {
@@ -330,10 +373,6 @@ def _compute_novelty(candidate: Candidate) -> float:
     history_len = len([score for score in candidate.trend_history_7d if score > 0])
     base = 1.0 / (1.0 + math.log1p(history_len + candidate.maturity * 5.0))
     return max(0.0, min(1.0, base))
-
-
-def _probability_from_score(score: float, center: float) -> float:
-    return max(0.0, min(1.0, 1.0 / (1.0 + math.exp(-(score - center)))))
 
 
 def _compute_domain_fit(candidate_type: CandidateType, features: list[DailySourceFeature]) -> float:

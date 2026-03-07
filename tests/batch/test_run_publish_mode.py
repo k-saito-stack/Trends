@@ -117,6 +117,7 @@ class TestPublishPathPlanning:
             "2026-03-07",
             "run_new",
             light_publish=True,
+            shadow_only=False,
         )
 
         assert paths == ("daily_rankings/2026-03-07/runs/run_new/items",)
@@ -126,6 +127,7 @@ class TestPublishPathPlanning:
             "2026-03-07",
             "run_new",
             light_publish=False,
+            shadow_only=False,
         )
 
         assert paths == (
@@ -133,3 +135,25 @@ class TestPublishPathPlanning:
             "daily_rankings_v2_shadow/2026-03-07/items",
             "daily_rankings/2026-03-07/runs/run_new/items",
         )
+
+    def test_shadow_only_publish_writes_shadow_and_versioned_items(self) -> None:
+        paths = run_module._build_item_collection_paths(
+            "2026-03-07",
+            "run_new",
+            light_publish=False,
+            shadow_only=True,
+        )
+
+        assert paths == (
+            "daily_rankings_v2_shadow/2026-03-07/items",
+            "daily_rankings/2026-03-07/runs/run_new/items",
+        )
+
+    def test_shadow_only_publish_resets_shadow_path_only(self) -> None:
+        paths = run_module._build_reset_collection_paths(
+            "2026-03-07",
+            light_publish=False,
+            shadow_only=True,
+        )
+
+        assert paths == ("daily_rankings_v2_shadow/2026-03-07/items",)

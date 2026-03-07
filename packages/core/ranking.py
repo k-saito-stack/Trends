@@ -182,6 +182,8 @@ def _selection_score(feature: DailyCandidateFeature) -> float:
     base_score = feature.primary_score
     role_scores = feature.metadata.get("roleScores", {})
     discovery_score = float(role_scores.get("DISCOVERY", 0.0))
+    breakout_prob = feature.breakout_prob_7d
+    mass_prob = feature.mass_prob
     chart_only_confirmation = (
         discovery_score == 0.0
         and len(feature.source_families) == 1
@@ -189,12 +191,12 @@ def _selection_score(feature: DailyCandidateFeature) -> float:
     )
 
     if feature.ranking_gate_passed:
-        return base_score + 1.0
+        return base_score + 0.8 + breakout_prob
     if discovery_score > 0 and feature.candidate_kind == CandidateKind.TOPIC:
-        return base_score + 0.12
+        return base_score + 0.2 + breakout_prob * 0.4
     if chart_only_confirmation:
-        return max(0.0, base_score - 0.25)
-    return base_score
+        return max(0.0, base_score - 0.35 + mass_prob * 0.1)
+    return base_score + breakout_prob * 0.15
 
 
 def build_ranked_candidates_v2(

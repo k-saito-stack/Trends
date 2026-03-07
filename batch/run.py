@@ -8,6 +8,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -77,8 +78,32 @@ LOCK_TIMEOUT_MINUTES = 30
 PUBLISH_COLLECTIONS = ("daily_rankings", "daily_rankings_v2", "daily_rankings_v2_shadow")
 
 
+@dataclass(frozen=True)
+class BatchRuntimeOptions:
+    shadow_only: bool = False
+    publish: bool = True
+    persist_observations: bool = True
+    persist_features: bool = True
+    persist_candidates: bool = True
+    persist_labels: bool = True
+    persist_source_posteriors: bool = True
+    skip_slow_sources: bool = False
+    source_include: tuple[str, ...] = field(default_factory=tuple)
+    source_exclude: tuple[str, ...] = field(default_factory=tuple)
+
+
 def _is_truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_csv_arg(values: list[str] | None) -> tuple[str, ...]:
+    parsed: list[str] = []
+    for value in values or []:
+        for chunk in str(value).split(","):
+            normalized = chunk.strip()
+            if normalized:
+                parsed.append(normalized)
+    return tuple(dict.fromkeys(parsed))
 
 
 def get_target_date(date_arg: str) -> str:
@@ -216,9 +241,15 @@ def _build_item_collection_paths(
     target_date: str,
     run_id: str,
     light_publish: bool,
+    shadow_only: bool = False,
 ) -> tuple[str, ...]:
     if light_publish:
         return (f"daily_rankings/{target_date}/runs/{run_id}/items",)
+    if shadow_only:
+        return (
+            f"daily_rankings_v2_shadow/{target_date}/items",
+            f"daily_rankings/{target_date}/runs/{run_id}/items",
+        )
     return (
         f"daily_rankings/{target_date}/items",
         f"daily_rankings_v2_shadow/{target_date}/items",
@@ -226,14 +257,28 @@ def _build_item_collection_paths(
     )
 
 
-def _build_reset_collection_paths(target_date: str, light_publish: bool) -> tuple[str, ...]:
+def _build_reset_collection_paths(
+    target_date: str,
+    light_publish: bool,
+    shadow_only: bool = False,
+) -> tuple[str, ...]:
     if light_publish:
         return ()
+    if shadow_only:
+        return (f"daily_rankings_v2_shadow/{target_date}/items",)
     return (
         f"daily_rankings/{target_date}/items",
         f"daily_rankings_v2/{target_date}/items",
         f"daily_rankings_v2_shadow/{target_date}/items",
     )
+
+
+def _build_publish_collections(light_publish: bool, shadow_only: bool) -> tuple[str, ...]:
+    if not light_publish and shadow_only:
+        return ("daily_rankings_v2_shadow",)
+    if light_publish:
+        return ("daily_rankings",)
+    return PUBLISH_COLLECTIONS
 
 
 def _build_publish_meta(
@@ -262,7 +307,34 @@ def _build_publish_meta(
 def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[BaseConnector]:
     from packages.connectors.registry import build_connectors
 
-    return build_connectors(source_cfgs or [])
+    source_plan = build_source_plan(source_cfgs or [], BatchRuntimeOptions())
+    return build_connectors(source_cfgs or [], source_plan=source_plan)
+
+
+def build_source_plan(
+    source_cfgs: list[dict[str, Any]],
+    options: BatchRuntimeOptions,
+) -> list[dict[str, Any]]:
+    include_set = set(options.source_include)
+    exclude_set = set(options.source_exclude)
+    plan = build_source_plan_from_catalog(source_cfgs)
+    filtered: list[dict[str, Any]] = []
+
+    for entry in plan:
+        source_id = str(entry.get("sourceId", ""))
+        if include_set and source_id not in include_set:
+            continue
+        if source_id in exclude_set:
+            continue
+        if options.skip_slow_sources and _is_slow_source(entry):
+            continue
+        filtered.append(entry)
+    return filtered
+
+
+def _is_slow_source(plan_entry: dict[str, Any]) -> bool:
+    access_mode = str(plan_entry.get("accessMode", ""))
+    return access_mode in {"HTML", "MANUAL_LOGIN", "LLM_SEARCH"}
 
 
 def _validate_runtime_source_cfgs(source_cfgs: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -300,10 +372,11 @@ def _build_runtime_source_cfg_map(
     return cfg_map
 
 
-def main(date_arg: str = "today") -> None:
+def main(date_arg: str = "today", options: BatchRuntimeOptions | None = None) -> None:
     target_date = get_target_date(date_arg)
     run_id = str(ULID())
     errors: list[str] = []
+    runtime_options = options or BatchRuntimeOptions()
     allow_completed_rerun = _is_truthy(os.environ.get("BATCH_ALLOW_RERUN_COMPLETED"))
 
     logger.info("=== Trends Daily Batch v2 ===")
@@ -315,7 +388,7 @@ def main(date_arg: str = "today") -> None:
         if not acquire_lock(target_date, run_id, allow_completed_rerun=allow_completed_rerun):
             return
         lock_acquired = True
-        _run_pipeline(target_date, run_id, errors)
+        _run_pipeline(target_date, run_id, errors, runtime_options)
     except Exception:
         if lock_acquired:
             with contextlib.suppress(Exception):
@@ -323,7 +396,12 @@ def main(date_arg: str = "today") -> None:
         raise
 
 
-def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
+def _run_pipeline(
+    target_date: str,
+    run_id: str,
+    errors: list[str],
+    options: BatchRuntimeOptions,
+) -> None:
     published_successfully = False
     top_candidates: list[Any] = []
 
@@ -335,6 +413,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     runtime_cfg_validation = _validate_runtime_source_cfgs(source_cfg_list)
     if any(runtime_cfg_validation.values()):
         logger.warning("Runtime source config drift detected: %s", runtime_cfg_validation)
+    source_plan = build_source_plan(source_cfg_list, options)
 
     degrade = DegradeState()
     try:
@@ -354,11 +433,21 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
             target_date,
         )
 
+    persist_observations = options.persist_observations and not light_publish
+    persist_features = options.persist_features and not light_publish
+    persist_candidates = options.persist_candidates and not light_publish
+    persist_labels = options.persist_labels and not light_publish
+    persist_source_posteriors = options.persist_source_posteriors and not light_publish
+
     if not light_publish:
         with contextlib.suppress(Exception):
             start_run(run_id, target_date, degrade.to_dict())
 
-    connectors = _create_connectors(source_cfg_list)
+    from packages.connectors.registry import build_connectors
+
+    connectors = build_connectors(source_cfg_list, source_plan=source_plan)
+    if not connectors:
+        raise RuntimeError("No connectors selected by the current source plan")
     source_cfg_map = _build_runtime_source_cfg_map(source_cfg_list, connectors)
 
     weighted_source_ids = filter_weighted_source_ids(
@@ -594,7 +683,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     generated_at = datetime.now(JST).isoformat()
 
     source_daily_snapshots = []
-    if not light_publish:
+    if persist_features:
         source_daily_snapshots = build_source_daily_snapshots(
             target_date=target_date,
             generated_at=generated_at,
@@ -607,7 +696,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         )
 
     next_weight_snapshot: SourceWeightSnapshot | None = None
-    if weighted_source_ids and not light_publish:
+    if weighted_source_ids and persist_features:
         try:
             history_map = load_source_daily(target_date, source_weighting_config)
             for snapshot in source_daily_snapshots:
@@ -627,7 +716,7 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
 
     hindsight_labels = []
     next_source_posteriors = []
-    if not light_publish:
+    if persist_labels or persist_source_posteriors:
         try:
             label_plan = _build_label_plan(target_date)
             label_dates = _collect_label_related_dates(target_date, label_plan)
@@ -712,45 +801,65 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
     try:
         from packages.core import firestore_client
 
-        meta = _build_publish_meta(
-            target_date=target_date,
-            generated_at=generated_at,
-            run_id=run_id,
-            top_k=app_config.top_k,
-            degrade=degrade,
-            status="BUILDING",
-            published_at=existing_published_meta.published_at if existing_published_meta else "",
-            latest_published_run_id=(
-                existing_published_meta.latest_published_run_id if existing_published_meta else ""
-            ),
-        )
-        if existing_published_meta is None:
-            for collection_name in PUBLISH_COLLECTIONS:
-                firestore_client.set_document(collection_name, target_date, meta.to_dict())
-        firestore_client.set_document(f"daily_rankings/{target_date}/runs", run_id, meta.to_dict())
+        if options.publish:
+            meta = _build_publish_meta(
+                target_date=target_date,
+                generated_at=generated_at,
+                run_id=run_id,
+                top_k=app_config.top_k,
+                degrade=degrade,
+                status="BUILDING",
+                published_at=(
+                    existing_published_meta.published_at if existing_published_meta else ""
+                ),
+                latest_published_run_id=(
+                    existing_published_meta.latest_published_run_id
+                    if existing_published_meta
+                    else ""
+                ),
+            )
+            if existing_published_meta is None and not options.shadow_only:
+                for collection_name in PUBLISH_COLLECTIONS:
+                    firestore_client.set_document(collection_name, target_date, meta.to_dict())
+            firestore_client.set_document(
+                f"daily_rankings/{target_date}/runs", run_id, meta.to_dict()
+            )
 
-        for collection_path in _build_reset_collection_paths(target_date, light_publish):
-            firestore_client.delete_collection_documents(collection_path)
+            for collection_path in _build_reset_collection_paths(
+                target_date,
+                light_publish,
+                shadow_only=options.shadow_only,
+            ):
+                firestore_client.delete_collection_documents(collection_path)
 
-        item_ops = []
-        item_collection_paths = _build_item_collection_paths(target_date, run_id, light_publish)
-        for item in ranking_items:
-            item_dict = item.to_dict()
-            for collection_path in item_collection_paths:
-                item_ops.append((collection_path, item.candidate_id, item_dict))
-        if item_ops:
-            if light_publish:
-                firestore_client.batch_write_with_chunk_size(item_ops, chunk_size=10)
-            else:
-                firestore_client.batch_write(item_ops)
+            item_ops = []
+            item_collection_paths = _build_item_collection_paths(
+                target_date,
+                run_id,
+                light_publish,
+                shadow_only=options.shadow_only,
+            )
+            for item in ranking_items:
+                item_dict = item.to_dict()
+                for collection_path in item_collection_paths:
+                    item_ops.append((collection_path, item.candidate_id, item_dict))
+            if item_ops:
+                if light_publish:
+                    firestore_client.batch_write_with_chunk_size(item_ops, chunk_size=10)
+                else:
+                    firestore_client.batch_write(item_ops)
 
-        if not light_publish:
+        if persist_observations:
             candidate_store.save_observations(observations)
+        if persist_features:
             candidate_store.save_daily_source_features(source_features)
             candidate_store.save_daily_candidate_features(candidate_feature_list)
+        if persist_candidates:
             candidate_store.upsert_touched_candidates(touched_candidates)
+        if persist_features and not options.shadow_only:
             candidate_store.save_daily_rankings_v2(target_date, ranked_candidates)
 
+        if persist_features:
             source_health_ops = [
                 ("source_health", record.document_id, record.to_dict())
                 for record in build_source_health_records(
@@ -781,35 +890,41 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
                 firestore_client.set_document(
                     "config", "source_weights_current", next_weight_snapshot.to_dict()
                 )
-            if hindsight_labels:
-                candidate_store.save_hindsight_labels(hindsight_labels)
-            if next_source_posteriors:
-                candidate_store.save_source_posteriors(next_source_posteriors)
+        if persist_labels and hindsight_labels:
+            candidate_store.save_hindsight_labels(hindsight_labels)
+        if persist_source_posteriors and next_source_posteriors:
+            candidate_store.save_source_posteriors(next_source_posteriors)
 
-        published_at = datetime.now(JST).isoformat()
-        publish_meta = _build_publish_meta(
-            target_date=target_date,
-            generated_at=generated_at,
-            run_id=run_id,
-            top_k=app_config.top_k,
-            degrade=degrade,
-            status="PUBLISHED",
-            published_at=published_at,
-            latest_published_run_id=run_id,
-        )
-        collections_to_publish = ("daily_rankings",) if light_publish else PUBLISH_COLLECTIONS
-        for collection in collections_to_publish:
-            firestore_client.set_document(collection, target_date, publish_meta.to_dict())
-        firestore_client.update_document(
-            f"daily_rankings/{target_date}/runs",
-            run_id,
-            {
-                "status": "PUBLISHED",
-                "publishedAt": published_at,
-                "latestPublishedRunId": run_id,
-            },
-        )
-        published_successfully = True
+        if options.publish:
+            published_at = datetime.now(JST).isoformat()
+            publish_meta = _build_publish_meta(
+                target_date=target_date,
+                generated_at=generated_at,
+                run_id=run_id,
+                top_k=app_config.top_k,
+                degrade=degrade,
+                status="PUBLISHED",
+                published_at=published_at,
+                latest_published_run_id=run_id,
+            )
+            collections_to_publish = _build_publish_collections(
+                light_publish=light_publish,
+                shadow_only=options.shadow_only,
+            )
+            for collection in collections_to_publish:
+                firestore_client.set_document(collection, target_date, publish_meta.to_dict())
+            firestore_client.update_document(
+                f"daily_rankings/{target_date}/runs",
+                run_id,
+                {
+                    "status": "PUBLISHED",
+                    "publishedAt": published_at,
+                    "latestPublishedRunId": run_id,
+                },
+            )
+            published_successfully = True
+        else:
+            published_successfully = True
     except Exception as exc:
         errors.append(f"publish: {exc}")
         logger.error("Publish failed: %s", exc)
@@ -856,10 +971,10 @@ def _run_pipeline(target_date: str, run_id: str, errors: list[str]) -> None:
         source_fallback_used=source_fallback_used,
         source_response_ms=source_response_ms,
         runtime_cfg_validation=runtime_cfg_validation,
-        source_plan=build_source_plan_from_catalog(source_cfg_list),
+        source_plan=source_plan,
     )
 
-    if not published_successfully:
+    if options.publish and not published_successfully:
         raise RuntimeError(f"Daily ranking publish failed for {target_date}")
 
 
@@ -1213,5 +1328,115 @@ def _write_connector_summary(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trends daily batch")
     parser.add_argument("--date", default="today", help="Target date (YYYY-MM-DD or 'today')")
+    parser.add_argument("--shadow-only", action="store_true", help="Publish only shadow outputs")
+    parser.add_argument(
+        "--publish",
+        dest="publish",
+        action="store_true",
+        default=True,
+        help="Publish ranking outputs",
+    )
+    parser.add_argument(
+        "--no-publish",
+        dest="publish",
+        action="store_false",
+        help="Skip ranking publish and only persist diagnostics/features",
+    )
+    parser.add_argument(
+        "--persist-observations",
+        dest="persist_observations",
+        action="store_true",
+        default=True,
+        help="Persist raw observations",
+    )
+    parser.add_argument(
+        "--no-persist-observations",
+        dest="persist_observations",
+        action="store_false",
+        help="Do not persist raw observations",
+    )
+    parser.add_argument(
+        "--persist-features",
+        dest="persist_features",
+        action="store_true",
+        default=True,
+        help="Persist source/candidate features and source health",
+    )
+    parser.add_argument(
+        "--no-persist-features",
+        dest="persist_features",
+        action="store_false",
+        help="Do not persist source/candidate features",
+    )
+    parser.add_argument(
+        "--persist-candidates",
+        dest="persist_candidates",
+        action="store_true",
+        default=True,
+        help="Persist touched candidates and alias updates",
+    )
+    parser.add_argument(
+        "--no-persist-candidates",
+        dest="persist_candidates",
+        action="store_false",
+        help="Do not persist touched candidates",
+    )
+    parser.add_argument(
+        "--persist-labels",
+        dest="persist_labels",
+        action="store_true",
+        default=True,
+        help="Persist hindsight labels",
+    )
+    parser.add_argument(
+        "--no-persist-labels",
+        dest="persist_labels",
+        action="store_false",
+        help="Do not persist hindsight labels",
+    )
+    parser.add_argument(
+        "--persist-source-posteriors",
+        dest="persist_source_posteriors",
+        action="store_true",
+        default=True,
+        help="Persist learned source posterior stats",
+    )
+    parser.add_argument(
+        "--no-persist-source-posteriors",
+        dest="persist_source_posteriors",
+        action="store_false",
+        help="Do not persist learned source posterior stats",
+    )
+    parser.add_argument(
+        "--skip-slow-sources",
+        action="store_true",
+        help="Skip HTML/manual/LLM sources for faster diagnostic runs",
+    )
+    parser.add_argument(
+        "--source-include",
+        action="append",
+        default=[],
+        help="Limit run to these source IDs (comma-separated or repeated)",
+    )
+    parser.add_argument(
+        "--source-exclude",
+        action="append",
+        default=[],
+        help="Exclude these source IDs (comma-separated or repeated)",
+    )
     args = parser.parse_args()
-    main(date_arg=args.date)
+    main(
+        date_arg=args.date,
+        options=BatchRuntimeOptions(
+            shadow_only=args.shadow_only,
+            publish=args.publish,
+            persist_observations=args.persist_observations,
+            persist_features=args.persist_features,
+            persist_candidates=args.persist_candidates,
+            persist_labels=args.persist_labels,
+            persist_source_posteriors=args.persist_source_posteriors,
+            skip_slow_sources=args.skip_slow_sources,
+            source_include=_parse_csv_arg(args.source_include),
+            source_exclude=_parse_csv_arg(args.source_exclude),
+        ),
+    )

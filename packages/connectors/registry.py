@@ -124,6 +124,7 @@ def build_source_plan_from_catalog(source_cfgs: list[dict[str, Any]]) -> list[di
                 "familyPrimary": entry.family_primary.value,
                 "familySecondary": entry.family_secondary.value if entry.family_secondary else "",
                 "status": entry.status.value,
+                "accessMode": entry.access_mode.value,
                 "availabilityTier": entry.availability_tier.value,
                 "regionGroup": entry.region_group,
                 "fallbackChain": list(entry.fallback_chain),
@@ -163,11 +164,21 @@ def validate_runtime_source_cfgs(source_cfgs: list[dict[str, Any]]) -> dict[str,
     }
 
 
-def build_connectors(source_cfgs: list[dict[str, Any]]) -> list[BaseConnector]:
+def build_connectors(
+    source_cfgs: list[dict[str, Any]],
+    source_plan: list[dict[str, Any]] | None = None,
+) -> list[BaseConnector]:
     cfg_map = {str(cfg.get("sourceId")): dict(cfg) for cfg in source_cfgs if cfg.get("sourceId")}
     connectors: list[BaseConnector] = []
+    planned_ids = {
+        str(entry.get("sourceId"))
+        for entry in (source_plan or [])
+        if entry.get("sourceId") and entry.get("enabled", True)
+    }
 
     for entry in iter_active_catalog():
+        if source_plan is not None and entry.source_id not in planned_ids:
+            continue
         cfg = dict(cfg_map.get(entry.source_id, {}))
         cfg.setdefault("enabled", entry.status != SourceStatus.DISABLED)
 
