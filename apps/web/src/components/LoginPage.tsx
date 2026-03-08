@@ -5,6 +5,7 @@
 import { useRef, useEffect } from "react";
 import { gsap, useGSAP } from "../hooks/useGSAPSetup";
 import { useScrambleText } from "../hooks/useScrambleText";
+import ScrambleBackground from "./ScrambleBackground";
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -96,9 +97,14 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
   return (
     <div
       ref={containerRef}
-      className="min-h-screen flex items-center justify-center bg-oci-mercury p-4"
+      className="relative min-h-screen flex items-center justify-center overflow-hidden bg-oci-mercury p-4"
     >
-      <div ref={cardRef} className="oci-card max-w-sm w-full px-10 py-8 text-center" style={{ opacity: 0 }}>
+      <ScrambleBackground />
+      <div
+        ref={cardRef}
+        className="relative z-10 oci-card max-w-sm w-full px-10 py-8 text-center"
+        style={{ opacity: 0 }}
+      >
         <h1 ref={titleRef} className="oci-heading text-oci-blue text-6xl">
           TRENDS
         </h1>
