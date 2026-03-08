@@ -105,6 +105,15 @@ class TestXSearchConnector:
         assert len(results) == 1
         assert results[0].metric == "likes:100,RT:50"
 
+    def test_parse_evidence_rejects_unsafe_urls(self) -> None:
+        connector = XSearchConnector(api_key="test-key")
+        content = (
+            '[{"url": "javascript:alert(1)", "summary": "s1", "likes": 100, "retweets": 50}]'
+        )
+        results = connector._parse_evidence("Test", content)
+        assert len(results) == 1
+        assert results[0].url == ""
+
     def test_fetch_returns_empty(self) -> None:
         connector = XSearchConnector(api_key="")
         result = connector.fetch()

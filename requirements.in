@@ -1,0 +1,15 @@
+# Direct Python dependencies for Trends.
+# Update this file first, then refresh requirements.txt / requirements.lock.txt.
+
+firebase-admin
+requests
+feedparser
+playwright
+spacy
+ginza
+ja_ginza
+python-ulid
+pytest
+ruff
+mypy
+types-requests

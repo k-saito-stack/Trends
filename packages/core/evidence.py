@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from packages.core.models import Evidence
+from packages.core.url_safety import sanitize_external_url
 
 
 def evidence_identity_key(evidence: Evidence) -> tuple[str, str, str]:
@@ -99,7 +100,7 @@ def build_evidence_pool(
         ev = Evidence(
             source_id=raw.get("source_id", ""),
             title=raw.get("title", ""),
-            url=raw.get("url", ""),
+            url=sanitize_external_url(str(raw.get("url", ""))),
             published_at=raw.get("published_at", ""),
             metric=raw.get("metric", ""),
             snippet=raw.get("snippet", ""),

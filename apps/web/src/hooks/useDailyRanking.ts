@@ -57,6 +57,19 @@ interface UseDailyRankingOptions {
   enabled?: boolean;
 }
 
+function toFriendlyRankingError(err: unknown): string {
+  const code = typeof err === "object" && err !== null && "code" in err ? String(err.code) : "";
+  switch (code) {
+    case "permission-denied":
+      return "ランキングを表示する権限がありません。";
+    case "unavailable":
+    case "deadline-exceeded":
+      return "ランキングを読み込めませんでした。時間をおいて再度お試しください。";
+    default:
+      return "ランキングの取得に失敗しました。";
+  }
+}
+
 export function useDailyRanking(date: string, options: UseDailyRankingOptions = {}) {
   const enabled = options.enabled ?? true;
   const [items, setItems] = useState<RankingItem[]>([]);
@@ -119,7 +132,8 @@ export function useDailyRanking(date: string, options: UseDailyRankingOptions = 
       const rankingItems: RankingItem[] = snapshot.docs.map((d) => mapRankingItem(d.data()));
       setItems(rankingItems);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch ranking");
+      console.error("Failed to fetch ranking", err);
+      setError(toFriendlyRankingError(err));
     } finally {
       setLoading(false);
     }

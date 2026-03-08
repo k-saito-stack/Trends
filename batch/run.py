@@ -7,6 +7,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -129,6 +130,8 @@ def _parse_csv_arg(values: list[str] | None) -> tuple[str, ...]:
 def get_target_date(date_arg: str) -> str:
     if date_arg == "today":
         return datetime.now(JST).strftime("%Y-%m-%d")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_arg):
+        raise ValueError(f"Invalid date: {date_arg}")
     return date_arg
 
 

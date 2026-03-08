@@ -11,6 +11,7 @@ import { useRef, useState, useCallback } from "react";
 import type { RankingItem } from "../hooks/useDailyRanking";
 import { gsap } from "../hooks/useGSAPSetup";
 import { useScrambleText } from "../hooks/useScrambleText";
+import { safeExternalUrl } from "../utils/safeUrl";
 import BreakdownBar from "./BreakdownBar";
 import Sparkline from "./Sparkline";
 
@@ -307,28 +308,31 @@ export default function TrendCard({ item }: TrendCardProps) {
                 Evidence
               </h4>
               <div className="space-y-2">
-                {item.evidenceTop3.map((ev, i) => (
-                  <div key={i} className="text-sm font-sans">
-                    {ev.url ? (
-                      <a
-                        href={ev.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline underline-offset-2 inline"
-                      >
-                        {ev.title || ev.url}
-                      </a>
-                    ) : (
-                      <span>{ev.title}</span>
-                    )}
-                    <span className="oci-label-sm opacity-30 mx-1">
-                      {ev.sourceId}
-                    </span>
-                    {ev.metric && (
-                      <span className="opacity-30">({ev.metric})</span>
-                    )}
-                  </div>
-                ))}
+                {item.evidenceTop3.map((ev, i) => {
+                  const safeUrl = safeExternalUrl(ev.url);
+                  return (
+                    <div key={i} className="text-sm font-sans">
+                      {safeUrl ? (
+                        <a
+                          href={safeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-2 inline"
+                        >
+                          {ev.title || safeUrl}
+                        </a>
+                      ) : (
+                        <span>{ev.title || ev.url}</span>
+                      )}
+                      <span className="oci-label-sm opacity-30 mx-1">
+                        {ev.sourceId}
+                      </span>
+                      {ev.metric && (
+                        <span className="opacity-30">({ev.metric})</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

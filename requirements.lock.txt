@@ -1,4 +1,4 @@
-# Pinned local requirements. Keep in sync with requirements.lock.txt.
+# Locked CI/batch dependencies.
 firebase-admin==7.2.0
 requests==2.32.3
 feedparser==6.0.12

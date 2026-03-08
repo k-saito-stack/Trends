@@ -67,13 +67,10 @@ class TestTVerRankingConnector:
         works = [c for c in candidates if c.type.value == "SHOW"]
         persons = [c for c in candidates if c.type.value == "PERSON"]
         assert len(works) == 3
-        assert len(persons) >= 7  # 3+2+2 cast members
+        assert len(persons) == 0
 
         assert works[0].name == "リブート"
-        assert persons[0].name == "鈴木亮平"
-        assert persons[0].extra.get("show") == "リブート"
-        assert persons[0].extra.get("derivedFromWork") is True
-        assert persons[0].metric_value < works[0].metric_value
+        assert works[0].extra.get("cast") is not None
 
     def test_compute_signals(self) -> None:
         connector = TVerRankingConnector()
@@ -84,8 +81,18 @@ class TestTVerRankingConnector:
 
         signal_names = {s.candidate_name for s in signals}
         assert "リブート" in signal_names
-        assert "鈴木亮平" in signal_names
-        assert "マツコ・デラックス" in signal_names
+        assert "鈴木亮平" not in signal_names
+        assert "マツコ・デラックス" not in signal_names
+
+    def test_emit_cast_direct_can_be_enabled(self) -> None:
+        connector = TVerRankingConnector(emit_cast_direct=True)
+        html = self._load_fixture()
+        items = parse_tver_ranking_html(html)
+        candidates = connector.extract_candidates(items)
+
+        persons = [c for c in candidates if c.type.value == "PERSON"]
+        assert len(persons) >= 7
+        assert persons[0].extra.get("derivedFromWork") is True
 
     def test_rank_exposure_ordering(self) -> None:
         assert _rank_exposure(1) > _rank_exposure(5)

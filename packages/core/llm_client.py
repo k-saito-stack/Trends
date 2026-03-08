@@ -175,11 +175,20 @@ class LLMClient:
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
-            body = ""
             response = getattr(exc, "response", None)
-            if response is not None:
-                body = response.text[:500]
-            logger.warning("xAI Responses API call failed: %s %s", exc, body)
+            status_code = getattr(response, "status_code", "unknown")
+            request_id = ""
+            response_headers = getattr(response, "headers", None)
+            if response_headers is not None:
+                request_id = response_headers.get("x-request-id", "") or response_headers.get(
+                    "request-id", ""
+                )
+            logger.warning(
+                "xAI Responses API call failed: status=%s request_id=%s error=%s",
+                status_code,
+                request_id,
+                exc,
+            )
             return None
 
         for output in data.get("output", []):

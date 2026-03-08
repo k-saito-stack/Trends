@@ -104,8 +104,9 @@ class BaseConnector(ABC):
         """Execute full pipeline: fetch -> extract -> signal.
 
         Returns ConnectorRunResult with ok=True on success (including 0 items),
-        ok=False on fetch failure. This distinction allows batch/run.py to
-        correctly handle 0-observation (x=0) vs missing data (x=None).
+        ok=False on fetch/extract/signal failure. This distinction allows
+        batch/run.py to correctly handle 0-observation (x=0) vs missing data
+        (x=None).
         """
         if not self.enabled:
             logger.info("[%s] Skipped (disabled)", self.source_id)
@@ -202,14 +203,16 @@ class BaseConnector(ABC):
         except Exception as e:
             response_ms = result.response_ms or int((time.monotonic() - started_at) * 1000)
             logger.error("[%s] Signal error: %s", self.source_id, e)
+            signal_metadata = dict(result.metadata)
+            signal_metadata["failureStage"] = "signal"
             return ConnectorRunResult(
                 source_id=self.source_id,
-                ok=True,
+                ok=False,
                 item_count=len(result.items),
                 candidates=candidates,
                 error=f"signal: {e}",
                 kept_item_count=len(candidates),
-                metadata=result.metadata,
+                metadata=signal_metadata,
                 fallback_used=result.fallback_used,
                 response_ms=response_ms,
             )

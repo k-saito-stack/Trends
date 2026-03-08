@@ -22,6 +22,7 @@ from packages.core.models import (
 )
 
 logger = logging.getLogger(__name__)
+FIRESTORE_IN_QUERY_LIMIT = 10
 
 
 def load_all_candidates() -> dict[str, Candidate]:
@@ -30,7 +31,12 @@ def load_all_candidates() -> dict[str, Candidate]:
     Returns:
         Dict of candidateId -> Candidate
     """
-    docs = firestore_client.get_collection("candidates")
+    docs = firestore_client.get_collection(
+        "candidates",
+        filters=[("status", "==", "ACTIVE")],
+    )
+    if not docs:
+        docs = firestore_client.get_collection("candidates")
     candidates: dict[str, Candidate] = {}
     for doc in docs:
         cand = Candidate.from_dict(doc)
@@ -96,26 +102,16 @@ def save_daily_candidate_features(features: list[DailyCandidateFeature]) -> None
 
 
 def load_daily_source_features_by_dates(dates: list[str]) -> list[DailySourceFeature]:
-    date_set = {value for value in dates if value}
-    if not date_set:
-        return []
-    docs = firestore_client.get_collection("daily_source_features")
     return [
         DailySourceFeature.from_dict(doc)
-        for doc in docs
-        if str(doc.get("date", "")) in date_set
+        for doc in _load_docs_by_dates("daily_source_features", dates)
     ]
 
 
 def load_daily_candidate_features_by_dates(dates: list[str]) -> list[DailyCandidateFeature]:
-    date_set = {value for value in dates if value}
-    if not date_set:
-        return []
-    docs = firestore_client.get_collection("daily_candidate_features")
     return [
         DailyCandidateFeature.from_dict(doc)
-        for doc in docs
-        if str(doc.get("date", "")) in date_set
+        for doc in _load_docs_by_dates("daily_candidate_features", dates)
     ]
 
 
@@ -155,14 +151,8 @@ def save_hindsight_labels(labels: list[HindsightLabel]) -> None:
 
 
 def load_ranking_evaluations_by_dates(dates: list[str]) -> list[RankingEvaluation]:
-    date_set = {value for value in dates if value}
-    if not date_set:
-        return []
-    docs = firestore_client.get_collection("shadow_evaluations")
     return [
-        RankingEvaluation.from_dict(doc)
-        for doc in docs
-        if str(doc.get("date", "")) in date_set
+        RankingEvaluation.from_dict(doc) for doc in _load_docs_by_dates("shadow_evaluations", dates)
     ]
 
 
@@ -173,6 +163,27 @@ def save_ranking_evaluations(evaluations: list[RankingEvaluation]) -> None:
     ]
     if operations:
         firestore_client.batch_upsert(operations)
+
+
+def _load_docs_by_dates(collection: str, dates: list[str]) -> list[dict[str, Any]]:
+    normalized_dates = [value for value in dict.fromkeys(dates) if value]
+    if not normalized_dates:
+        return []
+
+    docs: list[dict[str, Any]] = []
+    for chunk in _chunk_dates(normalized_dates):
+        filters: list[firestore_client.QueryFilter] = (
+            [("date", "==", chunk[0])] if len(chunk) == 1 else [("date", "in", chunk)]
+        )
+        docs.extend(firestore_client.get_collection(collection, filters=filters))
+    return docs
+
+
+def _chunk_dates(dates: list[str]) -> list[list[str]]:
+    return [
+        dates[index : index + FIRESTORE_IN_QUERY_LIMIT]
+        for index in range(0, len(dates), FIRESTORE_IN_QUERY_LIMIT)
+    ]
 
 
 def save_shadow_rollout_status(target_date: str, data: dict[str, Any]) -> None:

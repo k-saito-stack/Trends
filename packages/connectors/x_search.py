@@ -20,6 +20,7 @@ from typing import Any
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
 from packages.core.llm_client import LLMClient
 from packages.core.models import CandidateType, Evidence, RawCandidate
+from packages.core.url_safety import sanitize_external_url
 
 logger = logging.getLogger(__name__)
 JST = timezone(timedelta(hours=9))
@@ -203,7 +204,7 @@ class XSearchConnector(BaseConnector):
 
         if posts:
             for post in posts[:3]:
-                url = post.get("url", "")
+                url = sanitize_external_url(str(post.get("url", "")))
                 summary = post.get("summary", "")
                 likes = post.get("likes", 0)
                 retweets = post.get("retweets", 0)

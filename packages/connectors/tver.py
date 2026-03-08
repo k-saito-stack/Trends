@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import re
 from typing import Any
 
@@ -71,10 +72,16 @@ class TVerRankingConnector(BaseConnector):
     def __init__(
         self,
         max_results: int = 20,
+        emit_cast_direct: bool | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(source_id="TVER_RANKING_JP", stability="B", **kwargs)
         self.max_results = max_results
+        self.emit_cast_direct = (
+            _is_truthy(os.environ.get("TVER_EMIT_CAST_DIRECT"))
+            if emit_cast_direct is None
+            else emit_cast_direct
+        )
 
     def fetch(self) -> FetchResult:
         """Fetch and parse the TVer ranking page."""
@@ -96,7 +103,7 @@ class TVerRankingConnector(BaseConnector):
         """Extract candidates from TVer ranking items.
 
         - Each show title -> SHOW candidate
-        - Each cast member -> PERSON candidate
+        - Cast members remain relation hints unless explicitly enabled
         """
         candidates: list[RawCandidate] = []
 
@@ -139,31 +146,31 @@ class TVerRankingConnector(BaseConnector):
                 )
             )
 
-            # Each cast member as PERSON
-            for person in cast:
-                candidates.append(
-                    RawCandidate(
-                        name=person,
-                        type=CandidateType.PERSON,
-                        source_id=self.source_id,
-                        rank=rank,
-                        metric_value=_rank_exposure(rank) * 0.22,
-                        evidence=evidence,
-                        extra={
-                            "show": title,
-                            "from_title": title,
-                            "points": points,
-                            "countryCode": "JP",
-                            "region": "JP",
-                            "derivedFromWork": True,
-                            "workClusterId": source_item_id,
-                            "relationClusterId": source_item_id,
-                            "relationType": "features_in",
-                            "sourceSurface": "tver_cast",
-                        },
-                        source_item_id=source_item_id,
+            if self.emit_cast_direct:
+                for person in cast:
+                    candidates.append(
+                        RawCandidate(
+                            name=person,
+                            type=CandidateType.PERSON,
+                            source_id=self.source_id,
+                            rank=rank,
+                            metric_value=_rank_exposure(rank) * 0.22,
+                            evidence=evidence,
+                            extra={
+                                "show": title,
+                                "from_title": title,
+                                "points": points,
+                                "countryCode": "JP",
+                                "region": "JP",
+                                "derivedFromWork": True,
+                                "workClusterId": source_item_id,
+                                "relationClusterId": source_item_id,
+                                "relationType": "features_in",
+                                "sourceSurface": "tver_cast",
+                            },
+                            source_item_id=source_item_id,
+                        )
                     )
-                )
 
         return candidates
 
@@ -190,3 +197,7 @@ class TVerRankingConnector(BaseConnector):
 def _rank_exposure(rank: int) -> float:
     """E(rank) = 1 / log2(rank + 1)"""
     return 1.0 / math.log2(rank + 1)
+
+
+def _is_truthy(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}

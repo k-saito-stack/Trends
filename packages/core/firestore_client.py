@@ -31,6 +31,7 @@ RETRYABLE_ERROR_TOKENS = (
     "resource exhausted",
     "temporarily unavailable",
 )
+QueryFilter = tuple[str, str, Any]
 
 
 def _initialize() -> None:
@@ -161,6 +162,7 @@ def get_collection(
     collection: str,
     order_by: str | None = None,
     limit: int | None = None,
+    filters: list[QueryFilter] | None = None,
 ) -> list[dict[str, Any]]:
     """Read all documents from a collection.
 
@@ -169,9 +171,12 @@ def get_collection(
             e.g. "daily_rankings/2026-03-03/items")
         order_by: Field to order by
         limit: Max number of documents to return
+        filters: Optional list of (field_path, operator, value) tuples
     """
     db = get_db()
     query: Any = db.collection(collection)
+    for field_path, operator, value in filters or []:
+        query = query.where(field_path, operator, value)
     if order_by:
         query = query.order_by(order_by)
     if limit:

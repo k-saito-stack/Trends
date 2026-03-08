@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 from packages.core.llm_client import LLMClient
@@ -65,3 +66,23 @@ class TestLLMClient:
         client = LLMClient(api_key="test-key")
         result = client.chat([{"role": "user", "content": "hi"}])
         assert result is None
+
+    @patch("packages.core.llm_client.requests.post")
+    def test_responses_text_does_not_log_response_body(self, mock_post: MagicMock, caplog) -> None:
+        import requests
+
+        response = MagicMock()
+        response.status_code = 400
+        response.headers = {"x-request-id": "req-123"}
+        response.text = "super sensitive provider body"
+        error = requests.RequestException("bad request")
+        error.response = response
+        mock_post.side_effect = error
+
+        client = LLMClient(api_key="test-key")
+        with caplog.at_level(logging.WARNING):
+            result = client.responses_text([{"role": "user", "content": "hi"}])
+
+        assert result is None
+        assert "super sensitive provider body" not in caplog.text
+        assert "req-123" in caplog.text

@@ -93,7 +93,7 @@ export default function Dashboard({ items, loading, error }: DashboardProps) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="oci-card p-6">
-          <span className="oci-label text-oci-error">{error}</span>
+          <span className="oci-label text-oci-error">{error || "An unexpected error occurred."}</span>
         </div>
       </div>
     );
