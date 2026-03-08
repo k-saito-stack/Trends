@@ -1,7 +1,7 @@
 /**
  * Hook to fetch daily ranking data from Firestore.
  */
-import { collection, doc, getDoc, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, orderBy, query } from "firebase/firestore";
 import { useCallback, useEffect, useState } from "react";
 import { db } from "../firebase";
 
@@ -86,26 +86,12 @@ export function useDailyRanking(date: string, options: UseDailyRankingOptions = 
         activeMeta = metaSnap.data() as RankingMeta;
       }
 
-      // Prefer the latest published run snapshot only for the legacy public collection.
+      // Prefer the root document's latestPublishedRunId for the legacy public collection.
       if (PUBLIC_RANKING_COLLECTION === "daily_rankings") {
-        try {
-          const runsRef = collection(db, "daily_rankings", date, "runs");
-          const latestPublishedRunQuery = query(runsRef, orderBy("publishedAt", "desc"), limit(1));
-          const latestPublishedRunSnap = await getDocs(latestPublishedRunQuery);
-          if (!latestPublishedRunSnap.empty) {
-            const latestRunDoc = latestPublishedRunSnap.docs[0];
-            activeMeta = {
-              ...(latestRunDoc.data() as RankingMeta),
-              runId: latestRunDoc.data().runId || latestRunDoc.id,
-            };
-            itemsRef = collection(db, "daily_rankings", date, "runs", latestRunDoc.id, "items");
-            hasPublishedRun = true;
-          }
-        } catch (runQueryError) {
-          console.warn(
-            "Failed to query versioned daily ranking runs, falling back to legacy path.",
-            runQueryError,
-          );
+        const latestPublishedRunId = activeMeta?.latestPublishedRunId || activeMeta?.runId;
+        if (latestPublishedRunId) {
+          itemsRef = collection(db, "daily_rankings", date, "runs", latestPublishedRunId, "items");
+          hasPublishedRun = true;
         }
       }
 

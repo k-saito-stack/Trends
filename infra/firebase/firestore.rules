@@ -20,72 +20,194 @@ service cloud.firestore {
         && request.auth.token.admin == true;
     }
 
-    // Daily rankings (read-only for users, write by Admin SDK only)
+    // Helper: any signed-in Kodansha user can view public ranking data.
+    function canViewPublicRankings() {
+      return isAllowedDomain();
+    }
+
+    // Helper: internal operational data is visible only to admins.
+    function canViewInternalData() {
+      return isAdmin();
+    }
+
+    // Helper: only the currently published versioned run may be read by public users.
+    function isLatestPublishedRun(date, runId) {
+      return exists(/databases/$(database)/documents/daily_rankings/$(date))
+        && (
+          get(/databases/$(database)/documents/daily_rankings/$(date)).data.latestPublishedRunId == runId
+          || get(/databases/$(database)/documents/daily_rankings/$(date)).data.runId == runId
+        )
+        && get(/databases/$(database)/documents/daily_rankings/$(date)).data.status == "PUBLISHED";
+    }
+
+    // Public rankings
     match /daily_rankings/{date} {
-      allow read: if isAllowedDomain();
+      allow read: if canViewPublicRankings();
       allow write: if false;
       match /items/{candidateId} {
-        allow read: if isAllowedDomain();
+        allow read: if canViewPublicRankings();
         allow write: if false;
       }
       match /runs/{runId} {
-        allow read: if isAllowedDomain();
+        allow read: if canViewInternalData()
+          || (canViewPublicRankings() && isLatestPublishedRun(date, runId));
         allow write: if false;
         match /items/{candidateId} {
-          allow read: if isAllowedDomain();
+          allow read: if canViewInternalData()
+            || (canViewPublicRankings() && isLatestPublishedRun(date, runId));
           allow write: if false;
         }
       }
     }
 
-    // Config (read for authorized users, write for admin only)
-    match /config/{doc} {
-      allow read: if isAllowedDomain();
-      allow write: if isAdmin();
-    }
-    match /config/sources/{sourceId} {
-      allow read: if isAllowedDomain();
-      allow write: if isAdmin();
-    }
-
-    // Queries (read for authorized users, write for admin only)
-    match /queries/{queryId} {
-      allow read: if isAllowedDomain();
-      allow write: if isAdmin();
-    }
-
-    // Candidates (read-only for users, write by Admin SDK only)
-    match /candidates/{candidateId} {
-      allow read: if isAllowedDomain();
+    // Alternate public ranking collection for future rollout.
+    match /daily_rankings_v2/{date} {
+      allow read: if canViewPublicRankings();
       allow write: if false;
-    }
-
-    // Change logs (read for authorized users, write for admin only)
-    match /change_logs/{logId} {
-      allow read: if isAllowedDomain();
-      allow write: if isAdmin();
-    }
-
-    // Run logs (read-only for users, write by Admin SDK only)
-    match /runs/{runId} {
-      allow read: if isAllowedDomain();
-      allow write: if false;
-    }
-
-    // Cost logs (read-only for users, write by Admin SDK only)
-    match /cost_logs/{yyyymm} {
-      allow read: if isAllowedDomain();
-      allow write: if false;
-      match /days/{date} {
-        allow read: if isAllowedDomain();
+      match /items/{candidateId} {
+        allow read: if canViewPublicRankings();
         allow write: if false;
       }
     }
 
-    // Config snapshots (read-only for users, write by Admin SDK only)
-    match /snapshots/{doc=**} {
-      allow read: if isAllowedDomain();
+    // Shadow rankings are internal only.
+    match /daily_rankings_v2_shadow/{date} {
+      allow read: if canViewInternalData();
       allow write: if false;
+      match /items/{candidateId} {
+        allow read: if canViewInternalData();
+        allow write: if false;
+      }
+    }
+
+    // Config (future browser-based controls: admin only)
+    match /config/{doc} {
+      allow read: if canViewInternalData();
+      allow write: if isAdmin();
+    }
+    match /config_sources/{sourceId} {
+      allow read: if canViewInternalData();
+      allow write: if isAdmin();
+    }
+
+    // Admin-only console / tuning data
+    match /queries/{queryId} {
+      allow read: if canViewInternalData();
+      allow write: if isAdmin();
+    }
+
+    match /candidates/{candidateId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+    match /candidate_aliases/{aliasId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+    match /candidate_relations/{relationId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /change_logs/{logId} {
+      allow read: if canViewInternalData();
+      allow write: if isAdmin();
+    }
+
+    match /runs/{runId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /raw_observations/{observationId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /daily_source_features/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /daily_candidate_features/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /source_health/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /source_daily/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /source_weights/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /source_posteriors/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /shadow_evaluations/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /shadow_rollout_status/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /llm_resolution_cache/{docId} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    match /unresolved_resolution_queue/{date} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+      match /items/{pairId} {
+        allow read: if canViewInternalData();
+        allow write: if false;
+      }
+    }
+
+    match /hindsight_labels/{date} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+      match /items/{candidateId} {
+        allow read: if canViewInternalData();
+        allow write: if false;
+      }
+    }
+
+    match /cost_logs/{yyyymm} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+      match /runs/{runId} {
+        allow read: if canViewInternalData();
+        allow write: if false;
+      }
+      match /days/{date} {
+        allow read: if canViewInternalData();
+        allow write: if false;
+      }
+    }
+
+    match /snapshots/{doc=**} {
+      allow read: if canViewInternalData();
+      allow write: if false;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
