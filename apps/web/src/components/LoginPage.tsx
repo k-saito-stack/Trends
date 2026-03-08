@@ -49,6 +49,13 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
     };
   }, [scramble, cleanup]);
 
+  const handleTitleHover = () => {
+    if (titleRef.current) {
+      const currentText = titleRef.current.textContent || "TRENDS";
+      scramble(titleRef.current, currentText);
+    }
+  };
+
   // Direction-aware button hover (same style as TrendCard)
   const getDirection = (e: React.MouseEvent, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
@@ -105,7 +112,11 @@ export default function LoginPage({ onLogin, error }: LoginPageProps) {
         className="relative z-10 oci-card max-w-sm w-full px-10 py-8 text-center"
         style={{ opacity: 0 }}
       >
-        <h1 ref={titleRef} className="oci-heading text-oci-blue text-6xl">
+        <h1
+          ref={titleRef}
+          onMouseEnter={handleTitleHover}
+          className="oci-heading text-oci-blue text-6xl"
+        >
           TRENDS
         </h1>
         <button
