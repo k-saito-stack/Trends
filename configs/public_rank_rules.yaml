@@ -6,5 +6,21 @@
   "mature_mass_only_rank_cap": 15,
   "credible_words_behaviors_min": 1,
   "single_family_dominance_max": 0.45,
-  "public_rankability_min": 0.50
+  "public_rankability_min": 0.50,
+  "tver_relation_support_cap": 0.18,
+  "work_cluster_top20_cap": 1,
+  "work_cluster_top20_cap_with_direct": 2,
+  "work_cluster_top50_cap": 2,
+  "work_cluster_top50_cap_with_direct": 3,
+  "tiktok_single_source_song_threshold": 0.62,
+  "tiktok_single_source_topic_threshold": 0.70,
+  "tiktok_single_source_video_threshold": 0.74,
+  "tiktok_hashtag_region_score_min": 1.6,
+  "tiktok_video_region_score_min": 2.6,
+  "tiktok_topic_noise_penalty_max": 0.40,
+  "tiktok_video_noise_penalty_max": 0.34,
+  "tiktok_song_adjusted_jp_credibility_min": 0.08,
+  "tiktok_topic_adjusted_jp_credibility_min": 0.08,
+  "tiktok_video_adjusted_jp_credibility_min": 0.10,
+  "tiktok_creator_adjusted_jp_credibility_min": 0.12
 }

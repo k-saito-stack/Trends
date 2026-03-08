@@ -110,8 +110,8 @@ def test_regional_tiktok_topic_can_pass_with_japan_signal_and_jp_confirmation() 
         candidate_id="cand_regional",
         type=CandidateType.HASHTAG,
         kind=CandidateKind.TOPIC,
-        canonical_name="#メガ割",
-        display_name="#メガ割",
+        canonical_name="#メガ割購入品レビュー",
+        display_name="#メガ割購入品レビュー",
         domain_class=DomainClass.CONSUMER_CULTURE,
     )
     features = [
@@ -215,6 +215,52 @@ def test_ungated_multi_family_candidate_keeps_more_score_than_single_family_topi
     )
     assert feature.ranking_gate_passed is False
     assert abs(feature.primary_score - (expected_raw_primary * 0.45)) < 1e-9
+
+
+def test_relation_only_tver_person_is_not_public_rankable() -> None:
+    candidate = Candidate(
+        candidate_id="cand_actor",
+        type=CandidateType.PERSON,
+        kind=CandidateKind.ENTITY,
+        canonical_name="俳優A",
+        display_name="俳優A",
+        domain_class=DomainClass.ENTERTAINMENT,
+    )
+    features = [
+        DailySourceFeature(
+            date="2026-03-06",
+            source_id="TVER_RANKING_JP",
+            candidate_id="cand_actor",
+            candidate_type=CandidateType.PERSON,
+            candidate_kind=CandidateKind.ENTITY,
+            source_role=SourceRole.CONFIRMATION,
+            family_primary=SourceFamily.SHOW_CHART,
+            signal_value=0.22,
+            anomaly_score=1.2,
+            surprise01=0.18,
+            extraction_confidence=ExtractionConfidence.MEDIUM,
+            domain_class=DomainClass.ENTERTAINMENT,
+            metadata={
+                "derivedFromWork": True,
+                "workClusterId": "tver:1:show-a",
+                "relationClusterId": "tver:1:show-a",
+                "relationType": "features_in",
+            },
+        )
+    ]
+
+    feature = compute_candidate_feature(
+        date="2026-03-06",
+        candidate=candidate,
+        lane=RankingLane.PEOPLE_MUSIC,
+        domain_class=DomainClass.ENTERTAINMENT,
+        source_features=features,
+        algo_config=AlgorithmConfig(),
+        relation_support={"relation_support_total": 0.22, "tver_relation_support": 0.22},
+    )
+
+    assert feature.relation_only_flag is True
+    assert feature.public_gate_passed is False
 
 
 def test_single_chart_confirmation_requires_second_source() -> None:

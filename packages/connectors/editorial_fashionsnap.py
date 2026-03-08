@@ -5,10 +5,12 @@ from __future__ import annotations
 import math
 import re
 from typing import Any
+from xml.etree import ElementTree
 
 import requests
 
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
+from packages.connectors.fetch_common import build_fetch_metadata, mark_parse_counts, mark_soft_fail
 from packages.core.models import Evidence, RawCandidate
 from packages.core.topic_extract import extract_topic_candidates
 
@@ -38,6 +40,7 @@ class EditorialFashionsnapConnector(BaseConnector):
 
     def fetch(self) -> FetchResult:
         errors: list[str] = []
+        last_success_metadata: dict[str, Any] | None = None
         for url, fallback_name in URLS:
             try:
                 response = requests.get(url, headers=REQUEST_HEADERS, timeout=30)
@@ -45,18 +48,32 @@ class EditorialFashionsnapConnector(BaseConnector):
             except requests.RequestException as exc:
                 errors.append(f"{url}: {exc}")
                 continue
+            metadata = build_fetch_metadata(response, url=url, fallback_used=fallback_name)
             items = self.parse_items(response.text)
+            metadata = mark_parse_counts(metadata, parse_raw_count=len(items))
+            last_success_metadata = metadata
             if items:
                 return FetchResult(
                     items=items,
                     item_count=len(items),
                     fallback_used=fallback_name,
-                    metadata={"url": url},
+                    metadata=metadata,
                 )
             errors.append(f"{url}: zero_items")
+        if last_success_metadata is not None:
+            return FetchResult(
+                items=[],
+                item_count=0,
+                fallback_used=str(last_success_metadata.get("fallbackUsed", "")),
+                metadata=mark_soft_fail(last_success_metadata, error_type="zero_items"),
+            )
         return FetchResult(error=" | ".join(errors[-3:]) if errors else "no fashionsnap data")
 
     def parse_items(self, html: str) -> list[dict[str, Any]]:
+        if "<urlset" in html and "<loc>" in html:
+            sitemap_items = _parse_sitemap_items(html)
+            if sitemap_items:
+                return sitemap_items
         items: list[dict[str, Any]] = []
         seen: set[str] = set()
         for idx, groups in enumerate(TITLE_RE.findall(html), start=1):
@@ -64,7 +81,7 @@ class EditorialFashionsnapConnector(BaseConnector):
             if not title or title in seen:
                 continue
             if "/" in title and "article" in title:
-                title = title.rsplit("/", 1)[-1].replace("-", " ")
+                title = _slug_to_title(title.rsplit("/", 1)[-1])
             if title in {"FASHIONSNAP", "FashionSnap"}:
                 continue
             seen.add(title)
@@ -116,3 +133,32 @@ class EditorialFashionsnapConnector(BaseConnector):
 
 def _rank_exposure(rank: int) -> float:
     return 1.0 / math.log2(max(rank, 1) + 1)
+
+
+def _parse_sitemap_items(xml_text: str) -> list[dict[str, Any]]:
+    try:
+        root = ElementTree.fromstring(xml_text)
+    except ElementTree.ParseError:
+        return []
+
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    index = 1
+    for loc in root.iter():
+        if not loc.tag.endswith("loc") or not loc.text:
+            continue
+        url = loc.text.strip()
+        if "/article/" not in url:
+            continue
+        title = _slug_to_title(url.rstrip("/").rsplit("/", 1)[-1])
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        items.append({"title": title, "rank": index, "url": url})
+        index += 1
+    return items
+
+
+def _slug_to_title(slug: str) -> str:
+    normalized = slug.replace("-", " ").replace("_", " ").strip()
+    return re.sub(r"\s+", " ", normalized)

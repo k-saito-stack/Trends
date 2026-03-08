@@ -9,6 +9,7 @@ from typing import Any
 import requests
 
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
+from packages.connectors.fetch_common import build_fetch_metadata, mark_parse_counts, mark_soft_fail
 from packages.core.domain_classifier import classify_domain
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
 
@@ -37,6 +38,7 @@ class RakutenFashionConnector(BaseConnector):
 
     def fetch(self) -> FetchResult:
         errors: list[str] = []
+        last_success_metadata: dict[str, Any] | None = None
         for url, fallback_name in (
             (RAKUTEN_FASHION_URL, ""),
             (RAKUTEN_FASHION_FALLBACK_URL, "brandavenue_home"),
@@ -47,14 +49,28 @@ class RakutenFashionConnector(BaseConnector):
             except requests.RequestException as exc:
                 errors.append(f"{url}: {exc}")
                 continue
+            metadata = build_fetch_metadata(response, url=url, fallback_used=fallback_name)
             items = self.parse_items(response.text)
+            metadata = mark_parse_counts(metadata, parse_raw_count=len(items))
+            last_success_metadata = metadata
             if items:
                 return FetchResult(
                     items=items,
                     item_count=len(items),
                     fallback_used=fallback_name,
+                    metadata=metadata,
                 )
-        return FetchResult(error=" | ".join(errors[-2:]) if errors else "no rakuten fashion data")
+            errors.append(f"{url}: zero_items")
+        if last_success_metadata is not None:
+            return FetchResult(
+                items=[],
+                item_count=0,
+                fallback_used=str(last_success_metadata.get("fallbackUsed", "")),
+                metadata=mark_soft_fail(last_success_metadata, error_type="zero_items"),
+            )
+        return FetchResult(
+            error=" | ".join(errors[-2:]) if errors else "no rakuten fashion data"
+        )
 
     def parse_items(self, html: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []

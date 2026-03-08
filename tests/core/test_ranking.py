@@ -277,3 +277,82 @@ class TestBuildRankedCandidatesV2:
             "cand_tiktok",
             "cand_apple",
         ]
+
+    def test_relation_only_people_from_same_work_cluster_are_capped(self) -> None:
+        candidates = {
+            "actor_1": Candidate(
+                candidate_id="actor_1",
+                type=CandidateType.PERSON,
+                kind=CandidateKind.ENTITY,
+                canonical_name="actor_1",
+                display_name="Actor 1",
+                domain_class=DomainClass.ENTERTAINMENT,
+            ),
+            "actor_2": Candidate(
+                candidate_id="actor_2",
+                type=CandidateType.PERSON,
+                kind=CandidateKind.ENTITY,
+                canonical_name="actor_2",
+                display_name="Actor 2",
+                domain_class=DomainClass.ENTERTAINMENT,
+            ),
+            "show_1": Candidate(
+                candidate_id="show_1",
+                type=CandidateType.SHOW,
+                kind=CandidateKind.ENTITY,
+                canonical_name="show_1",
+                display_name="Show 1",
+                domain_class=DomainClass.ENTERTAINMENT,
+            ),
+        }
+        features = [
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="actor_1",
+                display_name="Actor 1",
+                candidate_type=CandidateType.PERSON,
+                candidate_kind=CandidateKind.ENTITY,
+                lane=RankingLane.PEOPLE_MUSIC,
+                domain_class=DomainClass.ENTERTAINMENT,
+                primary_score=3.0,
+                public_score=3.0,
+                public_rankability_prob=0.7,
+                public_gate_passed=True,
+                relation_only_flag=True,
+                work_cluster_id="cluster_show_1",
+            ),
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="actor_2",
+                display_name="Actor 2",
+                candidate_type=CandidateType.PERSON,
+                candidate_kind=CandidateKind.ENTITY,
+                lane=RankingLane.PEOPLE_MUSIC,
+                domain_class=DomainClass.ENTERTAINMENT,
+                primary_score=2.9,
+                public_score=2.9,
+                public_rankability_prob=0.68,
+                public_gate_passed=True,
+                relation_only_flag=True,
+                work_cluster_id="cluster_show_1",
+            ),
+            DailyCandidateFeature(
+                date="2026-03-06",
+                candidate_id="show_1",
+                display_name="Show 1",
+                candidate_type=CandidateType.SHOW,
+                candidate_kind=CandidateKind.ENTITY,
+                lane=RankingLane.SHOWS_FORMATS,
+                domain_class=DomainClass.ENTERTAINMENT,
+                primary_score=3.2,
+                public_score=3.2,
+                public_rankability_prob=0.75,
+                public_gate_passed=True,
+            ),
+        ]
+
+        ranked = build_ranked_candidates_v2(features, candidates, top_k=20)
+
+        ranked_ids = [item.candidate_id for item in ranked]
+        assert "actor_1" in ranked_ids
+        assert "actor_2" not in ranked_ids

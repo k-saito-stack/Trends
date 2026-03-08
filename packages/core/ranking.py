@@ -19,6 +19,7 @@ from packages.core.models import (
     RankedCandidateV2,
     RankingLane,
 )
+from packages.core.public_rank_rules import load_public_rank_rules
 from packages.core.scoring import momentum, multi_source_bonus
 
 # Maps source_id -> display bucket
@@ -193,9 +194,22 @@ def _selection_score(feature: DailyCandidateFeature) -> float:
     )
 
     if feature.public_gate_passed:
-        return base_score + 0.9 + breakout_prob + feature.public_rankability_prob * 0.6
+        return (
+            base_score
+            + 0.9
+            + breakout_prob
+            + feature.public_rankability_prob * 0.6
+            + feature.tiktok_priority_score * 0.08
+            - feature.omnipresent_talent_penalty * 0.4
+        )
     if feature.ranking_gate_passed:
-        return base_score + 0.8 + breakout_prob
+        return (
+            base_score
+            + 0.8
+            + breakout_prob
+            + feature.tiktok_priority_score * 0.05
+            - feature.omnipresent_talent_penalty * 0.3
+        )
     if discovery_score > 0 and feature.candidate_kind == CandidateKind.TOPIC:
         return base_score + 0.2 + breakout_prob * 0.4
     if chart_only_confirmation:
@@ -241,6 +255,8 @@ def build_ranked_candidates_v2(
             if len(eligible) >= top_k:
                 break
 
+    eligible = _apply_relation_cluster_caps(eligible, top_k=top_k)
+
     interleaved = cast(
         list[_PublishEntry],
         interleave_ranked_items(cast(list[dict[str, Any]], eligible), top_k=top_k),
@@ -273,3 +289,46 @@ def build_ranked_candidates_v2(
             )
         )
     return ranked
+
+
+def _apply_relation_cluster_caps(
+    entries: list[_PublishEntry],
+    *,
+    top_k: int,
+) -> list[_PublishEntry]:
+    rules = load_public_rank_rules()
+    capped: list[_PublishEntry] = []
+    cluster_counts: dict[str, int] = {}
+    for entry in sorted(entries, key=lambda item: -item["selection_score"]):
+        feature = entry["feature"]
+        if feature.candidate_type not in {
+            CandidateType.PERSON,
+            CandidateType.GROUP,
+            CandidateType.MUSIC_ARTIST,
+        }:
+            capped.append(entry)
+            continue
+
+        cluster_id = feature.work_cluster_id or feature.relation_cluster_id
+        if not cluster_id:
+            capped.append(entry)
+            continue
+
+        if feature.direct_support_total >= 0.08:
+            cap = int(
+                rules["work_cluster_top20_cap_with_direct"]
+                if top_k <= 20
+                else rules["work_cluster_top50_cap_with_direct"]
+            )
+        else:
+            cap = int(
+                rules["work_cluster_top20_cap"]
+                if top_k <= 20
+                else rules["work_cluster_top50_cap"]
+            )
+
+        if cluster_counts.get(cluster_id, 0) >= cap:
+            continue
+        cluster_counts[cluster_id] = cluster_counts.get(cluster_id, 0) + 1
+        capped.append(entry)
+    return capped

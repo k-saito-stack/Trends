@@ -72,6 +72,8 @@ class TestTVerRankingConnector:
         assert works[0].name == "リブート"
         assert persons[0].name == "鈴木亮平"
         assert persons[0].extra.get("show") == "リブート"
+        assert persons[0].extra.get("derivedFromWork") is True
+        assert persons[0].metric_value < works[0].metric_value
 
     def test_compute_signals(self) -> None:
         connector = TVerRankingConnector()

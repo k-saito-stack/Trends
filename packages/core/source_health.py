@@ -17,6 +17,13 @@ class SourceHealthRecord:
     availability_tier: str = ""
     fallback_used: str = ""
     response_ms: int | None = None
+    http_status: int | None = None
+    error_type: str = ""
+    response_bytes: int | None = None
+    body_hash: str = ""
+    body_excerpt: str = ""
+    parse_raw_count: int | None = None
+    is_soft_fail: bool = False
     metadata: dict[str, object] = field(default_factory=dict)
 
     @property
@@ -31,6 +38,7 @@ class SourceHealthRecord:
             "itemCount": self.raw_item_count,
             "rawItemCount": self.raw_item_count,
             "keptItemCount": self.kept_item_count,
+            "keptCount": self.kept_item_count,
             "error": self.error,
             "failureClass": self.failure_class,
             "availabilityTier": self.availability_tier,
@@ -39,6 +47,20 @@ class SourceHealthRecord:
         }
         if self.response_ms is not None:
             payload["responseMs"] = self.response_ms
+        if self.http_status is not None:
+            payload["httpStatus"] = self.http_status
+        if self.error_type:
+            payload["errorType"] = self.error_type
+        if self.response_bytes is not None:
+            payload["responseBytes"] = self.response_bytes
+        if self.body_hash:
+            payload["bodyHash"] = self.body_hash
+        if self.body_excerpt:
+            payload["bodyExcerpt"] = self.body_excerpt
+        if self.parse_raw_count is not None:
+            payload["parseRawCount"] = self.parse_raw_count
+        if self.is_soft_fail:
+            payload["isSoftFail"] = self.is_soft_fail
         return payload
 
 
@@ -51,14 +73,19 @@ def build_source_health_records(
     availability_tiers: dict[str, str] | None = None,
     fallback_used: dict[str, str] | None = None,
     response_ms: dict[str, int] | None = None,
+    source_metadata: dict[str, dict[str, object]] | None = None,
 ) -> list[SourceHealthRecord]:
     errors = errors or {}
     source_kept_count = source_kept_count or {}
     availability_tiers = availability_tiers or {}
     fallback_used = fallback_used or {}
     response_ms = response_ms or {}
-    return [
-        SourceHealthRecord(
+    source_metadata = source_metadata or {}
+    records: list[SourceHealthRecord] = []
+    for source_id, ok in source_ok.items():
+        metadata = dict(source_metadata.get(source_id, {}))
+        fallback_name = fallback_used.get(source_id, "") or str(metadata.pop("fallbackUsed", ""))
+        record = SourceHealthRecord(
             date=date,
             source_id=source_id,
             ok=ok,
@@ -72,11 +99,19 @@ def build_source_health_records(
                 error=errors.get(source_id, ""),
             ),
             availability_tier=availability_tiers.get(source_id, ""),
-            fallback_used=fallback_used.get(source_id, ""),
+            fallback_used=fallback_name,
             response_ms=response_ms.get(source_id),
+            http_status=_maybe_int(metadata.pop("httpStatus", None)),
+            error_type=str(metadata.pop("errorType", "")),
+            response_bytes=_maybe_int(metadata.pop("responseBytes", None)),
+            body_hash=str(metadata.pop("bodyHash", "")),
+            body_excerpt=str(metadata.pop("bodyExcerpt", "")),
+            parse_raw_count=_maybe_int(metadata.pop("parseRawCount", None)),
+            is_soft_fail=bool(metadata.pop("isSoftFail", False)),
+            metadata=metadata,
         )
-        for source_id, ok in source_ok.items()
-    ]
+        records.append(record)
+    return records
 
 
 def classify_source_failure(
@@ -112,3 +147,20 @@ def classify_source_failure(
     if kept_item_count <= 0:
         return "zero_kept"
     return "healthy"
+
+
+def _maybe_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None

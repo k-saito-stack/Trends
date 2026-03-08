@@ -126,7 +126,15 @@ class TVerRankingConnector(BaseConnector):
                     rank=rank,
                     metric_value=_rank_exposure(rank),
                     evidence=evidence,
-                    extra={"cast": cast, "points": points, "countryCode": "JP", "region": "JP"},
+                    extra={
+                        "cast": cast,
+                        "points": points,
+                        "countryCode": "JP",
+                        "region": "JP",
+                        "workClusterId": source_item_id,
+                        "relationClusterId": source_item_id,
+                        "sourceSurface": "tver_show",
+                    },
                     source_item_id=source_item_id,
                 )
             )
@@ -139,13 +147,19 @@ class TVerRankingConnector(BaseConnector):
                         type=CandidateType.PERSON,
                         source_id=self.source_id,
                         rank=rank,
-                        metric_value=_rank_exposure(rank),
+                        metric_value=_rank_exposure(rank) * 0.22,
                         evidence=evidence,
                         extra={
                             "show": title,
+                            "from_title": title,
                             "points": points,
                             "countryCode": "JP",
                             "region": "JP",
+                            "derivedFromWork": True,
+                            "workClusterId": source_item_id,
+                            "relationClusterId": source_item_id,
+                            "relationType": "features_in",
+                            "sourceSurface": "tver_cast",
                         },
                         source_item_id=source_item_id,
                     )

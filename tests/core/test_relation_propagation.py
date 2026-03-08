@@ -47,3 +47,20 @@ def test_build_relation_support_features_propagates_netflix_confirmation() -> No
     assert support["person_1"]["relation_support_total"] > 0
     assert support["person_1"]["netflix_relation_support_people"] > 0
     assert support["person_1"]["relation_confirmed_support"] > 0
+
+
+def test_build_relation_support_features_tracks_tver_support_separately() -> None:
+    feature_map = {"show_1": [_feature("show_1", "TVER_RANKING_JP")]}
+    relations = [
+        CandidateRelation(
+            src_candidate_id="show_1",
+            relation_type="associated_with_work",
+            dst_candidate_id="person_1",
+            confidence=0.9,
+            source="tver:test",
+        )
+    ]
+
+    support = build_relation_support_features(feature_map, relations)
+
+    assert support["person_1"]["tver_relation_support"] > 0

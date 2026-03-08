@@ -30,6 +30,7 @@ def build_relation_support_features(
             "netflix_relation_support_people": 0.0,
             "relation_support_total": 0.0,
             "relation_confirmed_support": 0.0,
+            "tver_relation_support": 0.0,
         }
     )
 
@@ -75,9 +76,9 @@ def build_relation_support_features(
                 destination["netflix_relation_support_show"] + propagated,
             )
         if src_source_ids & TVER_SOURCES:
-            destination["netflix_relation_support_show"] = min(
+            destination["tver_relation_support"] = min(
                 1.0,
-                destination["netflix_relation_support_show"] + propagated * 0.8,
+                destination["tver_relation_support"] + propagated * 0.8,
             )
 
         if any(feature.source_role.value == "CONFIRMATION" for feature in src_features):

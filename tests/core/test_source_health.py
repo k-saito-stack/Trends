@@ -13,10 +13,22 @@ def test_build_source_health_records_includes_latency_fallback_and_failure_class
         availability_tiers={"YAHOO_REALTIME": "public", "ZOZO_RANKING": "public"},
         fallback_used={"YAHOO_REALTIME": "theme_page"},
         response_ms={"YAHOO_REALTIME": 842},
+        source_metadata={
+            "YAHOO_REALTIME": {
+                "httpStatus": 200,
+                "responseBytes": 1024,
+                "bodyHash": "abc123",
+                "bodyExcerpt": "excerpt",
+                "parseRawCount": 12,
+                "isSoftFail": False,
+            }
+        },
     )
 
     assert records[0].to_dict()["responseMs"] == 842
     assert records[0].to_dict()["fallbackUsed"] == "theme_page"
+    assert records[0].to_dict()["httpStatus"] == 200
+    assert records[0].to_dict()["parseRawCount"] == 12
     assert records[1].failure_class == "timeout"
 
 

@@ -71,6 +71,7 @@ from packages.core.scoring_v2 import (
     compute_source_feature_score,
     group_features_by_candidate,
 )
+from packages.core.source_availability import compute_source_availability_snapshot
 from packages.core.source_catalog import get_source_entry
 from packages.core.source_health import build_source_health_records
 from packages.core.source_learning import compute_source_posteriors, resolve_source_posterior
@@ -313,6 +314,7 @@ def _build_publish_meta(
     published_at: str = "",
     latest_published_run_id: str = "",
     publish_health: dict[str, Any] | None = None,
+    source_availability_snapshot: dict[str, Any] | None = None,
 ) -> DailyRankingMeta:
     return DailyRankingMeta(
         date=target_date,
@@ -324,6 +326,7 @@ def _build_publish_meta(
         published_at=published_at,
         latest_published_run_id=latest_published_run_id,
         publish_health=dict(publish_health or {}),
+        source_availability_snapshot=dict(source_availability_snapshot or {}),
     )
 
 
@@ -510,6 +513,7 @@ def _run_pipeline(
     source_fallback_used: dict[str, str] = {}
     source_availability_tier: dict[str, str] = {}
     source_response_ms: dict[str, int] = {}
+    source_metadata: dict[str, dict[str, Any]] = {}
     sources_used: list[str] = []
 
     logger.info("Step 1-4: Fetch, parse, extract, resolve...")
@@ -528,6 +532,7 @@ def _run_pipeline(
         source_ok[source_id] = run_result.ok
         source_item_count[source_id] = run_result.item_count
         source_kept_count[source_id] = run_result.kept_item_count
+        source_metadata[source_id] = dict(run_result.metadata)
         if run_result.fallback_used:
             source_fallback_used[source_id] = run_result.fallback_used
         if run_result.response_ms is not None:
@@ -646,6 +651,11 @@ def _run_pipeline(
         source_features.append(feature)
         source_momentum[source_id].append((candidate_id, feature.surprise01))
 
+    source_availability_snapshot = compute_source_availability_snapshot(
+        source_ok=source_ok,
+        source_item_count=source_item_count,
+        source_plan=source_plan,
+    )
     feature_map = group_features_by_candidate(source_features)
     relation_support_map = build_relation_support_features(feature_map, candidate_relations)
     candidate_feature_list = []
@@ -663,6 +673,7 @@ def _run_pipeline(
             source_features=features,
             algo_config=algo_config,
             relation_support=relation_support_map.get(candidate_id, {}),
+            source_availability_snapshot=source_availability_snapshot,
         )
         candidate.trend_history_7d.append(candidate_feature.primary_score)
         candidate.trend_history_7d = candidate.trend_history_7d[-7:]
@@ -899,6 +910,7 @@ def _run_pipeline(
         availability_tiers=source_availability_tier,
         fallback_used=source_fallback_used,
         response_ms=source_response_ms,
+        source_metadata=source_metadata,
     )
     publish_health = evaluate_publish_health(
         source_health_records,
@@ -971,6 +983,7 @@ def _run_pipeline(
                     else ""
                 ),
                 publish_health=publish_health,
+                source_availability_snapshot=source_availability_snapshot,
             )
             prepublish_collections = _build_publish_collections(
                 light_publish=light_publish,
@@ -1067,6 +1080,7 @@ def _run_pipeline(
                 published_at=published_at,
                 latest_published_run_id=run_id,
                 publish_health=publish_health,
+                source_availability_snapshot=source_availability_snapshot,
             )
             collections_to_publish = _build_publish_collections(
                 light_publish=light_publish,
@@ -1082,6 +1096,7 @@ def _run_pipeline(
                     "publishedAt": published_at,
                     "latestPublishedRunId": run_id if collections_to_publish else "",
                     "publishHealth": publish_health,
+                    "sourceAvailabilitySnapshot": source_availability_snapshot,
                 },
             )
             published_successfully = True
@@ -1145,9 +1160,11 @@ def _run_pipeline(
         source_kept_count=source_kept_count,
         source_fallback_used=source_fallback_used,
         source_response_ms=source_response_ms,
+        source_metadata=source_metadata,
         runtime_cfg_validation=runtime_cfg_validation,
         source_plan=source_plan,
         publish_health=publish_health,
+        source_availability_snapshot=source_availability_snapshot,
         ranking_evaluations=ranking_evaluations,
         rollout_status=rollout_status,
         unresolved_queue_items=unresolved_queue_items,
@@ -1590,6 +1607,13 @@ def _build_source_feature_metadata(
         "sourceSurface",
         "sortMode",
         "netflixSurface",
+        "surface",
+        "derivedFromWork",
+        "workClusterId",
+        "relationClusterId",
+        "relationType",
+        "from_title",
+        "show",
     }
 
     for item in raw_items:
@@ -1720,9 +1744,11 @@ def _write_connector_summary(
     source_kept_count: dict[str, int] | None = None,
     source_fallback_used: dict[str, str] | None = None,
     source_response_ms: dict[str, int] | None = None,
+    source_metadata: dict[str, dict[str, Any]] | None = None,
     runtime_cfg_validation: dict[str, list[str]] | None = None,
     source_plan: list[dict[str, Any]] | None = None,
     publish_health: dict[str, Any] | None = None,
+    source_availability_snapshot: dict[str, Any] | None = None,
     ranking_evaluations: list[RankingEvaluation] | None = None,
     rollout_status: dict[str, Any] | None = None,
     unresolved_queue_items: list[dict[str, Any]] | None = None,
@@ -1734,6 +1760,7 @@ def _write_connector_summary(
     source_kept_count = source_kept_count or {}
     source_fallback_used = source_fallback_used or {}
     source_response_ms = source_response_ms or {}
+    source_metadata = source_metadata or {}
     failed = {sid: False for sid, ok in source_ok.items() if not ok}
     error_map: dict[str, str] = {}
     for err in errors:
@@ -1750,10 +1777,12 @@ def _write_connector_summary(
                 "keptItemCount": source_kept_count.get(sid, 0),
                 "fallbackUsed": source_fallback_used.get(sid, ""),
                 "responseMs": source_response_ms.get(sid),
+                "metadata": source_metadata.get(sid, {}),
             }
             for sid, ok in source_ok.items()
         },
         "failed_sources": list(failed.keys()),
+        "sourceAvailabilitySnapshot": source_availability_snapshot or {},
         "runtimeConfigValidation": runtime_cfg_validation or {},
         "sourcePlan": source_plan or [],
         "publishHealth": publish_health or {},

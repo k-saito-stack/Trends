@@ -32,6 +32,16 @@ def build_candidate_feature_vector(
     extraction_confidence: float,
     maturity_penalty: float,
     sustained_presence: float,
+    direct_support_total: float = 0.0,
+    direct_confirmation_support: float = 0.0,
+    relation_support_total: float = 0.0,
+    relation_confirmed_support: float = 0.0,
+    tver_relation_support: float = 0.0,
+    relation_only_penalty: float = 0.0,
+    same_work_cluster_penalty: float = 0.0,
+    omnipresent_talent_penalty: float = 0.0,
+    tiktok_priority_score: float = 0.0,
+    availability_adjusted_jp_credibility: float = 0.0,
 ) -> dict[str, float]:
     """Build a stable candidate-level feature vector for fusion.
 
@@ -100,6 +110,16 @@ def build_candidate_feature_vector(
         "regional_overlap": regional_overlap,
         "regional_priority": regional_priority,
         "tiktok_priority": tiktok_priority,
+        "direct_support_total": direct_support_total,
+        "direct_confirmation_support": direct_confirmation_support,
+        "relation_support_total": relation_support_total,
+        "relation_confirmed_support": relation_confirmed_support,
+        "tver_relation_support": tver_relation_support,
+        "relation_only_penalty": relation_only_penalty,
+        "same_work_cluster_penalty": same_work_cluster_penalty,
+        "omnipresent_talent_penalty": omnipresent_talent_penalty,
+        "tiktok_priority_score": tiktok_priority_score,
+        "availability_adjusted_jp_credibility": availability_adjusted_jp_credibility,
         "search_family_score": float(family_scores.get("SEARCH", 0.0)),
         "social_family_score": float(family_scores.get("SOCIAL_DISCOVERY", 0.0)),
         "music_family_score": float(family_scores.get("MUSIC_CHART", 0.0)),
@@ -143,12 +163,19 @@ def predict_breakout_prob(feature_vector: dict[str, float], horizon_days: int = 
         + 0.22 * feature_vector["regional_overlap"]
         + 0.18 * feature_vector["regional_priority"]
         + 0.25 * feature_vector["tiktok_priority"]
+        + 0.22 * feature_vector.get("direct_support_total", 0.0)
+        + 0.18 * feature_vector.get("direct_confirmation_support", 0.0)
+        + 0.18 * feature_vector.get("tiktok_priority_score", 0.0)
+        + 0.14 * feature_vector.get("availability_adjusted_jp_credibility", 0.0)
         + 0.26 * feature_vector.get("jp_relevance", 0.0)
         + 0.24 * feature_vector.get("constrained_trends_support", 0.0)
         + 0.18 * feature_vector.get("yahoo_realtime_support", 0.0)
         + 0.16 * feature_vector.get("relation_confirmed_support", 0.0)
         + 0.12 * feature_vector["family_count"]
         - 0.22 * feature_vector.get("public_noise_penalty", 0.0)
+        - 0.24 * feature_vector.get("relation_only_penalty", 0.0)
+        - 0.18 * feature_vector.get("same_work_cluster_penalty", 0.0)
+        - 0.20 * feature_vector.get("omnipresent_talent_penalty", 0.0)
         - 0.84 * feature_vector["maturity_penalty"]
         - 0.72 * feature_vector["redundancy_penalty"]
         - 1.34
@@ -173,10 +200,12 @@ def predict_mass_prob(feature_vector: dict[str, float]) -> float:
         + 0.24 * feature_vector["has_confirmation"]
         + 0.12 * feature_vector["music_confirmation"]
         + 0.12 * feature_vector["show_confirmation"]
+        + 0.10 * feature_vector.get("direct_confirmation_support", 0.0)
         + 0.18 * feature_vector.get("jp_relevance", 0.0)
         + 0.12 * feature_vector.get("relation_confirmed_support", 0.0)
         - 0.38 * feature_vector["novelty"]
         - 0.32 * feature_vector.get("public_noise_penalty", 0.0)
+        - 0.08 * feature_vector.get("same_work_cluster_penalty", 0.0)
         - 0.28 * feature_vector["redundancy_penalty"]
         - 0.92
     )
@@ -207,8 +236,15 @@ def build_public_feature_vector(
     posterior_reliability: float,
     extraction_confidence: float,
     relation_confirmed_support: float,
+    direct_confirmation_support: float = 0.0,
+    tver_relation_support: float = 0.0,
+    tiktok_priority_score: float = 0.0,
+    availability_adjusted_jp_credibility: float = 0.0,
     public_noise_penalty: float,
     mature_mass_only_penalty: float,
+    relation_only_penalty: float = 0.0,
+    same_work_cluster_penalty: float = 0.0,
+    omnipresent_talent_penalty: float = 0.0,
     family_count: float,
     source_count: float,
 ) -> dict[str, float]:
@@ -234,8 +270,15 @@ def build_public_feature_vector(
         "evidence_diversity": evidence_diversity,
         "category_fit": category_fit,
         "relation_confirmed_support": relation_confirmed_support,
+        "direct_confirmation_support": direct_confirmation_support,
+        "tver_relation_support": tver_relation_support,
+        "tiktok_priority_score": tiktok_priority_score,
+        "availability_adjusted_jp_credibility": availability_adjusted_jp_credibility,
         "public_noise_penalty": public_noise_penalty,
         "mature_mass_only_penalty": mature_mass_only_penalty,
+        "relation_only_penalty": relation_only_penalty,
+        "same_work_cluster_penalty": same_work_cluster_penalty,
+        "omnipresent_talent_penalty": omnipresent_talent_penalty,
         "single_source_domination": 1.0 if family_count <= 1 and source_count <= 1 else 0.0,
     }
 
@@ -250,8 +293,14 @@ def predict_public_rankability_prob(feature_vector: dict[str, float]) -> float:
         + 0.28 * feature_vector["evidence_diversity"]
         + 0.24 * feature_vector["category_fit"]
         + 0.22 * feature_vector["relation_confirmed_support"]
+        + 0.18 * feature_vector.get("direct_confirmation_support", 0.0)
+        + 0.16 * feature_vector.get("tiktok_priority_score", 0.0)
+        + 0.12 * feature_vector.get("availability_adjusted_jp_credibility", 0.0)
         - 0.95 * feature_vector["public_noise_penalty"]
         - 0.72 * feature_vector["mature_mass_only_penalty"]
+        - 0.42 * feature_vector.get("relation_only_penalty", 0.0)
+        - 0.28 * feature_vector.get("same_work_cluster_penalty", 0.0)
+        - 0.32 * feature_vector.get("omnipresent_talent_penalty", 0.0)
         - 0.4 * feature_vector["single_source_domination"]
         - 1.12
     )
@@ -261,13 +310,24 @@ def predict_public_rankability_prob(feature_vector: dict[str, float]) -> float:
 
 def compute_public_score(
     *,
+    coming_score: float | None = None,
+    mass_heat: float | None = None,
     breakout_prob: float,
     mass_prob: float,
     public_rankability_prob: float,
+    same_work_cluster_penalty: float = 0.0,
+    omnipresent_talent_penalty: float = 0.0,
 ) -> float:
-    coming_score = 4.0 * breakout_prob
-    mass_heat = 4.0 * mass_prob
-    return round(0.65 * coming_score + 0.20 * (4.0 * public_rankability_prob) + 0.15 * mass_heat, 4)
+    resolved_coming_score = 4.0 * breakout_prob if coming_score is None else coming_score
+    resolved_mass_heat = 4.0 * mass_prob if mass_heat is None else mass_heat
+    return round(
+        0.62 * resolved_coming_score
+        + 0.18 * resolved_mass_heat
+        + 0.20 * (4.0 * public_rankability_prob)
+        - 0.35 * same_work_cluster_penalty
+        - 0.28 * omnipresent_talent_penalty,
+        4,
+    )
 
 
 def _mass_gamma(candidate_type: CandidateType, domain_class: DomainClass) -> float:

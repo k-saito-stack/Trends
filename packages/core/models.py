@@ -486,6 +486,7 @@ class DailyRankingMeta:
     published_at: str = ""
     latest_published_run_id: str = ""
     publish_health: dict[str, Any] = field(default_factory=dict)
+    source_availability_snapshot: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -500,6 +501,7 @@ class DailyRankingMeta:
             "publishedAt": self.published_at,
             "latestPublishedRunId": self.latest_published_run_id,
             "publishHealth": self.publish_health,
+            "sourceAvailabilitySnapshot": self.source_availability_snapshot,
         }
 
     @classmethod
@@ -516,6 +518,7 @@ class DailyRankingMeta:
             published_at=data.get("publishedAt", ""),
             latest_published_run_id=data.get("latestPublishedRunId", ""),
             publish_health=dict(data.get("publishHealth", {})),
+            source_availability_snapshot=dict(data.get("sourceAvailabilitySnapshot", {})),
         )
 
 
@@ -1036,7 +1039,24 @@ class DailyCandidateFeature:
     behavior_objectness: float = 0.0
     public_noise_penalty: float = 0.0
     mature_mass_only_penalty: float = 0.0
+    direct_support_total: float = 0.0
+    direct_confirmation_support: float = 0.0
     relation_support_total: float = 0.0
+    relation_confirmed_support: float = 0.0
+    tver_relation_support: float = 0.0
+    relation_only_flag: bool = False
+    work_cluster_id: str = ""
+    relation_cluster_id: str = ""
+    same_work_relation_count: int = 0
+    dominant_work_ratio: float = 0.0
+    omnipresent_talent_penalty: float = 0.0
+    tiktok_primary_jp: bool = False
+    tiktok_country_count: int = 0
+    tiktok_multi_asia_count: int = 0
+    tiktok_weighted_region_score: float = 0.0
+    tiktok_cross_surface_count: int = 0
+    tiktok_priority_score: float = 0.0
+    availability_adjusted_jp_credibility: float = 0.0
     public_rankability_prob: float = 0.0
     public_score: float = 0.0
     breakout_prob_1d: float = 0.0
@@ -1087,7 +1107,24 @@ class DailyCandidateFeature:
             "behaviorObjectness": self.behavior_objectness,
             "publicNoisePenalty": self.public_noise_penalty,
             "matureMassOnlyPenalty": self.mature_mass_only_penalty,
+            "directSupportTotal": self.direct_support_total,
+            "directConfirmationSupport": self.direct_confirmation_support,
             "relationSupportTotal": self.relation_support_total,
+            "relationConfirmedSupport": self.relation_confirmed_support,
+            "tverRelationSupport": self.tver_relation_support,
+            "relationOnlyFlag": self.relation_only_flag,
+            "workClusterId": self.work_cluster_id,
+            "relationClusterId": self.relation_cluster_id,
+            "sameWorkRelationCount": self.same_work_relation_count,
+            "dominantWorkRatio": self.dominant_work_ratio,
+            "omnipresentTalentPenalty": self.omnipresent_talent_penalty,
+            "tiktokPrimaryJp": self.tiktok_primary_jp,
+            "tiktokCountryCount": self.tiktok_country_count,
+            "tiktokMultiAsiaCount": self.tiktok_multi_asia_count,
+            "tiktokWeightedRegionScore": self.tiktok_weighted_region_score,
+            "tiktokCrossSurfaceCount": self.tiktok_cross_surface_count,
+            "tiktokPriorityScore": self.tiktok_priority_score,
+            "availabilityAdjustedJpCredibility": self.availability_adjusted_jp_credibility,
             "publicRankabilityProb": self.public_rankability_prob,
             "publicScore": self.public_score,
             "breakoutProb1d": self.breakout_prob_1d,
@@ -1141,7 +1178,26 @@ class DailyCandidateFeature:
             behavior_objectness=float(data.get("behaviorObjectness", 0.0)),
             public_noise_penalty=float(data.get("publicNoisePenalty", 0.0)),
             mature_mass_only_penalty=float(data.get("matureMassOnlyPenalty", 0.0)),
+            direct_support_total=float(data.get("directSupportTotal", 0.0)),
+            direct_confirmation_support=float(data.get("directConfirmationSupport", 0.0)),
             relation_support_total=float(data.get("relationSupportTotal", 0.0)),
+            relation_confirmed_support=float(data.get("relationConfirmedSupport", 0.0)),
+            tver_relation_support=float(data.get("tverRelationSupport", 0.0)),
+            relation_only_flag=bool(data.get("relationOnlyFlag", False)),
+            work_cluster_id=str(data.get("workClusterId", "")),
+            relation_cluster_id=str(data.get("relationClusterId", "")),
+            same_work_relation_count=int(data.get("sameWorkRelationCount", 0)),
+            dominant_work_ratio=float(data.get("dominantWorkRatio", 0.0)),
+            omnipresent_talent_penalty=float(data.get("omnipresentTalentPenalty", 0.0)),
+            tiktok_primary_jp=bool(data.get("tiktokPrimaryJp", False)),
+            tiktok_country_count=int(data.get("tiktokCountryCount", 0)),
+            tiktok_multi_asia_count=int(data.get("tiktokMultiAsiaCount", 0)),
+            tiktok_weighted_region_score=float(data.get("tiktokWeightedRegionScore", 0.0)),
+            tiktok_cross_surface_count=int(data.get("tiktokCrossSurfaceCount", 0)),
+            tiktok_priority_score=float(data.get("tiktokPriorityScore", 0.0)),
+            availability_adjusted_jp_credibility=float(
+                data.get("availabilityAdjustedJpCredibility", 0.0)
+            ),
             public_rankability_prob=float(data.get("publicRankabilityProb", 0.0)),
             public_score=float(data.get("publicScore", 0.0)),
             breakout_prob_1d=float(data.get("breakoutProb1d", 0.0)),

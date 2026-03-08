@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import math
 import re
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 import requests
 
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
+from packages.connectors.fetch_common import build_fetch_metadata, mark_parse_counts, mark_soft_fail
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
 from packages.core.topic_extract import extract_topic_candidates
 from packages.core.topic_normalize import should_keep_topic
@@ -36,6 +38,7 @@ class WearConnector(BaseConnector):
 
     def fetch(self) -> FetchResult:
         errors: list[str] = []
+        last_success_metadata: dict[str, Any] | None = None
         for url, fallback_name in ((WEAR_URL, ""), (WEAR_ARTICLE_URL, "article_page")):
             try:
                 response = requests.get(url, headers=REQUEST_HEADERS, timeout=30)
@@ -43,22 +46,32 @@ class WearConnector(BaseConnector):
             except requests.RequestException as exc:
                 errors.append(f"{url}: {exc}")
                 continue
+            metadata = build_fetch_metadata(response, url=url, fallback_used=fallback_name)
             items = self.parse_items(response.text)
+            metadata = mark_parse_counts(metadata, parse_raw_count=len(items))
+            last_success_metadata = metadata
             if items:
                 return FetchResult(
                     items=items,
                     item_count=len(items),
                     fallback_used=fallback_name,
-                    metadata={"url": url},
+                    metadata=metadata,
                 )
             errors.append(f"{url}: zero_items")
+        if last_success_metadata is not None:
+            return FetchResult(
+                items=[],
+                item_count=0,
+                fallback_used=str(last_success_metadata.get("fallbackUsed", "")),
+                metadata=mark_soft_fail(last_success_metadata, error_type="zero_items"),
+            )
         return FetchResult(error=" | ".join(errors[-2:]) if errors else "no wear data")
 
     def parse_items(self, html: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         seen: set[str] = set()
         for rank, match in enumerate(KEYWORD_RE.findall(html), start=1):
-            keyword = (match[0] or match[1]).strip()
+            keyword = _clean_keyword(match[0] or match[1])
             if not keyword or keyword in seen or not should_keep_topic(keyword):
                 continue
             seen.add(keyword)
@@ -130,3 +143,9 @@ def _candidate_type(keyword: str) -> CandidateType:
 
 def _rank_exposure(rank: int) -> float:
     return 1.0 / math.log2(max(rank, 1) + 1)
+
+
+def _clean_keyword(keyword: str) -> str:
+    normalized = html.unescape(keyword or "")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized

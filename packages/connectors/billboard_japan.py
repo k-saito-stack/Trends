@@ -10,6 +10,7 @@ from typing import Any
 import requests
 
 from packages.connectors.base import BaseConnector, FetchResult, SignalResult
+from packages.connectors.fetch_common import build_fetch_metadata, mark_parse_counts, mark_soft_fail
 from packages.core.domain_classifier import classify_domain
 from packages.core.models import CandidateType, Evidence, ExtractionConfidence, RawCandidate
 
@@ -38,6 +39,7 @@ class BillboardJapanConnector(BaseConnector):
         errors: list[str] = []
         merged_items: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
+        response_metadata: list[dict[str, Any]] = []
         for url, chart_type in (
             (BILLBOARD_JAPAN_URL, "hot100"),
             (BILLBOARD_JAPAN_ARTIST_URL, "artist"),
@@ -48,7 +50,9 @@ class BillboardJapanConnector(BaseConnector):
             except requests.RequestException as exc:
                 errors.append(f"{url}: {exc}")
                 continue
+            metadata = build_fetch_metadata(response, url=url, fallback_used=chart_type)
             items = self.parse_items(response.text)
+            response_metadata.append(mark_parse_counts(metadata, parse_raw_count=len(items)))
             for item in items:
                 key = (str(item.get("track", "")), str(item.get("artist", "")))
                 if key in seen:
@@ -57,7 +61,20 @@ class BillboardJapanConnector(BaseConnector):
                 item["chartType"] = chart_type
                 merged_items.append(item)
         if merged_items:
-            return FetchResult(items=merged_items, item_count=len(merged_items))
+            metadata = {"surfaces": response_metadata, "parseRawCount": len(merged_items)}
+            return FetchResult(items=merged_items, item_count=len(merged_items), metadata=metadata)
+        if response_metadata:
+            return FetchResult(
+                items=[],
+                item_count=0,
+                metadata=mark_soft_fail(
+                    {
+                        "surfaces": response_metadata,
+                        "parseRawCount": 0,
+                    },
+                    error_type="zero_items",
+                ),
+            )
         return FetchResult(error=" | ".join(errors[-2:]) if errors else "no billboard data")
 
     def parse_items(self, html: str) -> list[dict[str, Any]]:
