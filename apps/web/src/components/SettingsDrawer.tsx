@@ -2,18 +2,9 @@
  * Settings drawer — OCI style.
  * GSAP timeline open/close, stagger log entries, scramble title.
  */
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { useEffect, useState, useRef, useCallback } from "react";
-import { db } from "../firebase";
+import { useEffect, useRef, useCallback } from "react";
 import { gsap } from "../hooks/useGSAPSetup";
 import { useScrambleText } from "../hooks/useScrambleText";
-
-interface ChangeLogEntry {
-  logId: string;
-  documentPath: string;
-  changedBy: string;
-  changedAt: string;
-}
 
 interface SettingsDrawerProps {
   isOpen: boolean;
@@ -21,36 +12,10 @@ interface SettingsDrawerProps {
 }
 
 export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps) {
-  const [changeLogs, setChangeLogs] = useState<ChangeLogEntry[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
-
   const backdropRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const { scramble } = useScrambleText();
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setLoadingLogs(true);
-    const fetchLogs = async () => {
-      try {
-        const q = query(
-          collection(db, "change_logs"),
-          orderBy("changedAt", "desc"),
-          limit(20),
-        );
-        const snap = await getDocs(q);
-        const logs = snap.docs.map((d) => d.data() as ChangeLogEntry);
-        setChangeLogs(logs);
-      } catch {
-        // Ignore
-      } finally {
-        setLoadingLogs(false);
-      }
-    };
-    fetchLogs();
-  }, [isOpen]);
 
   // Animate open
   useEffect(() => {
@@ -92,24 +57,6 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
       ease: "power4.inOut",
     }).to(backdropRef.current, { opacity: 0, duration: 0.3 }, 0);
   }, [onClose]);
-
-  // Stagger log entries
-  useEffect(() => {
-    if (!loadingLogs && changeLogs.length > 0 && contentRef.current) {
-      const entries = contentRef.current.querySelectorAll(".log-entry");
-      gsap.fromTo(
-        entries,
-        { opacity: 0, y: 10 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.3,
-          ease: "power4.out",
-          stagger: 0.04,
-        },
-      );
-    }
-  }, [loadingLogs, changeLogs]);
 
   return (
     <>
@@ -153,41 +100,13 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
         </div>
 
         <div className="p-5 overflow-y-auto h-full pb-20 hide-native-scrollbar">
-          <div className="bg-oci-mercury p-4 mb-6 border border-oci-blue/10">
-            <p className="text-oci-blue text-sm leading-relaxed font-sans">
-              ソースのON/OFFやアルゴリズム設定は Firestore Console
-              から変更できます。変更はchange_logsに記録されます。
-            </p>
-          </div>
-
-          <div ref={contentRef}>
+          <div className="bg-oci-mercury p-4 border border-oci-blue/10">
             <h3 className="oci-label-sm text-oci-blue/50 mb-3">
-              Change Logs (Latest 20)
+              Settings Coming Soon
             </h3>
-
-            {loadingLogs ? (
-              <p className="oci-label-sm text-oci-blue/30">Loading...</p>
-            ) : changeLogs.length === 0 ? (
-              <p className="oci-label-sm text-oci-blue/30">No logs yet</p>
-            ) : (
-              <div className="space-y-2">
-                {changeLogs.map((log) => (
-                  <div
-                    key={log.logId}
-                    className="log-entry border border-oci-blue/10 p-3"
-                    style={{ opacity: 0 }}
-                  >
-                    <span className="text-oci-blue text-sm font-sans">
-                      {log.documentPath}
-                    </span>
-                    <div className="oci-label-sm text-oci-blue/30 text-[0.5625rem] mt-1">
-                      {log.changedBy} /{" "}
-                      {new Date(log.changedAt).toLocaleString("ja-JP")}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <p className="text-oci-blue text-sm leading-relaxed font-sans">
+              User-facing controls are currently in development.
+            </p>
           </div>
         </div>
       </div>
