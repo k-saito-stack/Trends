@@ -23,7 +23,12 @@ export default function App() {
   const [loaderDone, setLoaderDone] = useState(false);
 
   // Data
-  const { items, meta, loading: dataLoading, error: dataError } = useDailyRanking(date);
+  const {
+    items,
+    meta,
+    loading: dataLoading,
+    error: dataError,
+  } = useDailyRanking(date, { enabled: !authLoading && !!user });
 
   // Smooth scroll
   useLenis();

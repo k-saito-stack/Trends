@@ -53,13 +53,26 @@ export interface RankingMeta {
   latestPublishedRunId?: string;
 }
 
-export function useDailyRanking(date: string) {
+interface UseDailyRankingOptions {
+  enabled?: boolean;
+}
+
+export function useDailyRanking(date: string, options: UseDailyRankingOptions = {}) {
+  const enabled = options.enabled ?? true;
   const [items, setItems] = useState<RankingItem[]>([]);
   const [meta, setMeta] = useState<RankingMeta | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRanking = useCallback(async () => {
+    if (!enabled) {
+      setItems([]);
+      setMeta(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -124,7 +137,7 @@ export function useDailyRanking(date: string) {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, enabled]);
 
   useEffect(() => {
     fetchRanking();
