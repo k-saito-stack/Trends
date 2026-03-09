@@ -20,11 +20,11 @@ def test_build_source_plan_applies_include_exclude_and_skip_slow() -> None:
     assert [entry["sourceId"] for entry in plan] == ["APPLE_MUSIC_JP"]
 
 
-def test_build_publish_collections_respects_shadow_only() -> None:
+def test_build_publish_collections_keeps_public_collection_for_shadow_only() -> None:
     assert run_module._build_publish_collections(
         light_publish=False,
         shadow_only=True,
-    ) == ("daily_rankings_v2_shadow",)
+    ) == ("daily_rankings", "daily_rankings_v2_shadow")
 
 
 def test_parse_csv_arg_dedupes_values() -> None:

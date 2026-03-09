@@ -145,6 +145,7 @@ class TestPublishPathPlanning:
         )
 
         assert paths == (
+            "daily_rankings/2026-03-07/items",
             "daily_rankings_v2_shadow/2026-03-07/items",
             "daily_rankings/2026-03-07/runs/run_new/items",
         )
@@ -156,7 +157,20 @@ class TestPublishPathPlanning:
             shadow_only=True,
         )
 
-        assert paths == ("daily_rankings_v2_shadow/2026-03-07/items",)
+        assert paths == (
+            "daily_rankings/2026-03-07/items",
+            "daily_rankings_v2_shadow/2026-03-07/items",
+        )
+
+    def test_collection_publish_status_keeps_shadow_marker_only_for_shadow_collection(self) -> None:
+        assert (
+            run_module._collection_publish_status("daily_rankings", shadow_only=True)
+            == "PUBLISHED"
+        )
+        assert (
+            run_module._collection_publish_status("daily_rankings_v2_shadow", shadow_only=True)
+            == "SHADOW_ONLY"
+        )
 
     def test_public_collections_use_public_meta_only(self) -> None:
         meta = DailyRankingMeta(

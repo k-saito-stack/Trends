@@ -270,6 +270,7 @@ def _build_item_collection_paths(
         return (f"daily_rankings/{target_date}/runs/{run_id}/items",)
     if shadow_only:
         return (
+            f"daily_rankings/{target_date}/items",
             f"daily_rankings_v2_shadow/{target_date}/items",
             f"daily_rankings/{target_date}/runs/{run_id}/items",
         )
@@ -288,7 +289,10 @@ def _build_reset_collection_paths(
     if light_publish:
         return ()
     if shadow_only:
-        return (f"daily_rankings_v2_shadow/{target_date}/items",)
+        return (
+            f"daily_rankings/{target_date}/items",
+            f"daily_rankings_v2_shadow/{target_date}/items",
+        )
     return (
         f"daily_rankings/{target_date}/items",
         f"daily_rankings_v2/{target_date}/items",
@@ -298,9 +302,9 @@ def _build_reset_collection_paths(
 
 def _build_publish_collections(light_publish: bool, shadow_only: bool) -> tuple[str, ...]:
     if light_publish and shadow_only:
-        return ()
+        return ("daily_rankings",)
     if not light_publish and shadow_only:
-        return ("daily_rankings_v2_shadow",)
+        return ("daily_rankings", "daily_rankings_v2_shadow")
     if light_publish:
         return ("daily_rankings",)
     return PUBLISH_COLLECTIONS
@@ -337,6 +341,12 @@ def _serialize_collection_meta(collection_name: str, meta: DailyRankingMeta) -> 
     if collection_name in {"daily_rankings", "daily_rankings_v2"}:
         return meta.to_public_dict()
     return meta.to_dict()
+
+
+def _collection_publish_status(collection_name: str, shadow_only: bool) -> str:
+    if collection_name == "daily_rankings_v2_shadow":
+        return "SHADOW_ONLY"
+    return "PUBLISHED"
 
 
 def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[BaseConnector]:
@@ -1082,36 +1092,48 @@ def _run_pipeline(
 
         if options.publish:
             published_at = datetime.now(JST).isoformat()
-            final_publish_status = "PUBLISHED" if not effective_shadow_only else "SHADOW_ONLY"
-            publish_meta = _build_publish_meta(
-                target_date=target_date,
-                generated_at=generated_at,
-                run_id=run_id,
-                top_k=app_config.top_k,
-                degrade=degrade,
-                status=final_publish_status,
-                published_at=published_at,
-                latest_published_run_id=run_id,
-                publish_health=publish_health,
-                source_availability_snapshot=source_availability_snapshot,
-            )
             collections_to_publish = _build_publish_collections(
                 light_publish=light_publish,
                 shadow_only=effective_shadow_only,
             )
             for collection in collections_to_publish:
+                collection_status = _collection_publish_status(
+                    collection,
+                    shadow_only=effective_shadow_only,
+                )
+                publish_meta = _build_publish_meta(
+                    target_date=target_date,
+                    generated_at=generated_at,
+                    run_id=run_id,
+                    top_k=app_config.top_k,
+                    degrade=degrade,
+                    status=collection_status,
+                    published_at=published_at,
+                    latest_published_run_id=run_id,
+                    publish_health=publish_health,
+                    source_availability_snapshot=source_availability_snapshot,
+                )
                 firestore_client.set_document(
                     collection,
                     target_date,
                     _serialize_collection_meta(collection, publish_meta),
                 )
+            has_public_collection = any(
+                collection in {"daily_rankings", "daily_rankings_v2"}
+                for collection in collections_to_publish
+            )
+            public_delivery_status = "PUBLISHED" if has_public_collection else "SHADOW_ONLY"
+            publish_disposition = (
+                "PUBLISHED_WITH_GATE_BYPASS" if effective_shadow_only else "PUBLIC_ELIGIBLE"
+            )
             firestore_client.update_document(
                 f"daily_rankings/{target_date}/runs",
                 run_id,
                 {
-                    "status": final_publish_status,
+                    "status": public_delivery_status,
                     "publishedAt": published_at,
                     "latestPublishedRunId": run_id if collections_to_publish else "",
+                    "publishDisposition": publish_disposition,
                 },
             )
             firestore_client.update_document(
@@ -1122,6 +1144,7 @@ def _run_pipeline(
                     "publishHealth": publish_health,
                     "sourceAvailabilitySnapshot": source_availability_snapshot,
                     "latestPublishedRunId": run_id if collections_to_publish else "",
+                    "publishDisposition": publish_disposition,
                 },
             )
             published_successfully = True
