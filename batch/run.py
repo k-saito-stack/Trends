@@ -485,9 +485,8 @@ def _run_pipeline(
     persist_source_posteriors = options.persist_source_posteriors and not light_publish
     persist_evaluations = options.persist_evaluations
 
-    if not light_publish:
-        with contextlib.suppress(Exception):
-            start_run(run_id, target_date, degrade.to_dict())
+    with contextlib.suppress(Exception):
+        start_run(run_id, target_date, degrade.to_dict())
 
     from packages.connectors.registry import build_connectors
 
@@ -562,11 +561,10 @@ def _run_pipeline(
             source_errors[source_id] = run_result.error
             errors.append(f"{source_id}: {run_result.error}")
 
-        if not light_publish:
-            with contextlib.suppress(Exception):
-                update_run_source(
-                    run_id, source_id, len(run_result.candidates), error=run_result.error
-                )
+        with contextlib.suppress(Exception):
+            update_run_source(
+                run_id, source_id, len(run_result.candidates), error=run_result.error
+            )
 
         if not run_result.ok or entry is None:
             continue
@@ -1183,18 +1181,17 @@ def _run_pipeline(
         if published_successfully
         else "FAILED"
     )
-    if not light_publish:
-        with contextlib.suppress(Exception):
-            end_run(
-                run_id,
-                status=run_status,
-                candidate_count=len(touched_candidates),
-                top_k=len(top_candidates),
-                errors=errors or None,
-                cost_jpy=cost_jpy,
-                write_ops_estimate=write_ops_estimate,
-                llm_resolution_calls=llm_resolution_calls,
-            )
+    with contextlib.suppress(Exception):
+        end_run(
+            run_id,
+            status=run_status,
+            candidate_count=len(touched_candidates),
+            top_k=len(top_candidates),
+            errors=errors or None,
+            cost_jpy=cost_jpy,
+            write_ops_estimate=write_ops_estimate,
+            llm_resolution_calls=llm_resolution_calls,
+        )
 
     with contextlib.suppress(Exception):
         release_lock(
