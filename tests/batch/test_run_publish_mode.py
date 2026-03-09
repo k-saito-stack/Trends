@@ -157,3 +157,44 @@ class TestPublishPathPlanning:
         )
 
         assert paths == ("daily_rankings_v2_shadow/2026-03-07/items",)
+
+    def test_public_collections_use_public_meta_only(self) -> None:
+        meta = DailyRankingMeta(
+            date="2026-03-07",
+            generated_at="2026-03-07T02:09:35+09:00",
+            run_id="run_new",
+            top_k=50,
+            degrade_state={"summaryMode": "LLM"},
+            status="PUBLISHED",
+            published_at="2026-03-07T02:09:44+09:00",
+            latest_published_run_id="run_new",
+            publish_health={"publicEligible": True},
+            source_availability_snapshot={"healthyCoreAvailabilityRatio": 0.8},
+        )
+
+        payload = run_module._serialize_collection_meta("daily_rankings", meta)
+
+        assert payload["latestPublishedRunId"] == "run_new"
+        assert "publishHealth" not in payload
+        assert "sourceAvailabilitySnapshot" not in payload
+        assert "degradeState" not in payload
+
+    def test_shadow_collection_keeps_full_meta(self) -> None:
+        meta = DailyRankingMeta(
+            date="2026-03-07",
+            generated_at="2026-03-07T02:09:35+09:00",
+            run_id="run_new",
+            top_k=50,
+            degrade_state={"summaryMode": "LLM"},
+            status="SHADOW_ONLY",
+            published_at="2026-03-07T02:09:44+09:00",
+            latest_published_run_id="run_new",
+            publish_health={"publicEligible": False},
+            source_availability_snapshot={"healthyCoreAvailabilityRatio": 0.5},
+        )
+
+        payload = run_module._serialize_collection_meta("daily_rankings_v2_shadow", meta)
+
+        assert payload["publishHealth"] == {"publicEligible": False}
+        assert payload["sourceAvailabilitySnapshot"] == {"healthyCoreAvailabilityRatio": 0.5}
+        assert payload["degradeState"] == {"summaryMode": "LLM"}

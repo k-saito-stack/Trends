@@ -46,7 +46,7 @@ export interface RankingMeta {
   generatedAt: string;
   runId: string;
   topK: number;
-  degradeState: Record<string, unknown>;
+  degradeState?: Record<string, unknown>;
   algorithmVersion?: string;
   status?: string;
   publishedAt?: string;

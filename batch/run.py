@@ -333,6 +333,12 @@ def _build_publish_meta(
     )
 
 
+def _serialize_collection_meta(collection_name: str, meta: DailyRankingMeta) -> dict[str, Any]:
+    if collection_name in {"daily_rankings", "daily_rankings_v2"}:
+        return meta.to_public_dict()
+    return meta.to_dict()
+
+
 def _create_connectors(source_cfgs: list[dict[str, Any]] | None = None) -> list[BaseConnector]:
     from packages.connectors.registry import build_connectors
 
@@ -994,9 +1000,13 @@ def _run_pipeline(
             )
             if existing_published_meta is None:
                 for collection_name in prepublish_collections:
-                    firestore_client.set_document(collection_name, target_date, meta.to_dict())
+                    firestore_client.set_document(
+                        collection_name,
+                        target_date,
+                        _serialize_collection_meta(collection_name, meta),
+                    )
             firestore_client.set_document(
-                f"daily_rankings/{target_date}/runs", run_id, meta.to_dict()
+                f"daily_rankings/{target_date}/runs", run_id, meta.to_public_dict()
             )
 
             for collection_path in _build_reset_collection_paths(
@@ -1090,7 +1100,11 @@ def _run_pipeline(
                 shadow_only=effective_shadow_only,
             )
             for collection in collections_to_publish:
-                firestore_client.set_document(collection, target_date, publish_meta.to_dict())
+                firestore_client.set_document(
+                    collection,
+                    target_date,
+                    _serialize_collection_meta(collection, publish_meta),
+                )
             firestore_client.update_document(
                 f"daily_rankings/{target_date}/runs",
                 run_id,
@@ -1098,8 +1112,16 @@ def _run_pipeline(
                     "status": final_publish_status,
                     "publishedAt": published_at,
                     "latestPublishedRunId": run_id if collections_to_publish else "",
+                },
+            )
+            firestore_client.update_document(
+                "runs",
+                run_id,
+                {
+                    "degradeState": degrade.to_dict(),
                     "publishHealth": publish_health,
                     "sourceAvailabilitySnapshot": source_availability_snapshot,
+                    "latestPublishedRunId": run_id if collections_to_publish else "",
                 },
             )
             published_successfully = True

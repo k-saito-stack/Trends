@@ -126,6 +126,30 @@ class TestDailyRankingMeta:
         assert restored.latest_published_run_id == "01KK1234567890"
         assert restored.publish_health == {"publicEligible": True}
 
+    def test_to_public_dict_omits_internal_fields(self) -> None:
+        meta = DailyRankingMeta(
+            date="2026-03-06",
+            generated_at="2026-03-06T11:15:00+09:00",
+            run_id="01KK1234567890",
+            top_k=20,
+            degrade_state={"xSearchEnabled": True},
+            status="PUBLISHED",
+            published_at="2026-03-06T11:16:00+09:00",
+            latest_published_run_id="01KK1234567890",
+            publish_health={"publicEligible": True},
+            source_availability_snapshot={"healthyCoreAvailabilityRatio": 0.8},
+        )
+
+        public_dict = meta.to_public_dict()
+
+        assert public_dict["date"] == "2026-03-06"
+        assert public_dict["runId"] == "01KK1234567890"
+        assert public_dict["latestPublishedRunId"] == "01KK1234567890"
+        assert "degradeState" not in public_dict
+        assert "musicWeights" not in public_dict
+        assert "publishHealth" not in public_dict
+        assert "sourceAvailabilitySnapshot" not in public_dict
+
 
 class TestRankingEvaluation:
     def test_roundtrip(self) -> None:

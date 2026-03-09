@@ -49,8 +49,7 @@ service cloud.firestore {
         allow write: if false;
       }
       match /runs/{runId} {
-        allow read: if canViewInternalData()
-          || (canViewPublicRankings() && isLatestPublishedRun(date, runId));
+        allow read: if canViewInternalData();
         allow write: if false;
         match /items/{candidateId} {
           allow read: if canViewInternalData()

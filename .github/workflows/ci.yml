@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install -U pip
-          pip install -r requirements.lock.txt
+          pip install --require-hashes -r requirements.lock.txt
 
       - name: Lint (ruff)
         run: ruff check packages/ batch/ tests/ scripts/

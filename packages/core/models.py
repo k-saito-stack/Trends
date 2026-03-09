@@ -504,6 +504,19 @@ class DailyRankingMeta:
             "sourceAvailabilitySnapshot": self.source_availability_snapshot,
         }
 
+    def to_public_dict(self) -> dict[str, Any]:
+        """Serialize only the fields needed by the public web client."""
+        return {
+            "date": self.date,
+            "generatedAt": self.generated_at,
+            "runId": self.run_id,
+            "topK": self.top_k,
+            "algorithmVersion": self.algorithm_version,
+            "status": self.status,
+            "publishedAt": self.published_at,
+            "latestPublishedRunId": self.latest_published_run_id,
+        }
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DailyRankingMeta:
         return cls(
